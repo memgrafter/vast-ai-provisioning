@@ -18,7 +18,9 @@ config/models/qwen3.5-9b-awq.json
 
 ## Principle
 
-Do not change launcher/provisioner/template builder architecture for a new model. Add profile files, mirror the model, build/apply the template payload, and launch with the new launch profile.
+Do not change launcher/provisioner/template builder architecture for a new model. Add profile files, mirror the model, build/apply a model-specific template payload, and launch with the new launch profile.
+
+Each model/profile case should have its own remote Vast template. Do not mutate a shared 9B template for a 27B launch. Manual tuning is expected for GPU requirements, pricing, storage, vLLM args, and interruption strategy.
 
 ---
 
@@ -110,7 +112,14 @@ source env.modeltransfer
 
 ---
 
-# Phase 5 — Build and apply template payload
+# Phase 5 — Build and apply a separate 27B template payload
+
+- [ ] Use a model-specific remote Vast template for 27B, separate from the current 9B template.
+- [ ] Set the intended 27B remote template name in the private overlay or rendered payload, for example:
+
+```text
+vLLM_R2_Qwen3_6_27B_AWQ
+```
 
 - [ ] Build a reviewed local rendered template payload:
 
@@ -122,14 +131,17 @@ source env.modeltransfer
   --out state/templates/vllm-r2.qwen3.6-27b-awq.rendered.json
 ```
 
-- [ ] Apply it explicitly to the remote Vast template:
+- [ ] Apply it explicitly to the separate 27B remote Vast template:
 
 ```bash
 . env.vast-management
 ./run.sh scripts/apply_vast_template.py \
   --template state/templates/vllm-r2.qwen3.6-27b-awq.rendered.json \
-  --hash-id <remote-template-hash>
+  --hash-id <remote-27b-template-hash>
 ```
+
+- [ ] Record the resulting 27B template hash in the 27B launch profile.
+- [ ] Do not overwrite the current 9B template hash in `config/launch-profiles/qwen3.5-9b-awq.interruptible.json`.
 
 ---
 
@@ -161,6 +173,7 @@ source env.modeltransfer
 - [ ] 27B model profile exists.
 - [ ] 27B GPU profile exists.
 - [ ] 27B launch profile exists.
+- [ ] 27B has its own remote Vast template/hash separate from the 9B template.
 - [ ] Model is mirrored to R2 via `--model-profile`.
 - [ ] Template payload is built from model profile and applied remotely.
 - [ ] Launcher uses the 27B launch profile directly.
