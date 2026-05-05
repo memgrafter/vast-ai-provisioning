@@ -8,7 +8,9 @@ if ! command -v uv >/dev/null 2>&1; then
   exit 1
 fi
 
-uv venv --python 3 .venv
+if [ ! -x .venv/bin/python ]; then
+  uv venv --python 3 .venv
+fi
 uv pip install --python .venv/bin/python -r pyproject.toml
 
 if [ "$#" -gt 0 ]; then
