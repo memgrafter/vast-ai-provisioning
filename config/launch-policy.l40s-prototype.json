@@ -4,7 +4,7 @@
   "market": "interruptible",
   "template": {
     "name": "vLLM_R2_Model_20260504",
-    "hash_id": "eadfe895130faf4eb8a8283ceccff0cd"
+    "hash_id": "b174caeb667a9c8e5cd7a68bd8b8af2e"
   },
   "model": {
     "id": "cyankiwi/Qwen3.5-9B-AWQ-4bit",

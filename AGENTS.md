@@ -36,7 +36,7 @@ Private working template:
 
 ```text
 name: vLLM_R2_Model_20260504
-hash: eadfe895130faf4eb8a8283ceccff0cd
+hash: b174caeb667a9c8e5cd7a68bd8b8af2e
 ```
 
 Public-safe skeleton:
@@ -54,7 +54,7 @@ R2_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com"
 AWS_DEFAULT_REGION="auto"
 MODEL_DIR="/workspace/models/cyankiwi/Qwen3.5-9B-AWQ-4bit"
 VLLM_MODEL="/workspace/models/cyankiwi/Qwen3.5-9B-AWQ-4bit"
-VLLM_ARGS="--served-model-name qwen3.5-9b-awq --quantization awq --dtype half --max-model-len 8192 --host 127.0.0.1 --port 18000 --download-dir /workspace/models --gpu-memory-utilization 0.90 --trust-remote-code"
+VLLM_ARGS=""
 AUTO_PARALLEL="false"
 AUTH_EXCLUDE="8000"
 PROVISIONING_SCRIPT="https://raw.githubusercontent.com/memgrafter/vast-ai-provisioning/main/provision_vast_vllm_from_r2.sh"

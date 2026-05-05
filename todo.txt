@@ -1,0 +1,11 @@
+# TODO
+
+- Add a pre-launch guard that verifies required Vast account-level runtime env vars are actually available to launched instances:
+  - `AWS_ACCESS_KEY_ID`
+  - `AWS_SECRET_ACCESS_KEY`
+  - `VLLM_API_KEY`
+- Do not print secret values. Only report present/missing and value length if needed.
+- Prefer a cheap diagnostic/provisioning mode or marker env check before renting GPU time for full model sync.
+- If Vast SDK cannot inspect account env directly, add safe early provisioning diagnostics and have the monitor terminate immediately on missing required env.
+
+- greylist by reason so we can consider those machines more carefully. we may want to collect a little more data maybe as jsonl per greylist entry in a greylist.jsonl

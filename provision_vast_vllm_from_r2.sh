@@ -22,6 +22,12 @@ RCLONE_MULTI_THREAD_STREAMS="${RCLONE_MULTI_THREAD_STREAMS:-8}"
 
 mkdir -p "$MODEL_DIR" ~/.aws
 
+# Use a file for complex vLLM args. This avoids Docker/template/env quoting
+# issues and is read by /opt/supervisor-scripts/vllm.sh after provisioning.
+cat > /etc/vllm-args.conf <<'EOF'
+--served-model-name qwen3.5-9b-awq --quantization awq --dtype half --max-model-len 8192 --host 127.0.0.1 --port 18000 --download-dir /workspace/models --gpu-memory-utilization 0.90 --trust-remote-code --api-key ${VLLM_API_KEY}
+EOF
+
 available_gb="$(df -BG "$MODEL_DIR" | awk 'NR==2 {gsub(/G/, "", $4); print $4}')"
 if [ "${available_gb:-0}" -lt "$MODEL_MIN_FREE_GB" ]; then
   echo "ERROR: only ${available_gb:-0}GB free at $MODEL_DIR; need at least ${MODEL_MIN_FREE_GB}GB" >&2
