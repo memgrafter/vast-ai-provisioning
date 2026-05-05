@@ -25,7 +25,7 @@ class ApplyVastTemplateTests(unittest.TestCase):
         self.assertEqual(kwargs, {
             "name": "template",
             "image": "vastai/vllm",
-            "tag": "v0.20.0-cuda-13.0",
+            "image_tag": "v0.20.0-cuda-13.0",
             "env": "-e A=B",
         })
 

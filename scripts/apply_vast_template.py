@@ -17,6 +17,28 @@ REMOTE_IGNORED_KEYS = {
     "creator_id",
     "model_profile",
 }
+REMOTE_ALLOWED_KEYS = {
+    "name",
+    "image",
+    "image_tag",
+    "href",
+    "repo",
+    "env",
+    "onstart_cmd",
+    "jup_direct",
+    "ssh_direct",
+    "use_jupyter_lab",
+    "runtype",
+    "use_ssh",
+    "jupyter_dir",
+    "docker_login_repo",
+    "extra_filters",
+    "disk_space",
+    "readme",
+    "readme_visible",
+    "desc",
+    "private",
+}
 
 
 def load_payload(path: Path) -> dict[str, Any]:
@@ -24,7 +46,16 @@ def load_payload(path: Path) -> dict[str, Any]:
 
 
 def update_kwargs(payload: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in payload.items() if k not in REMOTE_IGNORED_KEYS and v is not None}
+    normalized = {k: v for k, v in payload.items() if k not in REMOTE_IGNORED_KEYS and v is not None}
+    if "tag" in normalized and "image_tag" not in normalized:
+        normalized["image_tag"] = normalized.pop("tag")
+    if "onstart" in normalized and "onstart_cmd" not in normalized:
+        normalized["onstart_cmd"] = normalized.pop("onstart")
+    if "recommended_disk_space" in normalized and "disk_space" not in normalized:
+        normalized["disk_space"] = normalized.pop("recommended_disk_space")
+    if isinstance(normalized.get("extra_filters"), str):
+        normalized["extra_filters"] = json.loads(normalized["extra_filters"])
+    return {k: v for k, v in normalized.items() if k in REMOTE_ALLOWED_KEYS}
 
 
 def main() -> None:

@@ -4,7 +4,7 @@
   "market": "interruptible",
   "template": {
     "name": "vLLM_R2_Model_20260504",
-    "hash_id": "b174caeb667a9c8e5cd7a68bd8b8af2e"
+    "hash_id": "db2ec2d89cacb0820cb4067d6d81e68e"
   },
   "model_profile": "config/models/qwen3.5-9b-awq.json",
   "gpu_profile": "config/gpu-profiles/qwen-9b-awq-1gpu.json",
