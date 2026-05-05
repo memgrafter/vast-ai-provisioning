@@ -22,3 +22,19 @@
   - Derive decision quality metrics: success rate, expected useful minutes, effective cost per useful hour, launch-time percentage, and interruption probability by machine/GPU/market.
 
 - Add optional profile-driven single-file transfer later only if needed.
+
+- Cleanup stale/refactor-obsolete docs from repository review:
+  - `VAST_FAST_START_TERMINATION_PLAN.md` still references removed `config/launch-policy.l40s-prototype.json`; update to profile path and current preferred machine list.
+  - `VAST_SDK_AUTOMATION_PLAN.md` is obsolete relative to profile/template-manifest flow; it still describes patching remote templates, `VLLM_ARGS`, stale `--quantization awq`, planned scripts that no longer exist, and `OPEN_BUTTON_TOKEN` API auth.
+  - `VAST_VLLM_TEMPLATE_PLAN.md` is obsolete relative to profile/template-manifest flow; it references removed `env.vast-vllm.*.example`, stale `VLLM_ARGS`, stale `--quantization awq`, and `OPEN_BUTTON_TOKEN` API auth.
+  - Decide whether to rewrite these old plan docs as historical notes, replace with pointers to `AGENTS.md`/`QUICKSTART.md`, or delete them.
+
+- Fix minor docs formatting from repository review:
+  - `docs/model-profile-pure-refactor-plan.md` phase numbering under “Phase 9 — Documentation cleanup” still uses `## 8.1`, `## 8.2`, `## 8.3` headings.
+  - Add a blank line before the “Note: env-based model selection...” paragraph in `docs/model-profile-pure-refactor-plan.md`.
+
+- Harden template manifest safety:
+  - `scripts/apply_vast_template.py` currently only checks that the rendered filename is listed in `state/templates/manifest.json`; consider also verifying payload metadata matches manifest fields (`template_name`, `model_profile_name`, `private`) before remote create/update.
+
+- Review public template portal auth placeholder:
+  - `config/templates/vllm-r2-base.public.json` contains `OPEN_BUTTON_TOKEN=1`; it is not the vLLM API key, but it is token-shaped public template data. Confirm this remains intentional or replace with a safer placeholder/private overlay value.
