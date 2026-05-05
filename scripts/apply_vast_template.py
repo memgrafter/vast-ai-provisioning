@@ -121,7 +121,11 @@ def main() -> None:
 
     vast = VastAI()
     if args.create:
-        result = vast.create_template(**kwargs)
+        # VastAI.create_template injects jup_direct/ssh_direct/private defaults, which
+        # conflict with fully rendered template kwargs. Call the lower-level API.
+        from vastai.api import offers
+
+        result = offers.create_template(vast.client, **kwargs)
     else:
         result = vast.update_template(args.hash_id, **kwargs)
     print(json.dumps(result, indent=2, sort_keys=True, default=str))
