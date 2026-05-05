@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -325,6 +326,10 @@ def main() -> None:
     parser.add_argument("--yes-current-infra", action="store_true")
     parser.add_argument("--yes-launch", action="store_true")
     parser.add_argument("--poll-timeout", type=int, default=900)
+    parser.add_argument("--no-monitor", action="store_true", help="do not monitor readiness after launch")
+    parser.add_argument("--no-destroy-on-monitor-fail", action="store_true", help="leave failed monitored launches running")
+    parser.add_argument("--monitor-timeout", type=int, default=1800, help="readiness monitor timeout seconds")
+    parser.add_argument("--monitor-interval", type=int, default=15, help="readiness monitor poll interval seconds")
     args = parser.parse_args()
 
     policy = json.loads(args.policy.read_text())
@@ -371,6 +376,24 @@ def main() -> None:
     info = poll_instance(vast, int(instance_id), args.poll_timeout)
     save_json(Path(f"instances/{instance_id}.json"), info)
     print(f"Saved instance details to instances/{instance_id}.json")
+
+    if not args.no_monitor:
+        monitor_cmd = [
+            sys.executable,
+            "scripts/monitor_instance_readiness.py",
+            str(instance_id),
+            "--timeout",
+            str(args.monitor_timeout),
+            "--interval",
+            str(args.monitor_interval),
+        ]
+        if not args.no_destroy_on_monitor_fail:
+            monitor_cmd += ["--destroy-on-fail", "--yes-destroy"]
+        print("Starting readiness monitor:")
+        print("  " + " ".join(monitor_cmd))
+        result = subprocess.run(monitor_cmd, check=False)
+        if result.returncode not in {0, 4}:
+            raise SystemExit(result.returncode)
 
 
 if __name__ == "__main__":
