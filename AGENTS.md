@@ -97,12 +97,17 @@ or update an existing remote template by hash:
 ./run.sh
 ```
 
-Run scripts with:
+Run a read-only launch/cost check with:
 
 ```bash
 . env.vast-management
-./run.sh scripts/select_and_launch.py --dry-run
+./run.sh scripts/select_and_launch.py \
+  --launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json \
+  --check-only \
+  --top 1
 ```
+
+Use `--skip-current-infra` with `--check-only` to skip querying current instances. Prefer `--check-only` over legacy `--dry-run` for no-prompt read-only checks.
 
 ## Launch flow
 
@@ -116,12 +121,13 @@ Use the guarded profile launcher:
 
 It must:
 
-1. show current instances and known hourly burn
-2. note owned volumes are not checked
-3. prompt before search/selection
-4. print selected offer and cost estimate
-5. prompt before launch
-6. save runtime JSON locally only
+1. support `--check-only` for read-only offer/cost checks with no launch prompts
+2. show current instances and known hourly burn unless `--skip-current-infra` is used with `--check-only`
+3. note owned volumes are not checked
+4. prompt before search/selection in launch mode
+5. print selected offer and cost estimate
+6. prompt before launch in launch mode
+7. save runtime JSON locally only
 
 Runtime output dirs are local/ignored and must not be committed:
 

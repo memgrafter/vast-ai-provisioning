@@ -104,7 +104,7 @@ Run the launcher in read-only check mode to show current infra, offer-policy PAS
   --top 1
 ```
 
-Use `--skip-current-infra` if you only want the marketplace offer check.
+Use `--skip-current-infra` if you only want the marketplace offer check. Use `--top N` to summarize more than one passing offer.
 
 ## 6. Launch manually
 
