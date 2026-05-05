@@ -110,9 +110,12 @@ def main() -> int:
                 if url:
                     code, models = api_get_json(f"{url}/v1/models", api_key)
                     if code == 200:
+                        chat_completions_url = f"{url}/v1/chat/completions"
                         print("models ok:", json.dumps(models, default=str)[:500], flush=True)
+                        print(f"chat_completions_url={chat_completions_url}", flush=True)
+                        print(f"model={model['served_model_name']}", flush=True)
                         code, chat = api_post_json(
-                            f"{url}/v1/chat/completions",
+                            chat_completions_url,
                             api_key,
                             {
                                 "model": model["served_model_name"],
