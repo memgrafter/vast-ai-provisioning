@@ -105,7 +105,10 @@ provision_vast_vllm_from_r2.sh
 Then set:
 
 ```bash
-PROVISIONING_SCRIPT="https://raw.githubusercontent.com/<you>/<repo>/<branch>/provision_vast_vllm_from_r2.sh"
+GITHUB_USER="memgrafter"
+GITHUB_REPO="vast-ai-provisioning"
+GITHUB_BRANCH="main"
+PROVISIONING_SCRIPT="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/provision_vast_vllm_from_r2.sh"
 ```
 
 The script:
