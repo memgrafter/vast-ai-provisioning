@@ -340,22 +340,22 @@ Note: env-based model selection was intentionally removed from the active interf
 
 ## 8.1 Consolidate env file responsibilities
 
-- [ ] Make `env.vast-management` only responsible for Vast management/auth and local client-side API testing variables.
-- [ ] Make `env.modeltransfer` only responsible for Hugging Face download auth and R2 transfer credentials/private destinations.
-- [ ] Keep Vast runtime secrets only in Vast account-level env vars, not launch/template/profile files.
-- [ ] Document which env vars are local-only versus injected into Vast runtime.
+- [x] Make `env.vast-management` only responsible for Vast management/auth and local client-side API testing variables.
+- [x] Make `env.modeltransfer` only responsible for Hugging Face download auth and R2 transfer credentials/private destinations.
+- [x] Keep Vast runtime secrets only in Vast account-level env vars, not launch/template/profile files.
+- [x] Document which env vars are local-only versus injected into Vast runtime.
 
 ## 8.2 Remove confusing duplicated model envs
 
-- [ ] Remove model identity from local env files now that model profiles own `hf_model_id` and `r2_prefix`.
-- [ ] Remove stale `HF_REPO_ID`, `MODEL_ID`, `HF_FILENAME`, or `R2_PREFIX` expectations from docs/scripts unless they are credentials/private-destination related.
-- [ ] Keep model selection explicit via `--model-profile`.
+- [x] Remove model identity from local env files now that model profiles own `hf_model_id` and `r2_prefix`.
+- [x] Remove stale `HF_REPO_ID`, `MODEL_ID`, `HF_FILENAME`, or `R2_PREFIX` expectations from docs/scripts unless they are credentials/private-destination related.
+- [x] Keep model selection explicit via `--model-profile`.
 
 ## 8.3 Add safe env examples
 
-- [ ] Update example env files so they contain credentials/private destination placeholders only.
-- [ ] Do not include real bucket names, account IDs, API keys, tokens, or instance URLs.
-- [ ] Include comments showing which values belong in Vast account-level env vars.
+- [x] Update example env files so they contain credentials/private destination placeholders only.
+- [x] Do not include real bucket names, account IDs, API keys, tokens, or instance URLs.
+- [x] Include comments showing which values belong in Vast account-level env vars.
 
 ---
 

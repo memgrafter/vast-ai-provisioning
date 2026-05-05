@@ -32,15 +32,15 @@ print(profile["hf_model_id"])
 print(profile["r2_prefix"])
 PY
 )"
-HF_REPO_ID="$(printf '%s\n' "$profile_values" | sed -n '1p')"
-R2_PREFIX="$(printf '%s\n' "$profile_values" | sed -n '2p')"
+profile_hf_model_id="$(printf '%s\n' "$profile_values" | sed -n '1p')"
+profile_r2_prefix="$(printf '%s\n' "$profile_values" | sed -n '2p')"
 
-MODEL_DIR="./models/$HF_REPO_ID"
+MODEL_DIR="./models/$profile_hf_model_id"
 mkdir -p "$MODEL_DIR"
 
-hf download "$HF_REPO_ID" \
+hf download "$profile_hf_model_id" \
   --local-dir "$MODEL_DIR" \
   ${HF_TOKEN:+--token "$HF_TOKEN"}
 
-aws s3 sync "$MODEL_DIR" "s3://$R2_BUCKET/$R2_PREFIX" \
+aws s3 sync "$MODEL_DIR" "s3://$R2_BUCKET/$profile_r2_prefix" \
   --endpoint-url "$R2_ENDPOINT"
