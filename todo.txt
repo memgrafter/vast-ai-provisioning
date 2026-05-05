@@ -8,4 +8,15 @@
 - Prefer a cheap diagnostic/provisioning mode or marker env check before renting GPU time for full model sync.
 - If Vast SDK cannot inspect account env directly, add safe early provisioning diagnostics and have the monitor terminate immediately on missing required env.
 
-- greylist by reason so we can consider those machines more carefully. we may want to collect a little more data maybe as jsonl per greylist entry in a greylist.jsonl
+- Greylist by reason so we can consider those machines more carefully. We may want to collect a little more data, maybe as JSONL per greylist entry in `greylist.jsonl`.
+
+- Build a preferred-machine book by controlled instance churn:
+  - Launch short-lived interruptible probes to classify machines by Docker cache/startup speed, R2 speed, provisioning success, vLLM startup, and outbid behavior.
+  - Investigate whether Vast search can include currently unavailable/rented machines. If "unavailable" simply means currently rented, we may be able to map the full machine universe instead of only currently rentable machines.
+  - Use this book to prefer known-good machines and avoid wasting time on unknown/slow machines.
+
+- Add a SQLite history database for launch/offer/outcome decisions:
+  - Record every searched offer, selected offer, machine ID, GPU, advertised disk/network/cost, market type, bid cap, launch timestamp, and final outcome.
+  - Record measured facts: image cached or not, time to provisioning, R2 speed test MB/s, sync duration, vLLM ready time, API success, outbid/stopped time, and failure reason.
+  - Use the DB for scoring machines over time instead of relying only on static preferred/greylisted arrays.
+  - Derive decision quality metrics: success rate, expected useful minutes, effective cost per useful hour, launch-time percentage, and interruption probability by machine/GPU/market.
