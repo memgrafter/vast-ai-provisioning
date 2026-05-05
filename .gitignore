@@ -1,6 +1,6 @@
 # Local model downloads
 model/
-models/
+/models/
 *.safetensors
 *.bin
 *.gguf
