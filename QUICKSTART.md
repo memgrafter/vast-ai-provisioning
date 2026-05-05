@@ -48,11 +48,21 @@ Build a rendered template payload for review:
 ```bash
 ./run.sh scripts/build_vast_template.py \
   --template-spec config/templates/vllm-r2-base.public.json \
+  --private-overlay config/private/vllm-r2.local.json \
   --model-profile config/models/qwen3.5-9b-awq.json \
   --out state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json
 ```
 
-The public spec uses placeholders for private R2 identifiers. Keep any private overlay or rendered live template under ignored local paths only.
+The public spec uses placeholders for private R2 identifiers. Put real private-but-not-secret identifiers in an ignored overlay under `config/private/`. Keep rendered live templates under ignored local paths only.
+
+Apply a reviewed rendered payload explicitly:
+
+```bash
+. env.vast-management
+./run.sh scripts/apply_vast_template.py \
+  --template state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json \
+  --hash-id <remote-template-hash>
+```
 
 ## 4. Launch
 

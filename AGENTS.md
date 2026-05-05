@@ -62,11 +62,21 @@ Use:
 ```bash
 ./run.sh scripts/build_vast_template.py \
   --template-spec config/templates/vllm-r2-base.public.json \
+  --private-overlay config/private/vllm-r2.local.json \
   --model-profile config/models/qwen3.5-9b-awq.json \
   --out state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json
 ```
 
-Rendered/live/private template files belong in ignored local paths such as `state/` or ignored `templates/` snapshots. Do not commit them.
+`config/private/` is ignored and may contain private-but-not-secret values such as real R2 bucket and endpoint. Rendered/live/private template files belong in ignored local paths such as `state/` or ignored `templates/` snapshots. Do not commit them.
+
+Apply a reviewed rendered payload explicitly:
+
+```bash
+. env.vast-management
+./run.sh scripts/apply_vast_template.py \
+  --template state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json \
+  --hash-id <remote-template-hash>
+```
 
 ## Local setup
 

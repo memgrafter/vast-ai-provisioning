@@ -304,8 +304,8 @@ scripts/build_vast_template.py
 
 ## 6.5 Remaining work
 
-- [ ] Add explicit remote apply/update command that writes the locally rendered template payload to Vast.
-- [ ] Add private ignored overlay support for private-but-not-secret values such as real R2 bucket and endpoint.
+- [x] Add explicit remote apply/update command that writes the locally rendered template payload to Vast.
+- [x] Add private ignored overlay support for private-but-not-secret values such as real R2 bucket and endpoint.
 
 ---
 
@@ -336,7 +336,30 @@ Note: env-based model selection was intentionally removed from the active interf
 
 ---
 
-# Phase 8 — Documentation cleanup
+# Phase 8 — Environment cleanup
+
+## 8.1 Consolidate env file responsibilities
+
+- [ ] Make `env.vast-management` only responsible for Vast management/auth and local client-side API testing variables.
+- [ ] Make `env.modeltransfer` only responsible for Hugging Face download auth and R2 transfer credentials/private destinations.
+- [ ] Keep Vast runtime secrets only in Vast account-level env vars, not launch/template/profile files.
+- [ ] Document which env vars are local-only versus injected into Vast runtime.
+
+## 8.2 Remove confusing duplicated model envs
+
+- [ ] Remove model identity from local env files now that model profiles own `hf_model_id` and `r2_prefix`.
+- [ ] Remove stale `HF_REPO_ID`, `MODEL_ID`, `HF_FILENAME`, or `R2_PREFIX` expectations from docs/scripts unless they are credentials/private-destination related.
+- [ ] Keep model selection explicit via `--model-profile`.
+
+## 8.3 Add safe env examples
+
+- [ ] Update example env files so they contain credentials/private destination placeholders only.
+- [ ] Do not include real bucket names, account IDs, API keys, tokens, or instance URLs.
+- [ ] Include comments showing which values belong in Vast account-level env vars.
+
+---
+
+# Phase 9 — Documentation cleanup
 
 ## 8.1 Update operator docs
 

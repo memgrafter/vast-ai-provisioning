@@ -26,6 +26,16 @@ def load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text())
 
 
+def deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
 def docker_options(env: dict[str, str], ports: dict[str, str]) -> str:
     parts: list[str] = []
     for external, internal in ports.items():
@@ -82,10 +92,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build a Vast template payload from local specs")
     parser.add_argument("--template-spec", type=Path, required=True)
     parser.add_argument("--model-profile", type=Path, required=True)
+    parser.add_argument("--private-overlay", type=Path, default=None, help="ignored local JSON overlay for private non-secret values")
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
 
-    payload = build_template(load_json(args.template_spec), load_json(args.model_profile))
+    template = load_json(args.template_spec)
+    if args.private_overlay:
+        template = deep_merge(template, load_json(args.private_overlay))
+    payload = build_template(template, load_json(args.model_profile))
     text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)

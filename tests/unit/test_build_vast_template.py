@@ -57,6 +57,19 @@ class BuildVastTemplateTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             build_vast_template.build_template(self.template, self.model)
 
+    def test_private_overlay_can_supply_non_secret_private_values(self):
+        overlay = {
+            "env_map": {
+                "R2_BUCKET": "private-bucket-placeholder",
+                "R2_ENDPOINT": "https://private-account.example.invalid",
+            }
+        }
+        merged = build_vast_template.deep_merge(self.template, overlay)
+        payload = build_vast_template.build_template(merged, self.model)
+        env, _ = self.parse_env(payload["env"])
+        self.assertEqual(env["R2_BUCKET"], "private-bucket-placeholder")
+        self.assertEqual(env["R2_ENDPOINT"], "https://private-account.example.invalid")
+
     def test_payload_contains_no_obvious_secret_or_pii_values(self):
         payload = build_vast_template.build_template(self.template, self.model)
         text = json.dumps(payload, sort_keys=True)

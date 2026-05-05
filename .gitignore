@@ -18,6 +18,7 @@ env.*
 templates/*
 !templates/*.public.json
 state/
+config/private/
 instances/
 offers/
 
