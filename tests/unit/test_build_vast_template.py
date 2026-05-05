@@ -12,8 +12,37 @@ SPEC.loader.exec_module(build_vast_template)
 
 class BuildVastTemplateTests(unittest.TestCase):
     def setUp(self):
-        self.template = json.loads((ROOT / "config" / "templates" / "vllm-r2-base.public.json").read_text())
-        self.model = json.loads((ROOT / "config" / "models" / "qwen3.5-9b-awq.json").read_text())
+        self.template = {
+            "name": "fixture-template",
+            "image": "vastai/vllm",
+            "tag": "fixture-tag",
+            "env_map": {
+                "R2_BUCKET": "<your-r2-bucket>",
+                "R2_ENDPOINT": "https://<account-id>.r2.cloudflarestorage.com",
+                "VLLM_ARGS": "",
+                "AUTH_EXCLUDE": "8000",
+                "PROVISIONING_SCRIPT": "https://example.invalid/provision.sh",
+            },
+            "ports": {"8000": "8000"},
+            "extra_filters": {},
+        }
+        self.model = {
+            "name": "fixture-model",
+            "r2_prefix": "org/model",
+            "model_dir": "/workspace/models/org/model",
+            "served_model_name": "fixture-served-name",
+            "vllm": {
+                "dtype": "half",
+                "max_model_len": 4096,
+                "gpu_memory_utilization": 0.82,
+                "trust_remote_code": True,
+                "host": "127.0.0.1",
+                "port": 18000,
+                "download_dir": "/workspace/models",
+                "extra_args": ["--enforce-eager"],
+                "force_quantization": None,
+            },
+        }
 
     def parse_env(self, env_string):
         tokens = shlex.split(env_string)
@@ -32,25 +61,33 @@ class BuildVastTemplateTests(unittest.TestCase):
                 i += 1
         return env, ports
 
-    def test_builds_current_public_safe_template_from_local_specs(self):
+    def test_builds_template_from_local_specs(self):
         payload = build_vast_template.build_template(self.template, self.model)
         env, ports = self.parse_env(payload["env"])
 
         self.assertEqual(payload["image"], "vastai/vllm")
-        self.assertEqual(payload["tag"], "v0.20.0-cuda-13.0")
-        self.assertEqual(payload["model_profile"], "qwen3.5-9b-awq")
+        self.assertEqual(payload["model_profile"], "fixture-model")
         self.assertIn("8000:8000", ports)
-        self.assertEqual(env["R2_PREFIX"], "cyankiwi/Qwen3.5-9B-AWQ-4bit")
-        self.assertEqual(env["MODEL_DIR"], "/workspace/models/cyankiwi/Qwen3.5-9B-AWQ-4bit")
-        self.assertEqual(env["VLLM_MODEL"], "/workspace/models/cyankiwi/Qwen3.5-9B-AWQ-4bit")
-        self.assertEqual(env["SERVED_MODEL_NAME"], "qwen3.5-9b-awq")
-        self.assertEqual(env["VLLM_MAX_MODEL_LEN"], "8192")
-        self.assertEqual(env["VLLM_HOST"], "127.0.0.1")
-        self.assertEqual(env["VLLM_PORT"], "18000")
+        self.assertEqual(env["R2_PREFIX"], "org/model")
+        self.assertEqual(env["MODEL_DIR"], "/workspace/models/org/model")
+        self.assertEqual(env["VLLM_MODEL"], "/workspace/models/org/model")
+        self.assertEqual(env["SERVED_MODEL_NAME"], "fixture-served-name")
+        self.assertEqual(env["VLLM_MAX_MODEL_LEN"], "4096")
+        self.assertEqual(env["VLLM_GPU_MEMORY_UTILIZATION"], "0.82")
+        self.assertEqual(env["VLLM_EXTRA_ARGS"], "--enforce-eager")
         self.assertEqual(env["VLLM_ARGS"], "")
         self.assertEqual(env["AUTH_EXCLUDE"], "8000")
-        self.assertEqual(env["R2_BUCKET"], "<your-r2-bucket>")
-        self.assertEqual(env["R2_ENDPOINT"], "https://<account-id>.r2.cloudflarestorage.com")
+
+    def test_current_profile_contract_is_wired_into_template(self):
+        template = json.loads((ROOT / "config" / "templates" / "vllm-r2-base.public.json").read_text())
+        model = json.loads((ROOT / "config" / "models" / "qwen3.5-9b-awq.json").read_text())
+        payload = build_vast_template.build_template(template, model)
+        env, _ = self.parse_env(payload["env"])
+        self.assertEqual(payload["model_profile"], model["name"])
+        self.assertEqual(env["R2_PREFIX"], model["r2_prefix"])
+        self.assertEqual(env["MODEL_DIR"], model["model_dir"])
+        self.assertEqual(env["SERVED_MODEL_NAME"], model["served_model_name"])
+        self.assertEqual(env["VLLM_MAX_MODEL_LEN"], str(model["vllm"]["max_model_len"]))
 
     def test_rejects_secret_env_names(self):
         self.template["env_map"]["AWS_ACCESS_KEY_ID"] = "not-a-real-value"

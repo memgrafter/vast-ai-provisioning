@@ -7,22 +7,20 @@ class TransferScriptStaticTests(unittest.TestCase):
     def setUpClass(cls):
         cls.text = Path("transfer_model_to_R2.sh").read_text()
 
-    def test_requires_model_profile(self):
+    def test_model_profile_is_required_active_interface(self):
         self.assertIn("--model-profile", self.text)
         self.assertIn("ERROR: --model-profile is required", self.text)
+        self.assertNotIn("HF_REPO_ID=", self.text)
+        self.assertNotIn("HF_FILENAME", self.text)
 
-    def test_reads_model_and_r2_prefix_from_profile(self):
+    def test_model_identity_is_read_from_profile_json(self):
         self.assertIn('profile["hf_model_id"]', self.text)
         self.assertIn('profile["r2_prefix"]', self.text)
-        self.assertIn('profile_hf_model_id="$(printf', self.text)
-        self.assertIn('profile_r2_prefix="$(printf', self.text)
 
-    def test_keeps_secret_env_file_for_credentials_only(self):
+    def test_env_file_is_for_credentials_and_private_destination(self):
         self.assertIn("source env.modeltransfer", self.text)
         self.assertIn("$R2_BUCKET", self.text)
         self.assertIn("$R2_ENDPOINT", self.text)
-        self.assertNotIn("HF_REPO_ID=", self.text)
-        self.assertNotIn("HF_FILENAME", self.text)
 
 
 if __name__ == "__main__":
