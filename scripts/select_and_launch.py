@@ -256,7 +256,8 @@ def search_policy_offers(vast: VastAI, policy: dict[str, Any]) -> list[dict[str,
             f"disk_bw={number(offer.get('disk_bw') or offer.get('disk_io'), 1)} "
             f"downTB={money(offer.get('internet_down_cost_per_tb'))} "
             f"upTB={money(offer.get('internet_up_cost_per_tb'))} "
-            f"inet_down={number(offer.get('inet_down'), 1)} "
+            f"inet_down={number(offer.get('inet_down'), 1)}Mbps "
+            f"inet_down_MBps={number((float(offer.get('inet_down') or 0) / 8.0), 1)} "
             f"rel={number(offer.get('reliability2'), 4)} "
             f"eff={money(effective_cost(offer, policy))}"
         )
@@ -286,7 +287,9 @@ def print_selected_offer(offer: dict[str, Any], policy: dict[str, Any]) -> None:
     print(f"direct ports:   {offer.get('direct_port_count')}")
     print(f"disk available: {number(offer.get('disk_space'), 1)}GB")
     print(f"disk bw:        {number(offer.get('disk_bw') or offer.get('disk_io'), 1)} MB/s")
-    print(f"inet down/up:   {number(offer.get('inet_down'), 1)} / {number(offer.get('inet_up'), 1)}")
+    inet_down_mbps = float(offer.get('inet_down') or 0)
+    print(f"inet down/up:   {number(offer.get('inet_down'), 1)} / {number(offer.get('inet_up'), 1)} Mbps")
+    print(f"inet down:      {number(inet_down_mbps / 8.0, 1)} MB/s theoretical")
     print()
     print("Costs")
     print("=====")

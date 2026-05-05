@@ -39,7 +39,7 @@
   },
   "network": {
     "min_direct_port_count": 1,
-    "min_inet_down": 300,
+    "min_inet_down": 1000,
     "max_internet_down_cost_per_tb": 3.0,
     "max_internet_up_cost_per_tb": 4.0
   },
