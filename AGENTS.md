@@ -54,42 +54,51 @@ config/templates/vllm-r2-base.public.json
 Build Vast template payloads locally from:
 
 ```text
-public-safe template spec + model profile
+public-safe template spec + launch profile + model profile + ignored private overlay
 ```
 
-Use:
+The launch profile owns the remote template identity:
 
-```bash
-./run.sh scripts/build_vast_template.py \
-  --template-spec config/templates/vllm-r2-base.public.json \
-  --private-overlay config/private/vllm-r2.local.json \
-  --model-profile config/models/qwen3.5-9b-awq.json \
-  --out state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json
+```json
+"template": {
+  "name": "...",
+  "hash_id": "..."
+}
 ```
 
-The build writes `state/templates/manifest.json`. `scripts/apply_vast_template.py` only applies rendered templates listed in that manifest; running it with no args prints help.
-
-`config/private/` is ignored and may contain private-but-not-secret values such as real R2 bucket and endpoint. Rendered/live/private template files belong in ignored local paths such as `state/` or ignored `templates/` snapshots. Do not commit them.
-
-Create or apply a reviewed rendered payload explicitly:
+Use the launch-profile-driven prepare command for remote create/update:
 
 ```bash
 . env.vast-management
-./run.sh scripts/apply_vast_template.py \
-  --create \
-  --template state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json \
-  --update-launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json
+./run.sh scripts/prepare_vast_template.py \
+  --launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json \
+  --create
 ```
 
 or update an existing remote template by hash:
 
 ```bash
 . env.vast-management
-./run.sh scripts/apply_vast_template.py \
-  --hash-id <remote-template-hash> \
-  --template state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json \
-  --update-launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json
+./run.sh scripts/prepare_vast_template.py \
+  --launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json \
+  --hash-id <remote-template-hash>
 ```
+
+Templates default to private. Use `--public` only for intentionally shareable templates whose overlay contains no private identifiers.
+
+For review-only rendering without remote mutation:
+
+```bash
+./run.sh scripts/build_vast_template.py \
+  --launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json \
+  --template-spec config/templates/vllm-r2-base.public.json \
+  --private-overlay config/private/vllm-r2.local.json \
+  --out state/templates/qwen3.5-9b-awq.interruptible.rendered.json
+```
+
+The build writes `state/templates/manifest.json`. `scripts/apply_vast_template.py` only applies rendered templates listed in that manifest; running it with no args prints help.
+
+`config/private/` is ignored and may contain private-but-not-secret values such as real R2 bucket and endpoint. Rendered/live/private template files belong in ignored local paths such as `state/` or ignored `templates/` snapshots. Do not commit them.
 
 ## Local setup
 

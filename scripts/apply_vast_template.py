@@ -70,6 +70,26 @@ def update_kwargs(payload: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in normalized.items() if k in REMOTE_ALLOWED_KEYS}
 
 
+def validate_launch_profile_match(template_path: Path, payload: dict[str, Any], launch_profile_path: Path) -> None:
+    manifest_entry = load_manifest_for_template(template_path)
+    launch = json.loads(launch_profile_path.read_text())
+    expected_template_name = launch.get("template", {}).get("name")
+    expected_model_name = json.loads(Path(launch["model_profile"]).read_text()).get("name")
+    errors: list[str] = []
+    if manifest_entry.get("template_name") != payload.get("name"):
+        errors.append("manifest template_name does not match payload name")
+    if manifest_entry.get("model_profile_name") != payload.get("model_profile"):
+        errors.append("manifest model_profile_name does not match payload model_profile")
+    if expected_template_name != payload.get("name"):
+        errors.append(f"payload name {payload.get('name')!r} does not match launch template name {expected_template_name!r}")
+    if expected_model_name != payload.get("model_profile"):
+        errors.append(f"payload model_profile {payload.get('model_profile')!r} does not match launch model profile {expected_model_name!r}")
+    if payload.get("private") is not True:
+        print("WARN: rendered template is public/private=false; only use this for intentionally shareable templates.", file=sys.stderr)
+    if errors:
+        raise SystemExit("Template/launch profile safety check failed:\n- " + "\n- ".join(errors))
+
+
 def write_launch_profile_hash(path: Path, template_hash: str) -> None:
     data = json.loads(path.read_text())
     data.setdefault("template", {})["hash_id"] = template_hash
@@ -83,6 +103,19 @@ def result_hash_id(result: dict[str, Any]) -> str | None:
     if template.get("hash_id"):
         return str(template["hash_id"])
     return None
+
+
+def apply_template(vast: VastAI, payload: dict[str, Any], *, create: bool, hash_id: str | None = None) -> dict[str, Any]:
+    kwargs = update_kwargs(payload)
+    if create:
+        # VastAI.create_template injects jup_direct/ssh_direct/private defaults, which
+        # conflict with fully rendered template kwargs. Call the lower-level API.
+        from vastai.api import offers
+
+        return offers.create_template(vast.client, **kwargs)
+    if not hash_id:
+        raise ValueError("hash_id is required when create=False")
+    return vast.update_template(hash_id, **kwargs)
 
 
 def main() -> None:
@@ -112,6 +145,7 @@ def main() -> None:
     print(f"Private:              {kwargs.get('private')}")
     print(f"Env bytes:            {len(kwargs.get('env') or '')}")
     if args.update_launch_profile:
+        validate_launch_profile_match(args.template, payload, args.update_launch_profile)
         print(f"Launch profile:       {args.update_launch_profile}")
     if not args.yes:
         answer = input(f"{action.capitalize()} this remote Vast template from local rendered payload? [y/N] ").strip().lower()
@@ -120,14 +154,7 @@ def main() -> None:
             return
 
     vast = VastAI()
-    if args.create:
-        # VastAI.create_template injects jup_direct/ssh_direct/private defaults, which
-        # conflict with fully rendered template kwargs. Call the lower-level API.
-        from vastai.api import offers
-
-        result = offers.create_template(vast.client, **kwargs)
-    else:
-        result = vast.update_template(args.hash_id, **kwargs)
+    result = apply_template(vast, payload, create=args.create, hash_id=args.hash_id)
     print(json.dumps(result, indent=2, sort_keys=True, default=str))
 
     new_hash = result_hash_id(result)

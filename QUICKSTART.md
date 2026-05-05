@@ -35,7 +35,7 @@ source env.modeltransfer
 ./transfer_model_to_R2.sh --model-profile config/models/qwen3.5-9b-awq.json
 ```
 
-## 3. Build local template payload
+## 3. Build/apply remote template from launch profile
 
 The local public-safe template spec is:
 
@@ -43,38 +43,40 @@ The local public-safe template spec is:
 config/templates/vllm-r2-base.public.json
 ```
 
-Build a rendered template payload for review:
+The ignored private overlay supplies private-but-not-secret R2 identifiers:
+
+```text
+config/private/vllm-r2.local.json
+```
+
+Prepare a remote template directly from the committed launch profile:
+
+```bash
+. env.vast-management
+./run.sh scripts/prepare_vast_template.py \
+  --launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json \
+  --create
+```
+
+This renders a local payload under `state/templates/`, writes/updates `state/templates/manifest.json`, creates a remote Vast template, and writes the returned `template.hash_id` back into the launch profile. Templates default to private. Use `--public` only for intentionally shareable templates whose overlay contains no private identifiers.
+
+To update an existing remote template instead:
+
+```bash
+. env.vast-management
+./run.sh scripts/prepare_vast_template.py \
+  --launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json \
+  --hash-id <remote-template-hash>
+```
+
+For review-only rendering without remote mutation:
 
 ```bash
 ./run.sh scripts/build_vast_template.py \
+  --launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json \
   --template-spec config/templates/vllm-r2-base.public.json \
   --private-overlay config/private/vllm-r2.local.json \
-  --model-profile config/models/qwen3.5-9b-awq.json \
-  --out state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json
-```
-
-The public spec uses placeholders for private R2 identifiers. Put real private-but-not-secret identifiers in an ignored overlay under `config/private/`. Keep rendered live templates under ignored local paths only.
-
-The build also writes `state/templates/manifest.json`. The apply script only applies rendered templates listed in that manifest; running it with no args prints help.
-
-Create or apply a reviewed rendered payload explicitly:
-
-```bash
-. env.vast-management
-./run.sh scripts/apply_vast_template.py \
-  --create \
-  --template state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json \
-  --update-launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json
-```
-
-or update an existing remote template by hash:
-
-```bash
-. env.vast-management
-./run.sh scripts/apply_vast_template.py \
-  --hash-id <remote-template-hash> \
-  --template state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json \
-  --update-launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json
+  --out state/templates/qwen3.5-9b-awq.interruptible.rendered.json
 ```
 
 ## 4. Optional one-command smoke loop

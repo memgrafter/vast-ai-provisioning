@@ -76,16 +76,43 @@ def assert_public_safe(env: dict[str, str]) -> None:
         raise ValueError(f"template env must not contain secret env names: {', '.join(forbidden_present)}")
 
 
-def build_template(template: dict[str, Any], model: dict[str, Any]) -> dict[str, Any]:
+def build_template(template: dict[str, Any], model: dict[str, Any], *, private: bool | None = None) -> dict[str, Any]:
     env = env_from_specs(template, model)
     assert_public_safe(env)
     ports = {str(k): str(v) for k, v in (template.get("ports") or {}).items()}
     payload = {k: v for k, v in template.items() if k not in {"env_map", "ports"}}
+    if private is not None:
+        payload["private"] = private
+    else:
+        payload.setdefault("private", True)
     payload["env"] = docker_options(env, ports)
     payload["model_profile"] = model.get("name")
     payload["desc"] = template.get("desc", "")
     payload["extra_filters"] = json.dumps(template.get("extra_filters", {}), sort_keys=True)
     return payload
+
+
+def build_from_launch_profile(
+    *,
+    launch_profile_path: Path,
+    template_spec_path: Path,
+    private_overlay_path: Path | None,
+    private: bool = True,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    launch = load_json(launch_profile_path)
+    model_profile_path = Path(launch["model_profile"])
+    template = load_json(template_spec_path)
+    if private_overlay_path:
+        template = deep_merge(template, load_json(private_overlay_path))
+    template["name"] = launch["template"]["name"]
+    payload = build_template(template, load_json(model_profile_path), private=private)
+    metadata = {
+        "template_spec": template_spec_path,
+        "model_profile": model_profile_path,
+        "private_overlay": private_overlay_path,
+        "launch_profile": launch_profile_path,
+    }
+    return payload, metadata
 
 
 def update_manifest(out: Path, args: argparse.Namespace, payload: dict[str, Any]) -> None:
@@ -98,7 +125,8 @@ def update_manifest(out: Path, args: argparse.Namespace, payload: dict[str, Any]
         "file": out.name,
         "template_spec": str(args.template_spec),
         "model_profile": str(args.model_profile),
-        "private_overlay": str(args.private_overlay) if args.private_overlay else None,
+        "private_overlay": str(args.private_overlay) if getattr(args, "private_overlay", None) else None,
+        "launch_profile": str(args.launch_profile) if getattr(args, "launch_profile", None) else None,
         "model_profile_name": payload.get("model_profile"),
         "template_name": payload.get("name"),
         "private": payload.get("private"),
@@ -109,20 +137,37 @@ def update_manifest(out: Path, args: argparse.Namespace, payload: dict[str, Any]
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build a Vast template payload from local specs")
     parser.add_argument("--template-spec", type=Path, required=True)
-    parser.add_argument("--model-profile", type=Path, required=True)
+    parser.add_argument("--model-profile", type=Path, default=None)
+    parser.add_argument("--launch-profile", type=Path, default=None, help="derive model profile and template name from launch profile")
     parser.add_argument("--private-overlay", type=Path, default=None, help="ignored local JSON overlay for private non-secret values")
     parser.add_argument("--out", type=Path, default=None)
+    privacy = parser.add_mutually_exclusive_group()
+    privacy.add_argument("--private", dest="private", action="store_true", default=True, help="render remote template as private (default)")
+    privacy.add_argument("--public", dest="private", action="store_false", help="render remote template as public; only use with public-safe overlays")
     args = parser.parse_args()
 
-    template = load_json(args.template_spec)
-    if args.private_overlay:
-        template = deep_merge(template, load_json(args.private_overlay))
-    payload = build_template(template, load_json(args.model_profile))
+    out = args.out
+    if args.launch_profile:
+        payload, metadata = build_from_launch_profile(
+            launch_profile_path=args.launch_profile,
+            template_spec_path=args.template_spec,
+            private_overlay_path=args.private_overlay,
+            private=args.private,
+        )
+        manifest_args = argparse.Namespace(**metadata)
+    else:
+        if not args.model_profile:
+            raise SystemExit("--model-profile is required unless --launch-profile is used")
+        template = load_json(args.template_spec)
+        if args.private_overlay:
+            template = deep_merge(template, load_json(args.private_overlay))
+        payload = build_template(template, load_json(args.model_profile), private=args.private)
+        manifest_args = args
     text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
-    if args.out:
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(text)
-        update_manifest(args.out, args, payload)
+    if out:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text)
+        update_manifest(out, manifest_args, payload)
     else:
         print(text, end="")
 
