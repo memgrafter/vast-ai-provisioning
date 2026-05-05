@@ -1,0 +1,20 @@
+{
+  "name": "qwen3.6-27b-awq-coding-budget-160k",
+  "hf_model_id": "QuantTrio/Qwen3.6-27B-AWQ",
+  "r2_prefix": "QuantTrio/Qwen3.6-27B-AWQ",
+  "model_dir": "/workspace/models/QuantTrio/Qwen3.6-27B-AWQ",
+  "served_model_name": "qwen3.6-27b-awq-coding-budget-160k",
+  "quantization": "awq",
+  "expected_model_download_tb": 0.025,
+  "vllm": {
+    "dtype": "half",
+    "max_model_len": 160000,
+    "gpu_memory_utilization": 0.9,
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "extra_args": [],
+    "force_quantization": null
+  }
+}
