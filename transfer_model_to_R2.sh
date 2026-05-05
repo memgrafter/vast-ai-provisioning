@@ -38,9 +38,10 @@ profile_r2_prefix="$(printf '%s\n' "$profile_values" | sed -n '2p')"
 MODEL_DIR="./models/$profile_hf_model_id"
 mkdir -p "$MODEL_DIR"
 
+# Do not pass HF_TOKEN as a CLI argument; process listings can expose argv.
+# The Hugging Face CLI reads HF_TOKEN from the environment after env.modeltransfer is sourced.
 hf download "$profile_hf_model_id" \
-  --local-dir "$MODEL_DIR" \
-  ${HF_TOKEN:+--token "$HF_TOKEN"}
+  --local-dir "$MODEL_DIR"
 
 aws s3 sync "$MODEL_DIR" "s3://$R2_BUCKET/$profile_r2_prefix" \
   --endpoint-url "$R2_ENDPOINT"

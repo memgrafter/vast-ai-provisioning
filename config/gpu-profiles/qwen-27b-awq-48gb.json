@@ -1,0 +1,18 @@
+{
+  "name": "qwen-27b-awq-48gb",
+  "preferred_gpu_name": null,
+  "allowed_gpu_names": [
+    "L40S",
+    "L40",
+    "RTX A6000",
+    "RTX 6000 Ada",
+    "RTX 5090",
+    "A100 PCIE",
+    "A100 SXM4",
+    "H100 PCIe",
+    "H100 SXM"
+  ],
+  "num_gpus": 1,
+  "min_gpu_total_ram_mb": 45000,
+  "min_cuda_max_good": 13.0
+}
