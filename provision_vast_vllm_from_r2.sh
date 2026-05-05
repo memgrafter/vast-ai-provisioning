@@ -15,6 +15,10 @@ MODEL_MIN_FREE_GB="${MODEL_MIN_FREE_GB:-5}"
 # Set R2_SPEED_TEST_MIN_MBPS=0 to disable.
 R2_SPEED_TEST_MIN_MBPS="${R2_SPEED_TEST_MIN_MBPS:-100}"
 R2_SPEED_TEST_MAX_MB="${R2_SPEED_TEST_MAX_MB:-512}"
+R2_TRANSFER_TOOL="${R2_TRANSFER_TOOL:-rclone}"
+RCLONE_TRANSFERS="${RCLONE_TRANSFERS:-16}"
+RCLONE_CHECKERS="${RCLONE_CHECKERS:-32}"
+RCLONE_MULTI_THREAD_STREAMS="${RCLONE_MULTI_THREAD_STREAMS:-8}"
 
 mkdir -p "$MODEL_DIR" ~/.aws
 
@@ -47,6 +51,24 @@ if ! command -v aws >/dev/null 2>&1; then
   fi
 fi
 
+if [ "$R2_TRANSFER_TOOL" = "rclone" ] && ! command -v rclone >/dev/null 2>&1; then
+  echo "Installing rclone for parallel R2 downloads"
+  curl -fsSL https://rclone.org/install.sh | bash
+fi
+
+rclone_config="/tmp/rclone-r2.conf"
+if [ "$R2_TRANSFER_TOOL" = "rclone" ]; then
+  cat > "$rclone_config" <<EOF
+[r2]
+type = s3
+provider = Cloudflare
+access_key_id = $AWS_ACCESS_KEY_ID
+secret_access_key = $AWS_SECRET_ACCESS_KEY
+endpoint = $R2_ENDPOINT
+acl = private
+EOF
+fi
+
 if [ "$R2_SPEED_TEST_MIN_MBPS" != "0" ]; then
   echo "R2 speed test enabled: minimum ${R2_SPEED_TEST_MIN_MBPS} MB/s, max ${R2_SPEED_TEST_MAX_MB} MB"
   speed_key="$(aws s3 ls "s3://$R2_BUCKET/$R2_PREFIX/" --recursive --endpoint-url "$R2_ENDPOINT" \
@@ -58,25 +80,44 @@ if [ "$R2_SPEED_TEST_MIN_MBPS" != "0" ]; then
     echo "ERROR: R2 speed test could not find any non-empty object under s3://$R2_BUCKET/$R2_PREFIX" >&2
     exit 1
   fi
-  speed_out="/tmp/r2-speed-test.bin"
-  rm -f "$speed_out"
-  range_end="$(( R2_SPEED_TEST_MAX_MB * 1000 * 1000 - 1 ))"
+  speed_dir="/tmp/r2-speed-test"
+  rm -rf "$speed_dir"
+  mkdir -p "$speed_dir"
+  test_bytes="$(( R2_SPEED_TEST_MAX_MB * 1000 * 1000 ))"
+  chunk_count="$RCLONE_MULTI_THREAD_STREAMS"
+  [ "$chunk_count" -lt 1 ] && chunk_count=1
+  chunk_bytes="$(( test_bytes / chunk_count ))"
   echo "R2 speed test object: s3://$R2_BUCKET/$speed_key"
-  echo "R2 speed test range: bytes=0-${range_end}"
+  echo "R2 speed test range: first ${test_bytes} bytes across ${chunk_count} parallel ranged GETs"
   start_ts="$(date +%s)"
-  aws s3api get-object \
-    --bucket "$R2_BUCKET" \
-    --key "$speed_key" \
-    --range "bytes=0-${range_end}" \
-    --endpoint-url "$R2_ENDPOINT" \
-    "$speed_out" >/dev/null
+  pids=""
+  i=0
+  while [ "$i" -lt "$chunk_count" ]; do
+    range_start="$(( i * chunk_bytes ))"
+    if [ "$i" -eq "$(( chunk_count - 1 ))" ]; then
+      range_end="$(( test_bytes - 1 ))"
+    else
+      range_end="$(( range_start + chunk_bytes - 1 ))"
+    fi
+    aws s3api get-object \
+      --bucket "$R2_BUCKET" \
+      --key "$speed_key" \
+      --range "bytes=${range_start}-${range_end}" \
+      --endpoint-url "$R2_ENDPOINT" \
+      "$speed_dir/part-$i" >/dev/null &
+    pids="$pids $!"
+    i="$(( i + 1 ))"
+  done
+  for pid in $pids; do
+    wait "$pid"
+  done
   end_ts="$(date +%s)"
   elapsed_s="$(( end_ts - start_ts ))"
   [ "$elapsed_s" -lt 1 ] && elapsed_s=1
-  bytes="$(wc -c < "$speed_out")"
+  bytes="$(find "$speed_dir" -type f -printf '%s\n' | awk '{s += $1} END {print s + 0}')"
   mbps="$(awk -v b="$bytes" -v s="$elapsed_s" 'BEGIN {printf "%.2f", b / 1000000 / s}')"
   echo "R2 speed test result: ${bytes} bytes in ${elapsed_s}s = ${mbps} MB/s"
-  rm -f "$speed_out"
+  rm -rf "$speed_dir"
   if awk -v got="$mbps" -v min="$R2_SPEED_TEST_MIN_MBPS" 'BEGIN {exit !(got < min)}'; then
     echo "ERROR: R2 speed test below threshold: ${mbps} MB/s < ${R2_SPEED_TEST_MIN_MBPS} MB/s" >&2
     exit 42
@@ -91,8 +132,19 @@ else
   echo "Sync started at: $(date -Is)"
   # Intentionally do not use --only-show-errors here. Vast UI logs need transfer
   # activity so we can tell R2 sync is progressing before vLLM starts.
-  aws s3 sync "s3://$R2_BUCKET/$R2_PREFIX" "$MODEL_DIR" \
-    --endpoint-url "$R2_ENDPOINT"
+  if [ "$R2_TRANSFER_TOOL" = "rclone" ]; then
+    rclone copy "r2:$R2_BUCKET/$R2_PREFIX" "$MODEL_DIR" \
+      --config "$rclone_config" \
+      --transfers "$RCLONE_TRANSFERS" \
+      --checkers "$RCLONE_CHECKERS" \
+      --multi-thread-cutoff 1M \
+      --multi-thread-streams "$RCLONE_MULTI_THREAD_STREAMS" \
+      --stats 10s \
+      --stats-one-line
+  else
+    aws s3 sync "s3://$R2_BUCKET/$R2_PREFIX" "$MODEL_DIR" \
+      --endpoint-url "$R2_ENDPOINT"
+  fi
   echo "Sync finished at: $(date -Is)"
   echo "Synced bytes: $(du -sh "$MODEL_DIR" | awk '{print $1}')"
 fi

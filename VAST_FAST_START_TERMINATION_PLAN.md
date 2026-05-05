@@ -100,9 +100,23 @@ R2_SPEED_TEST_MAX_MB=512
 
 No template env is required. Override with Vast account/template env only when tuning; set `R2_SPEED_TEST_MIN_MBPS=0` to disable.
 
-The provisioning script will copy one large model object before full sync and log:
+The provisioning script measures aggregate download with parallel ranged GETs, then uses rclone by default for the full R2 download. This keeps the 100 MB/s gate but tests a parallel path closer to the optimized transfer path.
+
+Default transfer knobs:
+
+```bash
+R2_TRANSFER_TOOL=rclone
+RCLONE_TRANSFERS=16
+RCLONE_CHECKERS=32
+RCLONE_MULTI_THREAD_STREAMS=8
+```
+
+Note: `--s3-upload-concurrency` is an rclone upload knob; this workflow downloads from R2 to Vast. The download-side equivalents we use are `--transfers` plus `--multi-thread-streams`.
+
+The speed test logs:
 
 ```text
+R2 speed test range: first <bytes> bytes across <N> parallel ranged GETs
 R2 speed test result: <bytes> bytes in <seconds>s = <MB/s> MB/s
 ```
 
