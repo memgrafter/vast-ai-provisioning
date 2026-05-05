@@ -41,6 +41,7 @@ class Signals:
     vllm_started: bool
     api_ready: bool
     speed_test_failed: bool
+    provisioning_failed: bool
     errors: list[str]
 
 
@@ -94,7 +95,6 @@ def analyze_logs(logs: str, image: str) -> Signals:
         vllm_waiting_for_provisioning=("vllm startup paused until instance provisioning has completed" in logs),
         vllm_started=(
             "vllm serve" in logs
-            or "Started server process" in logs and "vllm" in lower and "18000" in logs
             or "Uvicorn running on http://127.0.0.1:18000" in logs
             or "Uvicorn running on http://0.0.0.0:18000" in logs
         ),
@@ -106,6 +106,12 @@ def analyze_logs(logs: str, image: str) -> Signals:
         speed_test_failed=(
             "R2 speed test below threshold" in logs
             or "Provisioning script failed (exit 42)" in logs
+        ),
+        provisioning_failed=(
+            "All 3 attempts exhausted" in logs
+            or "missing AWS_ACCESS_KEY_ID" in logs
+            or "missing AWS_SECRET_ACCESS_KEY" in logs
+            or "Provisioning script failed (exit 1)" in logs
         ),
         errors=error_lines,
     )
@@ -135,6 +141,7 @@ def print_status(instance_id: int, info: dict[str, Any], signals: Signals, elaps
         f"r2_transfer_active={signals.r2_transfer_active} "
         f"r2_sync_finished={signals.r2_sync_finished} "
         f"speed_test_failed={signals.speed_test_failed} "
+        f"provisioning_failed={signals.provisioning_failed} "
         f"vllm_waiting={signals.vllm_waiting_for_provisioning} "
         f"vllm_started={signals.vllm_started} "
         f"api_ready={signals.api_ready}"
@@ -142,6 +149,8 @@ def print_status(instance_id: int, info: dict[str, Any], signals: Signals, elaps
     recommendation = "WAIT"
     if signals.speed_test_failed:
         recommendation = "TERMINATE_R2_SPEED_TEST_FAILED"
+    elif signals.provisioning_failed:
+        recommendation = "TERMINATE_PROVISIONING_FAILED"
     elif signals.api_ready or signals.vllm_started:
         recommendation = "READY_OR_STARTING_VLLM"
     elif signals.r2_sync_finished:
