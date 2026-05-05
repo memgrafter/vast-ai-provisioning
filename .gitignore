@@ -14,6 +14,10 @@ env.*
 .env
 .env.*
 
+# Vast template snapshots: ignored by default because fetched templates can contain private IDs.
+templates/*
+!templates/*.public.json
+
 # Python/cache noise
 __pycache__/
 *.pyc
