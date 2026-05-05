@@ -11,6 +11,10 @@ set -euo pipefail
 export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-auto}"
 
 MODEL_MIN_FREE_GB="${MODEL_MIN_FREE_GB:-5}"
+# Built-in smoke gate for R2 path quality. Override with env if needed.
+# Set R2_SPEED_TEST_MIN_MBPS=0 to disable.
+R2_SPEED_TEST_MIN_MBPS="${R2_SPEED_TEST_MIN_MBPS:-100}"
+R2_SPEED_TEST_MAX_MB="${R2_SPEED_TEST_MAX_MB:-512}"
 
 mkdir -p "$MODEL_DIR" ~/.aws
 
@@ -43,8 +47,6 @@ if ! command -v aws >/dev/null 2>&1; then
   fi
 fi
 
-R2_SPEED_TEST_MIN_MBPS="${R2_SPEED_TEST_MIN_MBPS:-0}"
-R2_SPEED_TEST_MAX_MB="${R2_SPEED_TEST_MAX_MB:-512}"
 if [ "$R2_SPEED_TEST_MIN_MBPS" != "0" ]; then
   echo "R2 speed test enabled: minimum ${R2_SPEED_TEST_MIN_MBPS} MB/s, max ${R2_SPEED_TEST_MAX_MB} MB"
   speed_key="$(aws s3 ls "s3://$R2_BUCKET/$R2_PREFIX/" --recursive --endpoint-url "$R2_ENDPOINT" \

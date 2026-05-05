@@ -91,12 +91,14 @@ At that point the container has started and the bottleneck has moved to R2 sync/
 
 ## R2 speed greylist policy
 
-For future launches, set a non-secret template env threshold:
+The provisioning script has a built-in non-secret speed threshold:
 
 ```bash
 R2_SPEED_TEST_MIN_MBPS=100
 R2_SPEED_TEST_MAX_MB=512
 ```
+
+No template env is required. Override with Vast account/template env only when tuning; set `R2_SPEED_TEST_MIN_MBPS=0` to disable.
 
 The provisioning script will copy one large model object before full sync and log:
 
