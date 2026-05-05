@@ -22,11 +22,38 @@ RCLONE_MULTI_THREAD_STREAMS="${RCLONE_MULTI_THREAD_STREAMS:-8}"
 
 mkdir -p "$MODEL_DIR" ~/.aws
 
+SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-$(basename "$MODEL_DIR" | tr '[:upper:]_' '[:lower:]-')}"
+VLLM_DTYPE="${VLLM_DTYPE:-half}"
+VLLM_MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-8192}"
+VLLM_HOST="${VLLM_HOST:-127.0.0.1}"
+VLLM_PORT="${VLLM_PORT:-18000}"
+VLLM_DOWNLOAD_DIR="${VLLM_DOWNLOAD_DIR:-/workspace/models}"
+VLLM_GPU_MEMORY_UTILIZATION="${VLLM_GPU_MEMORY_UTILIZATION:-0.90}"
+VLLM_TRUST_REMOTE_CODE="${VLLM_TRUST_REMOTE_CODE:-true}"
+VLLM_FORCE_QUANTIZATION="${VLLM_FORCE_QUANTIZATION:-}"
+VLLM_EXTRA_ARGS="${VLLM_EXTRA_ARGS:-}"
+
 # Use a file for complex vLLM args. This avoids Docker/template/env quoting
 # issues and is read by /opt/supervisor-scripts/vllm.sh after provisioning.
-cat > /etc/vllm-args.conf <<'EOF'
---served-model-name qwen3.5-9b-awq --dtype half --max-model-len 8192 --host 127.0.0.1 --port 18000 --download-dir /workspace/models --gpu-memory-utilization 0.90 --trust-remote-code --api-key ${VLLM_API_KEY}
-EOF
+{
+  printf -- '--served-model-name %q ' "$SERVED_MODEL_NAME"
+  printf -- '--dtype %q ' "$VLLM_DTYPE"
+  printf -- '--max-model-len %q ' "$VLLM_MAX_MODEL_LEN"
+  printf -- '--host %q ' "$VLLM_HOST"
+  printf -- '--port %q ' "$VLLM_PORT"
+  printf -- '--download-dir %q ' "$VLLM_DOWNLOAD_DIR"
+  printf -- '--gpu-memory-utilization %q ' "$VLLM_GPU_MEMORY_UTILIZATION"
+  if [ "$VLLM_TRUST_REMOTE_CODE" = "true" ]; then
+    printf -- '--trust-remote-code '
+  fi
+  if [ -n "$VLLM_FORCE_QUANTIZATION" ]; then
+    printf -- '--quantization %q ' "$VLLM_FORCE_QUANTIZATION"
+  fi
+  if [ -n "$VLLM_EXTRA_ARGS" ]; then
+    printf -- '%s ' "$VLLM_EXTRA_ARGS"
+  fi
+  printf -- '--api-key ${VLLM_API_KEY}\n'
+} > /etc/vllm-args.conf
 
 available_gb="$(df -BG "$MODEL_DIR" | awk 'NR==2 {gsub(/G/, "", $4); print $4}')"
 if [ "${available_gb:-0}" -lt "$MODEL_MIN_FREE_GB" ]; then

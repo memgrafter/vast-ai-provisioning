@@ -1,0 +1,20 @@
+{
+  "name": "qwen-9b-awq-1gpu",
+  "preferred_gpu_name": null,
+  "allowed_gpu_names": [
+    "L40S",
+    "L40",
+    "RTX 3090",
+    "RTX 3090 Ti",
+    "RTX 4090",
+    "RTX 5090",
+    "RTX A5000",
+    "RTX A6000",
+    "A10",
+    "A100 PCIE",
+    "A100 SXM4"
+  ],
+  "num_gpus": 1,
+  "min_gpu_total_ram_mb": 21000,
+  "min_cuda_max_good": 13.0
+}

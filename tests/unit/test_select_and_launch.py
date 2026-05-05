@@ -1,19 +1,19 @@
 import copy
-import json
 import unittest
 from pathlib import Path
 
 from scripts.select_and_launch import (
     effective_cost,
     is_preferred_machine,
+    load_launch_context,
     offer_passes_policy,
     search_policy_offers,
     selection_sort_key,
 )
 
 
-def load_policy():
-    return json.loads(Path("config/launch-policy.l40s-prototype.json").read_text())
+def load_context():
+    return load_launch_context(Path("config/launch-profiles/qwen3.5-9b-awq.interruptible.json"))
 
 
 def good_offer(**overrides):
@@ -41,15 +41,15 @@ def good_offer(**overrides):
 
 class OfferPolicyTests(unittest.TestCase):
     def setUp(self):
-        self.policy = load_policy()
+        self.context = load_context()
 
     def assertFailsFor(self, reason, **offer_overrides):
-        ok, reasons = offer_passes_policy(good_offer(**offer_overrides), self.policy)
+        ok, reasons = offer_passes_policy(good_offer(**offer_overrides), self.context)
         self.assertFalse(ok)
         self.assertIn(reason, reasons)
 
     def test_good_offer_passes(self):
-        ok, reasons = offer_passes_policy(good_offer(), self.policy)
+        ok, reasons = offer_passes_policy(good_offer(), self.context)
         self.assertTrue(ok, reasons)
 
     def test_greylisted_machine_fails(self):
@@ -81,22 +81,22 @@ class OfferPolicyTests(unittest.TestCase):
         self.assertFailsFor("reliability2", reliability2=0.5)
 
     def test_effective_cost_includes_expected_download_cost(self):
-        policy = copy.deepcopy(self.policy)
-        policy["selection"]["expected_model_download_tb"] = 0.5
+        context = copy.deepcopy(self.context)
+        context["launch"]["selection"]["expected_model_download_tb"] = 0.5
         offer = good_offer(dph_total=1.0, internet_down_cost_per_tb=2.0)
-        self.assertEqual(effective_cost(offer, policy), 2.0)
+        self.assertEqual(effective_cost(offer, context), 2.0)
 
     def test_preferred_sort_wins_before_lower_effective_cost(self):
         preferred = good_offer(id=1, machine_id=1569, dph_total=0.60)
         non_preferred = good_offer(id=2, machine_id=99999, dph_total=0.10)
-        offers = sorted([non_preferred, preferred], key=lambda o: selection_sort_key(o, self.policy))
+        offers = sorted([non_preferred, preferred], key=lambda o: selection_sort_key(o, self.context))
         self.assertEqual(offers[0]["id"], 1)
-        self.assertTrue(is_preferred_machine(preferred, self.policy))
+        self.assertTrue(is_preferred_machine(preferred, self.context))
 
 
 class SearchPolicyOffersTests(unittest.TestCase):
     def test_query_uses_gpu_ram_gb_and_interruptible_market(self):
-        policy = load_policy()
+        context = load_context()
 
         class FakeVast:
             def __init__(self):
@@ -107,7 +107,7 @@ class SearchPolicyOffersTests(unittest.TestCase):
                 return [good_offer()]
 
         fake = FakeVast()
-        offers = search_policy_offers(fake, policy)
+        offers = search_policy_offers(fake, context)
         self.assertEqual(len(offers), 1)
         call = fake.calls[0]
         self.assertEqual(call["type"], "interruptible")
@@ -115,8 +115,8 @@ class SearchPolicyOffersTests(unittest.TestCase):
         self.assertIn("verified=true", call["query"])
 
     def test_on_demand_market_mapping(self):
-        policy = load_policy()
-        policy["market"] = "on-demand"
+        context = load_context()
+        context["launch"]["market"] = "on-demand"
 
         class FakeVast:
             def __init__(self):
@@ -127,7 +127,7 @@ class SearchPolicyOffersTests(unittest.TestCase):
                 return [good_offer()]
 
         fake = FakeVast()
-        search_policy_offers(fake, policy)
+        search_policy_offers(fake, context)
         self.assertEqual(fake.calls[0]["type"], "on-demand")
 
 

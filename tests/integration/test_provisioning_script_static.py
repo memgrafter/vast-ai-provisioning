@@ -19,18 +19,25 @@ class ProvisioningScriptStaticTests(unittest.TestCase):
         ]:
             self.assertIn(f": \"${{{name}:?missing {name}}}\"", self.text)
 
-    def test_writes_vllm_args_file_with_current_working_contract(self):
-        self.assertIn("cat > /etc/vllm-args.conf", self.text)
+    def test_writes_vllm_args_file_from_env_driven_contract(self):
+        self.assertIn("> /etc/vllm-args.conf", self.text)
         for snippet in [
-            "--served-model-name qwen3.5-9b-awq",
-            "--max-model-len 8192",
-            "--host 127.0.0.1",
-            "--port 18000",
+            "SERVED_MODEL_NAME=",
+            "VLLM_DTYPE=",
+            "VLLM_MAX_MODEL_LEN=",
+            "VLLM_HOST=",
+            "VLLM_PORT=",
+            "VLLM_DOWNLOAD_DIR=",
+            "VLLM_GPU_MEMORY_UTILIZATION=",
+            "VLLM_TRUST_REMOTE_CODE=",
+            "VLLM_FORCE_QUANTIZATION=",
+            "VLLM_EXTRA_ARGS=",
             "--api-key ${VLLM_API_KEY}",
         ]:
             self.assertIn(snippet, self.text)
 
-    def test_does_not_force_stale_awq_quantization(self):
+    def test_does_not_hardcode_current_model_or_force_stale_awq_quantization(self):
+        self.assertNotIn("--served-model-name qwen3.5-9b-awq", self.text)
         self.assertNotIn("--quantization awq", self.text)
 
     def test_uses_rclone_optimized_download_path(self):

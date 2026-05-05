@@ -7,7 +7,7 @@ Provision Vast.ai vLLM instances that sync a private R2-hosted Hugging Face mode
 ## Secret rules
 
 - This repo is public.
-- Never commit secrets, live instance JSON, API keys, R2 credentials, or Hugging Face tokens.
+- Never commit secrets, live instance JSON, API keys, R2 credentials, Hugging Face tokens, or PII.
 - Keep local secrets in ignored env files:
   - `env.modeltransfer`
   - `env.vast-management`
@@ -21,68 +21,52 @@ VLLM_API_KEY
 
 Do not put those values in public templates. Templates may reference `VLLM_API_KEY` by name only.
 
-## Current model
+## Profile-based config
 
-```bash
-MODEL_ID="cyankiwi/Qwen3.5-9B-AWQ-4bit"
-R2_PREFIX="cyankiwi/Qwen3.5-9B-AWQ-4bit"
-MODEL_DIR="/workspace/models/cyankiwi/Qwen3.5-9B-AWQ-4bit"
-SERVED_MODEL_NAME="qwen3.5-9b-awq"
-```
+The active launch path uses profiles directly. Do not reintroduce a rendered legacy launch-policy adapter.
 
-## Vast template
-
-Private working template:
+Current default model profile:
 
 ```text
-name: vLLM_R2_Model_20260504
-hash: b174caeb667a9c8e5cd7a68bd8b8af2e
+config/models/qwen3.5-9b-awq.json
 ```
 
-Public-safe skeleton:
+Current default GPU profile:
 
 ```text
-templates/vllm-r2-template.public.json
+config/gpu-profiles/qwen-9b-awq-1gpu.json
 ```
 
-The template should contain only non-secret env vars:
+Current default launch profile:
 
-```bash
-R2_BUCKET="<bucket>"
-R2_PREFIX="cyankiwi/Qwen3.5-9B-AWQ-4bit"
-R2_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com"
-AWS_DEFAULT_REGION="auto"
-MODEL_DIR="/workspace/models/cyankiwi/Qwen3.5-9B-AWQ-4bit"
-VLLM_MODEL="/workspace/models/cyankiwi/Qwen3.5-9B-AWQ-4bit"
-VLLM_ARGS=""
-AUTO_PARALLEL="false"
-AUTH_EXCLUDE="8000"
-PROVISIONING_SCRIPT="https://raw.githubusercontent.com/memgrafter/vast-ai-provisioning/main/provision_vast_vllm_from_r2.sh"
+```text
+config/launch-profiles/qwen3.5-9b-awq.interruptible.json
 ```
 
-## Launch policy
+Current default template spec:
+
+```text
+config/templates/vllm-r2-base.public.json
+```
+
+## Local template source of truth
+
+Build Vast template payloads locally from:
+
+```text
+public-safe template spec + model profile
+```
 
 Use:
 
-```text
-config/launch-policy.l40s-prototype.json
+```bash
+./run.sh scripts/build_vast_template.py \
+  --template-spec config/templates/vllm-r2-base.public.json \
+  --model-profile config/models/qwen3.5-9b-awq.json \
+  --out state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json
 ```
 
-Current policy intent:
-
-- interruptible market
-- 1 GPU
-- allowed GPU list, 21GB+ VRAM
-- CUDA >= 13.0
-- verified enforced in Vast search query only
-- reliability >= 0.98
-- 40GB disk
-- max total hourly <= $0.65
-- max storage <= $0.012/hr
-- max network <= $3/TB down, $4/TB up
-- bid cap <= $0.65/hr
-
-Note: Vast returns `verified` as null on some offers even when `verified=true` is in the query. Do not post-filter `offer["verified"]`; trust the server-side query.
+Rendered/live/private template files belong in ignored local paths such as `state/` or ignored `templates/` snapshots. Do not commit them.
 
 ## Local setup
 
@@ -99,11 +83,12 @@ Run scripts with:
 
 ## Launch flow
 
-Use the guarded launcher:
+Use the guarded profile launcher:
 
 ```bash
 . env.vast-management
-./run.sh scripts/select_and_launch.py
+./run.sh scripts/select_and_launch.py \
+  --launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json
 ```
 
 It must:
@@ -165,13 +150,19 @@ Syncing s3://...
 
 Until those appear, the machine is probably still pulling the Docker image.
 
+vLLM args are generated from profile-derived environment variables into:
+
+```text
+/etc/vllm-args.conf
+```
+
 ## Model transfer to R2
 
-Use local env:
+Use local env and model profile:
 
 ```bash
 source env.modeltransfer
-./transfer_model_to_R2.sh
+./transfer_model_to_R2.sh --model-profile config/models/qwen3.5-9b-awq.json
 ```
 
-For vLLM/AWQ, `HF_FILENAME` should be empty so the whole repo is mirrored.
+The transfer script reads Hugging Face model ID and R2 prefix from the model profile.

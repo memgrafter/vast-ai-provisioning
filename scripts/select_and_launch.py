@@ -19,6 +19,7 @@ from vastai import VastAI
 
 COSTING_STATUSES = {"running", "loading", "starting", "stopped", "exited", "unknown", "offline"}
 BAD_STATUSES = {"exited", "unknown", "offline"}
+DEFAULT_LAUNCH_PROFILE = Path("config/launch-profiles/qwen3.5-9b-awq.interruptible.json")
 
 
 def money(value: Any) -> str:
@@ -54,6 +55,26 @@ def get_instances(vast: VastAI) -> list[dict[str, Any]]:
     except Exception as e:
         print(f"WARN: show_instances failed: {e}", file=sys.stderr)
         return []
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text())
+
+
+def load_launch_context(path: Path) -> dict[str, Any]:
+    launch = load_json(path)
+    model_path = Path(launch["model_profile"])
+    gpu_path = Path(launch["gpu_profile"])
+    model = load_json(model_path)
+    gpu = load_json(gpu_path)
+    return {
+        "launch_profile_path": str(path),
+        "launch": launch,
+        "model_profile_path": str(model_path),
+        "model": model,
+        "gpu_profile_path": str(gpu_path),
+        "gpu": gpu,
+    }
 
 
 def get_volumes(vast: VastAI) -> dict[str, Any]:
@@ -140,16 +161,17 @@ def print_current_infra(instances: list[dict[str, Any]], volumes: dict[str, Any]
     return total_known
 
 
-def offer_passes_policy(offer: dict[str, Any], policy: dict[str, Any]) -> tuple[bool, list[str]]:
+def offer_passes_policy(offer: dict[str, Any], context: dict[str, Any]) -> tuple[bool, list[str]]:
     reasons: list[str] = []
-    gpu = policy["gpu"]
-    pricing = policy["pricing"]
-    storage = policy["storage"]
-    network = policy["network"]
-    reliability = policy["reliability"]
+    launch = context["launch"]
+    gpu = context["gpu"]
+    pricing = launch["pricing"]
+    storage = launch["storage"]
+    network = launch["network"]
+    reliability = launch["reliability"]
     require_verified = bool(reliability.get("require_verified", False))
 
-    greylisted_machines = {int(x) for x in policy.get("selection", {}).get("greylisted_machine_ids", [])}
+    greylisted_machines = {int(x) for x in launch.get("selection", {}).get("greylisted_machine_ids", [])}
     try:
         machine_id = int(offer.get("machine_id"))
     except Exception:
@@ -186,39 +208,41 @@ def offer_passes_policy(offer: dict[str, Any], policy: dict[str, Any]) -> tuple[
     return not reasons, reasons
 
 
-def effective_cost(offer: dict[str, Any], policy: dict[str, Any]) -> float:
-    tb = float(policy["selection"].get("expected_model_download_tb", 0))
+def effective_cost(offer: dict[str, Any], context: dict[str, Any]) -> float:
+    launch = context["launch"]
+    tb = float(launch.get("selection", {}).get("expected_model_download_tb", context["model"].get("expected_model_download_tb", 0)))
     return float(offer.get("dph_total") or math.inf) + tb * float(offer.get("internet_down_cost_per_tb") or 0)
 
 
-def is_preferred_machine(offer: dict[str, Any], policy: dict[str, Any]) -> bool:
-    preferred = {int(x) for x in policy.get("selection", {}).get("preferred_machine_ids", [])}
+def is_preferred_machine(offer: dict[str, Any], context: dict[str, Any]) -> bool:
+    preferred = {int(x) for x in context["launch"].get("selection", {}).get("preferred_machine_ids", [])}
     try:
         return int(offer.get("machine_id")) in preferred
     except Exception:
         return False
 
 
-def is_greylisted_machine(offer: dict[str, Any], policy: dict[str, Any]) -> bool:
-    greylisted = {int(x) for x in policy.get("selection", {}).get("greylisted_machine_ids", [])}
+def is_greylisted_machine(offer: dict[str, Any], context: dict[str, Any]) -> bool:
+    greylisted = {int(x) for x in context["launch"].get("selection", {}).get("greylisted_machine_ids", [])}
     try:
         return int(offer.get("machine_id")) in greylisted
     except Exception:
         return False
 
 
-def selection_sort_key(offer: dict[str, Any], policy: dict[str, Any]) -> tuple[bool, float, float]:
+def selection_sort_key(offer: dict[str, Any], context: dict[str, Any]) -> tuple[bool, float, float]:
     return (
-        not is_preferred_machine(offer, policy),
-        effective_cost(offer, policy),
+        not is_preferred_machine(offer, context),
+        effective_cost(offer, context),
         -float(offer.get("reliability2") or 0),
     )
 
 
-def search_policy_offers(vast: VastAI, policy: dict[str, Any]) -> list[dict[str, Any]]:
-    gpu = policy["gpu"]
-    storage_gb = float(policy["storage"]["disk_gb"])
-    require_verified = bool(policy["reliability"].get("require_verified", False))
+def search_policy_offers(vast: VastAI, context: dict[str, Any]) -> list[dict[str, Any]]:
+    launch = context["launch"]
+    gpu = context["gpu"]
+    storage_gb = float(launch["storage"]["disk_gb"])
+    require_verified = bool(launch["reliability"].get("require_verified", False))
     verified_filter = "verified=true " if require_verified else ""
     filters = [
         f"num_gpus={gpu['num_gpus']}",
@@ -234,7 +258,7 @@ def search_policy_offers(vast: VastAI, policy: dict[str, Any]) -> list[dict[str,
     if float(gpu.get("min_cuda_max_good") or 0) > 0:
         filters.append(f"cuda_max_good>={gpu['min_cuda_max_good']}")
     query = " ".join(filters)
-    market = "interruptible" if policy.get("market") in {"interruptible", "bid", "spot"} else "on-demand"
+    market = "interruptible" if launch.get("market") in {"interruptible", "bid", "spot"} else "on-demand"
     raw = vast.search_offers(query=query, type=market, order="dph_total", limit=50, storage=storage_gb)
     passing = []
     print("Offer policy check")
@@ -242,10 +266,10 @@ def search_policy_offers(vast: VastAI, policy: dict[str, Any]) -> list[dict[str,
     print(f"market: {market}")
     print(f"query: {query}")
     for offer in raw:
-        ok, reasons = offer_passes_policy(offer, policy)
+        ok, reasons = offer_passes_policy(offer, context)
         status = "PASS" if ok else "FAIL " + ",".join(reasons)
-        preferred = "*" if is_preferred_machine(offer, policy) else " "
-        greylisted = "!" if is_greylisted_machine(offer, policy) else " "
+        preferred = "*" if is_preferred_machine(offer, context) else " "
+        greylisted = "!" if is_greylisted_machine(offer, context) else " "
         print(
             f"{status:22} "
             f"pref={preferred} grey={greylisted} "
@@ -259,28 +283,30 @@ def search_policy_offers(vast: VastAI, policy: dict[str, Any]) -> list[dict[str,
             f"inet_down={number(offer.get('inet_down'), 1)}Mbps "
             f"inet_down_MBps={number((float(offer.get('inet_down') or 0) / 8.0), 1)} "
             f"rel={number(offer.get('reliability2'), 4)} "
-            f"eff={money(effective_cost(offer, policy))}"
+            f"eff={money(effective_cost(offer, context))}"
         )
         if ok:
             passing.append(offer)
-    passing.sort(key=lambda o: selection_sort_key(o, policy))
+    passing.sort(key=lambda o: selection_sort_key(o, context))
     print()
     return passing
 
 
-def print_selected_offer(offer: dict[str, Any], policy: dict[str, Any]) -> None:
-    smoke_minutes = float(policy["pricing"].get("target_first_test_minutes", 10))
+def print_selected_offer(offer: dict[str, Any], context: dict[str, Any]) -> None:
+    launch = context["launch"]
+    model = context["model"]
+    smoke_minutes = float(launch["pricing"].get("target_first_test_minutes", 10))
     dph = float(offer.get("dph_total") or 0)
     storage_hour = float(offer.get("storage_total_cost") or 0)
     down_tb = float(offer.get("internet_down_cost_per_tb") or 0)
     up_tb = float(offer.get("internet_up_cost_per_tb") or 0)
-    expected_tb = float(policy["selection"].get("expected_model_download_tb", 0))
+    expected_tb = float(launch.get("selection", {}).get("expected_model_download_tb", model.get("expected_model_download_tb", 0)))
     smoke_compute = dph * smoke_minutes / 60.0
     pull_cost = expected_tb * down_tb
     print("Selected offer")
     print("==============")
     print(f"offer_id:       {offer.get('id')}")
-    print(f"machine_id:     {offer.get('machine_id')}{' (preferred)' if is_preferred_machine(offer, policy) else ''}")
+    print(f"machine_id:     {offer.get('machine_id')}{' (preferred)' if is_preferred_machine(offer, context) else ''}")
     print(f"gpu:            {offer.get('gpu_name')} {offer.get('gpu_total_ram')}MB")
     print(f"cuda/driver:    {offer.get('cuda_max_good')} / {offer.get('driver_version')}")
     print(f"reliability2:   {number(offer.get('reliability2'), 4)}")
@@ -294,7 +320,7 @@ def print_selected_offer(offer: dict[str, Any], policy: dict[str, Any]) -> None:
     print("Costs")
     print("=====")
     print(f"base hourly:        {money(offer.get('dph_base'))}/hr")
-    print(f"storage hourly:     {money(storage_hour)}/hr for {policy['storage']['disk_gb']}GB")
+    print(f"storage hourly:     {money(storage_hour)}/hr for {launch['storage']['disk_gb']}GB")
     print(f"total hourly:       {money(dph)}/hr")
     print(f"per minute:         {money(dph / 60.0)}/min")
     print(f"per second:         {money(dph / 3600.0)}/sec")
@@ -324,7 +350,7 @@ def poll_instance(vast: VastAI, instance_id: int, timeout_s: int) -> dict[str, A
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Select and launch Vast instance with approval gates")
-    parser.add_argument("--policy", type=Path, default=Path("config/launch-policy.l40s-prototype.json"))
+    parser.add_argument("--launch-profile", type=Path, default=DEFAULT_LAUNCH_PROFILE)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--yes-current-infra", action="store_true")
     parser.add_argument("--yes-launch", action="store_true")
@@ -335,7 +361,19 @@ def main() -> None:
     parser.add_argument("--monitor-interval", type=int, default=15, help="readiness monitor poll interval seconds")
     args = parser.parse_args()
 
-    policy = json.loads(args.policy.read_text())
+    context = load_launch_context(args.launch_profile)
+    launch = context["launch"]
+    model = context["model"]
+    print("Launch profile")
+    print("==============")
+    print(f"profile:       {context['launch_profile_path']}")
+    print(f"model profile: {context['model_profile_path']}")
+    print(f"gpu profile:   {context['gpu_profile_path']}")
+    print(f"model:         {model.get('hf_model_id')}")
+    print(f"served name:   {model.get('served_model_name')}")
+    print(f"r2 prefix:     {model.get('r2_prefix')}")
+    print(f"market:        {launch.get('market')}")
+    print()
     vast = VastAI()
 
     instances = get_instances(vast)
@@ -346,12 +384,12 @@ def main() -> None:
         print("Aborted before search.")
         return
 
-    offers = search_policy_offers(vast, policy)
+    offers = search_policy_offers(vast, context)
     if not offers:
         raise SystemExit("No offers passed policy.")
     selected = offers[0]
     save_json(Path(f"offers/{selected['id']}.selected.json"), selected)
-    print_selected_offer(selected, policy)
+    print_selected_offer(selected, context)
 
     if args.dry_run:
         print("Dry run: not launching.")
@@ -362,12 +400,12 @@ def main() -> None:
 
     create_kwargs = {
         "id": int(selected["id"]),
-        "disk": float(policy["storage"]["disk_gb"]),
-        "template_hash": policy["template"]["hash_id"],
-        "label": f"{policy['name']}-{policy['model']['served_model_name']}",
+        "disk": float(launch["storage"]["disk_gb"]),
+        "template_hash": launch["template"]["hash_id"],
+        "label": f"{launch['name']}-{model['served_model_name']}",
     }
-    if policy.get("market") in {"interruptible", "bid", "spot"}:
-        create_kwargs["price"] = float(policy["spot"]["max_bid_dph"])
+    if launch.get("market") in {"interruptible", "bid", "spot"}:
+        create_kwargs["price"] = float(launch["spot"]["max_bid_dph"])
     result = vast.create_instance(**create_kwargs)
     print("Create result:")
     print(json.dumps(result, indent=2, sort_keys=True, default=str))

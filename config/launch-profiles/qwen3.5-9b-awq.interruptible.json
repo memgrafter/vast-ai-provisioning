@@ -1,41 +1,18 @@
 {
-  "name": "l40s-prototype",
+  "name": "qwen3.5-9b-awq.interruptible",
   "purpose": "First-success vLLM launch for Qwen3.5-9B-AWQ-4bit from R2",
   "market": "interruptible",
   "template": {
     "name": "vLLM_R2_Model_20260504",
     "hash_id": "b174caeb667a9c8e5cd7a68bd8b8af2e"
   },
-  "model": {
-    "id": "cyankiwi/Qwen3.5-9B-AWQ-4bit",
-    "served_model_name": "qwen3.5-9b-awq",
-    "quantization": "compressed-tensors",
-    "max_model_len": 8192
-  },
+  "model_profile": "config/models/qwen3.5-9b-awq.json",
+  "gpu_profile": "config/gpu-profiles/qwen-9b-awq-1gpu.json",
   "storage": {
     "disk_gb": 40,
     "max_storage_total_cost_per_hour": 0.012,
     "max_storage_cost_per_gb_hour": 0.0003,
     "min_disk_bw": 500
-  },
-  "gpu": {
-    "preferred_gpu_name": null,
-    "allowed_gpu_names": [
-      "L40S",
-      "L40",
-      "RTX 3090",
-      "RTX 3090 Ti",
-      "RTX 4090",
-      "RTX 5090",
-      "RTX A5000",
-      "RTX A6000",
-      "A10",
-      "A100 PCIE",
-      "A100 SXM4"
-    ],
-    "num_gpus": 1,
-    "min_gpu_total_ram_mb": 21000,
-    "min_cuda_max_good": 13.0
   },
   "network": {
     "min_direct_port_count": 1,
@@ -66,7 +43,6 @@
     "greylisted_machine_ids": [
       8357
     ],
-    "expected_model_download_tb": 0.01,
     "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb"
   }
 }
