@@ -18,7 +18,21 @@
     "max_storage_cost_per_gb_hour": 0.0003
   },
   "gpu": {
-    "preferred_gpu_name": "L40S",
+    "preferred_gpu_name": null,
+    "allowed_gpu_names": [
+      "L40S",
+      "L40",
+      "L4",
+      "RTX 3090",
+      "RTX 3090 Ti",
+      "RTX 4090",
+      "RTX 5090",
+      "RTX A5000",
+      "RTX A6000",
+      "A10",
+      "A100 PCIE",
+      "A100 SXM4"
+    ],
     "num_gpus": 1,
     "min_gpu_total_ram_mb": 21000,
     "min_cuda_max_good": 13.0
@@ -39,7 +53,7 @@
   },
   "spot": {
     "enabled_after_smoke_test": false,
-    "max_bid_dph": 0.35
+    "max_bid_dph": 0.65
   },
   "selection": {
     "sort": "effective_cost_then_reliability",
