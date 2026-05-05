@@ -148,7 +148,14 @@ def offer_passes_policy(offer: dict[str, Any], policy: dict[str, Any]) -> tuple[
     reliability = policy["reliability"]
     require_verified = bool(reliability.get("require_verified", False))
 
+    greylisted_machines = {int(x) for x in policy.get("selection", {}).get("greylisted_machine_ids", [])}
+    try:
+        machine_id = int(offer.get("machine_id"))
+    except Exception:
+        machine_id = -1
+
     checks = [
+        (machine_id not in greylisted_machines, "greylisted_machine"),
         (
             (not gpu.get("preferred_gpu_name"))
             or offer.get("gpu_name") == gpu["preferred_gpu_name"],
@@ -191,6 +198,14 @@ def is_preferred_machine(offer: dict[str, Any], policy: dict[str, Any]) -> bool:
         return False
 
 
+def is_greylisted_machine(offer: dict[str, Any], policy: dict[str, Any]) -> bool:
+    greylisted = {int(x) for x in policy.get("selection", {}).get("greylisted_machine_ids", [])}
+    try:
+        return int(offer.get("machine_id")) in greylisted
+    except Exception:
+        return False
+
+
 def selection_sort_key(offer: dict[str, Any], policy: dict[str, Any]) -> tuple[bool, float, float]:
     return (
         not is_preferred_machine(offer, policy),
@@ -229,9 +244,10 @@ def search_policy_offers(vast: VastAI, policy: dict[str, Any]) -> list[dict[str,
         ok, reasons = offer_passes_policy(offer, policy)
         status = "PASS" if ok else "FAIL " + ",".join(reasons)
         preferred = "*" if is_preferred_machine(offer, policy) else " "
+        greylisted = "!" if is_greylisted_machine(offer, policy) else " "
         print(
             f"{status:22} "
-            f"pref={preferred} "
+            f"pref={preferred} grey={greylisted} "
             f"id={offer.get('id')} gpu={offer.get('gpu_name')} "
             f"cuda={offer.get('cuda_max_good')} "
             f"dph={money(offer.get('dph_total'))}/hr "

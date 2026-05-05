@@ -89,6 +89,35 @@ vLLM startup paused until instance provisioning has completed
 
 At that point the container has started and the bottleneck has moved to R2 sync/model loading, not Docker image pull.
 
+## R2 speed greylist policy
+
+For future launches, set a non-secret template env threshold:
+
+```bash
+R2_SPEED_TEST_MIN_MBPS=100
+R2_SPEED_TEST_MAX_MB=512
+```
+
+The provisioning script will copy one large model object before full sync and log:
+
+```text
+R2 speed test result: <bytes> bytes in <seconds>s = <MB/s> MB/s
+```
+
+If below threshold it exits with code `42`. Treat that machine as bad for this R2/model path and add its machine ID to:
+
+```json
+"greylisted_machine_ids": []
+```
+
+Greylist reasons to track in commit/log notes:
+
+- slow R2 speed test
+- repeat slow/no cached Docker image
+- outbid before provisioning despite high bid
+- bad disk bandwidth despite advertised offer fields
+- repeated provisioning failures unrelated to credentials
+
 ## Future automation
 
 Add `scripts/monitor_launch.py` to:

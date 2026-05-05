@@ -61,6 +61,7 @@
       56761,
       51970
     ],
+    "greylisted_machine_ids": [],
     "expected_model_download_tb": 0.01,
     "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb"
   }

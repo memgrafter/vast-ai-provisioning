@@ -43,6 +43,44 @@ if ! command -v aws >/dev/null 2>&1; then
   fi
 fi
 
+R2_SPEED_TEST_MIN_MBPS="${R2_SPEED_TEST_MIN_MBPS:-0}"
+R2_SPEED_TEST_MAX_MB="${R2_SPEED_TEST_MAX_MB:-512}"
+if [ "$R2_SPEED_TEST_MIN_MBPS" != "0" ]; then
+  echo "R2 speed test enabled: minimum ${R2_SPEED_TEST_MIN_MBPS} MB/s, max ${R2_SPEED_TEST_MAX_MB} MB"
+  speed_key="$(aws s3 ls "s3://$R2_BUCKET/$R2_PREFIX/" --recursive --endpoint-url "$R2_ENDPOINT" \
+    | awk '$3 > 0 {print $3 " " $4}' \
+    | sort -nr \
+    | head -1 \
+    | cut -d' ' -f2-)"
+  if [ -z "$speed_key" ]; then
+    echo "ERROR: R2 speed test could not find any non-empty object under s3://$R2_BUCKET/$R2_PREFIX" >&2
+    exit 1
+  fi
+  speed_out="/tmp/r2-speed-test.bin"
+  rm -f "$speed_out"
+  range_end="$(( R2_SPEED_TEST_MAX_MB * 1000 * 1000 - 1 ))"
+  echo "R2 speed test object: s3://$R2_BUCKET/$speed_key"
+  echo "R2 speed test range: bytes=0-${range_end}"
+  start_ts="$(date +%s)"
+  aws s3api get-object \
+    --bucket "$R2_BUCKET" \
+    --key "$speed_key" \
+    --range "bytes=0-${range_end}" \
+    --endpoint-url "$R2_ENDPOINT" \
+    "$speed_out" >/dev/null
+  end_ts="$(date +%s)"
+  elapsed_s="$(( end_ts - start_ts ))"
+  [ "$elapsed_s" -lt 1 ] && elapsed_s=1
+  bytes="$(wc -c < "$speed_out")"
+  mbps="$(awk -v b="$bytes" -v s="$elapsed_s" 'BEGIN {printf "%.2f", b / 1000000 / s}')"
+  echo "R2 speed test result: ${bytes} bytes in ${elapsed_s}s = ${mbps} MB/s"
+  rm -f "$speed_out"
+  if awk -v got="$mbps" -v min="$R2_SPEED_TEST_MIN_MBPS" 'BEGIN {exit !(got < min)}'; then
+    echo "ERROR: R2 speed test below threshold: ${mbps} MB/s < ${R2_SPEED_TEST_MIN_MBPS} MB/s" >&2
+    exit 42
+  fi
+fi
+
 # Cheap readiness check. If config exists and at least one safetensors file exists, skip.
 if [ -f "$MODEL_DIR/config.json" ] && find "$MODEL_DIR" -maxdepth 1 -name '*.safetensors' | grep -q .; then
   echo "Model appears present at $MODEL_DIR; skipping R2 sync"
