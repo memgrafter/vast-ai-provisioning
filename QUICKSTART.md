@@ -87,6 +87,12 @@ For a short end-to-end test that launches, waits for readiness, sends one chat c
   --launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json
 ```
 
+For the 27B AWQ profile, use this composed one-liner:
+
+```bash
+. env.vast-management && ./run.sh scripts/smoke_chat_once.py --launch-profile config/launch-profiles/qwen3.6-27b-awq.interruptible.json --launch-attempts 2 --ready-timeout 1800 --message 'Say hello in one short sentence.'
+```
+
 ## 5. Launch manually
 
 Use the profile-based launcher:
