@@ -112,6 +112,8 @@ def analyze_logs(logs: str, image: str) -> Signals:
             or "missing AWS_ACCESS_KEY_ID" in logs
             or "missing AWS_SECRET_ACCESS_KEY" in logs
             or "Provisioning script failed (exit 1)" in logs
+            or "Quantization method specified in the model config" in logs
+            or "ValidationError: 1 validation error for ModelConfig" in logs
         ),
         errors=error_lines,
     )
