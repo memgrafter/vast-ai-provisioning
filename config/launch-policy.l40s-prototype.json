@@ -60,7 +60,8 @@
     "preferred_machine_ids": [
       56761,
       51970,
-      1569
+      1569,
+      68063
     ],
     "greylisted_machine_ids": [
       8357
