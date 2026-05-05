@@ -1,48 +1,48 @@
 {
-  "name": "qwen3.5-9b-awq.interruptible",
-  "purpose": "First-success vLLM launch for Qwen3.5-9B-AWQ-4bit from R2",
-  "market": "interruptible",
-  "template": {
-    "name": "vLLM_R2_Model_20260504",
-    "hash_id": "db2ec2d89cacb0820cb4067d6d81e68e"
-  },
-  "model_profile": "config/models/qwen3.5-9b-awq.json",
   "gpu_profile": "config/gpu-profiles/qwen-9b-awq-1gpu.json",
-  "storage": {
-    "disk_gb": 40,
-    "max_storage_total_cost_per_hour": 0.012,
-    "max_storage_cost_per_gb_hour": 0.0003,
-    "min_disk_bw": 500
-  },
+  "market": "interruptible",
+  "model_profile": "config/models/qwen3.5-9b-awq.json",
+  "name": "qwen3.5-9b-awq.interruptible",
   "network": {
-    "min_direct_port_count": 1,
-    "min_inet_down": 1000,
     "max_internet_down_cost_per_tb": 3.0,
-    "max_internet_up_cost_per_tb": 4.0
+    "max_internet_up_cost_per_tb": 4.0,
+    "min_direct_port_count": 1,
+    "min_inet_down": 1000
   },
   "pricing": {
     "max_dph_total": 0.65,
     "target_first_test_minutes": 10
   },
+  "purpose": "First-success vLLM launch for Qwen3.5-9B-AWQ-4bit from R2",
   "reliability": {
-    "require_verified": true,
-    "min_reliability2": 0.98
-  },
-  "spot": {
-    "enabled_after_smoke_test": false,
-    "max_bid_dph": 1.0
+    "min_reliability2": 0.98,
+    "require_verified": true
   },
   "selection": {
-    "sort": "preferred_machine_then_effective_cost_then_reliability",
+    "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
+    "greylisted_machine_ids": [
+      8357
+    ],
     "preferred_machine_ids": [
       56761,
       51970,
       1569,
       68063
     ],
-    "greylisted_machine_ids": [
-      8357
-    ],
-    "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb"
+    "sort": "preferred_machine_then_effective_cost_then_reliability"
+  },
+  "spot": {
+    "enabled_after_smoke_test": false,
+    "max_bid_dph": 1.0
+  },
+  "storage": {
+    "disk_gb": 40,
+    "max_storage_cost_per_gb_hour": 0.0003,
+    "max_storage_total_cost_per_hour": 0.012,
+    "min_disk_bw": 500
+  },
+  "template": {
+    "hash_id": "4596967abe48d176537304f719540640",
+    "name": "vLLM_R2_Model_20260504"
   }
 }
