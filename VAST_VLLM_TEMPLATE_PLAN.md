@@ -1,61 +1,68 @@
 # Vast.ai vLLM-from-R2 template setup
 
-Goal: fast fresh-machine launches with minimal rework when swapping models. Assumption: when the model changes, you rent/replace the machine.
+This document is historical. The active implementation is now profile-based and local-template-source-of-truth based.
 
-## Recommended strategy
+Use the current docs instead:
+
+```text
+AGENTS.md
+QUICKSTART.md
+docs/model-profile-pure-refactor-plan.md
+docs/model-profile-refactor-plan.md
+```
+
+## Active template strategy
 
 Use the official/cached Vast vLLM image. Do **not** build a custom image yet.
 
 Why:
 
 - official `vastai/vllm` layers are likely cached on many hosts
-- model changes are env-var changes, not image rebuilds
-- `PROVISIONING_SCRIPT` is fine because each model change uses a fresh machine
-- custom image only becomes worth it if install/bootstrap overhead is proven significant
+- model changes are profile/template changes, not image rebuilds
+- `PROVISIONING_SCRIPT` is fine because each model/profile case uses a rendered template payload
+- custom images only become worth it if install/bootstrap overhead is proven significant
 
-## Launch modes
+## Local template source of truth
 
-### Production
-
-Use:
+The public-safe base template is:
 
 ```text
-Docker ENTRYPOINT
+config/templates/vllm-r2-base.public.json
 ```
 
-The image runs as designed. The official image entrypoint starts Vast tooling, Supervisor, Instance Portal, Ray, and vLLM.
-
-Use env file:
+Model-specific values come from:
 
 ```text
-env.vast-vllm.production.example
+config/models/<model>.json
 ```
 
-### Discovery/debug
-
-Use:
+Private-but-not-secret values such as real R2 bucket/endpoint belong in ignored overlays such as:
 
 ```text
-Jupyter + SSH
+config/private/vllm-r2.local.json
 ```
 
-In SSH/Jupyter modes Vast overrides the Docker entrypoint, so paste the contents of this file into the template on-start field:
-
-```text
-onstart.vast-vllm-discovery.sh
-```
-
-It restores the image startup with:
+Build a rendered template payload:
 
 ```bash
-exec /opt/instance-tools/bin/entrypoint.sh
+./run.sh scripts/build_vast_template.py \
+  --template-spec config/templates/vllm-r2-base.public.json \
+  --private-overlay config/private/vllm-r2.local.json \
+  --model-profile config/models/qwen3.5-9b-awq.json \
+  --out state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json
 ```
 
-Use env file:
+Apply a reviewed payload:
 
-```text
-env.vast-vllm.discovery.example
+```bash
+. env.vast-management
+./run.sh scripts/apply_vast_template.py \
+  --hash-id <remote-template-hash> \
+  --template state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json \
+  --update-launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json
 ```
+
+Use `--create` for a new model/profile case so each case has a separate remote Vast template.
 
 ## Model artifact convention
 
@@ -78,88 +85,56 @@ s3://$R2_BUCKET/cyankiwi/Qwen3.5-9B-AWQ-4bit/
   *.json
 ```
 
-For vLLM/AWQ, download/upload the **whole repo**, not a single file.
-
-## Vast env vars
-
-Core model-specific values:
+For vLLM models, transfer the whole repo unless a future profile explicitly supports single-file transfer.
 
 ```bash
-R2_PREFIX="cyankiwi/Qwen3.5-9B-AWQ-4bit"
-MODEL_DIR="/workspace/models/cyankiwi/Qwen3.5-9B-AWQ-4bit"
-VLLM_MODEL="/workspace/models/cyankiwi/Qwen3.5-9B-AWQ-4bit"
-VLLM_ARGS="--served-model-name qwen3.5-9b-awq --quantization awq --dtype half --host 127.0.0.1 --port 18000 --download-dir /workspace/models --gpu-memory-utilization 0.90 --trust-remote-code"
-AUTO_PARALLEL="false"
+source env.modeltransfer
+./transfer_model_to_R2.sh --model-profile config/models/qwen3.5-9b-awq.json
 ```
 
-Port `18000` is the internal vLLM port. Vast exposes API access through external/mapped port `8000` via the portal/proxy.
+## vLLM runtime args
 
-## Provisioning
-
-Host this file at a raw HTTPS URL:
+Do not hardcode model-specific `VLLM_ARGS` in templates. The provisioning script generates `/etc/vllm-args.conf` from profile-derived environment variables:
 
 ```text
-provision_vast_vllm_from_r2.sh
+SERVED_MODEL_NAME
+VLLM_DTYPE
+VLLM_MAX_MODEL_LEN
+VLLM_HOST
+VLLM_PORT
+VLLM_DOWNLOAD_DIR
+VLLM_GPU_MEMORY_UTILIZATION
+VLLM_TRUST_REMOTE_CODE
+VLLM_FORCE_QUANTIZATION
+VLLM_EXTRA_ARGS
 ```
 
-Then set:
+`VLLM_FORCE_QUANTIZATION` should remain empty unless a model profile explicitly requires it. Prefer model-declared quantization.
+
+## Auth
+
+External OpenAI-compatible API calls use vLLM API key auth:
 
 ```bash
-GITHUB_USER="memgrafter"
-GITHUB_REPO="vast-ai-provisioning"
-GITHUB_BRANCH="main"
-PROVISIONING_SCRIPT="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/provision_vast_vllm_from_r2.sh"
+curl -H "Authorization: Bearer $VLLM_API_KEY" \
+  http://<INSTANCE_IP>:<MAPPED_PORT_8000>/v1/models
 ```
 
-The script:
-
-1. validates R2/model env vars
-2. installs `awscli` if missing
-3. configures S3/R2 multipart/concurrency
-4. syncs `s3://$R2_BUCKET/$R2_PREFIX` to `$MODEL_DIR`
-5. skips sync if model files already exist
-6. lets vLLM start after provisioning completes
-
-## Startup sequence
-
-```text
-Vast pulls cached vLLM image
-container boots
-provisioning syncs model from R2 to /workspace/models/...
-vLLM supervisor waits until provisioning is done
-vLLM starts from local MODEL_DIR
-Instance Portal exposes the API
-```
-
-## Checks on first boot
-
-Inside SSH/Jupyter terminal:
-
-```bash
-supervisorctl status
-supervisorctl tail -f vllm
-curl http://localhost:18000/v1/models
-```
-
-External API call uses the mapped external port for `8000` and the `OPEN_BUTTON_TOKEN` bearer token:
-
-```bash
-curl -X POST \
-  -H "Authorization: Bearer <OPEN_BUTTON_TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"qwen3.5-9b-awq","messages":[{"role":"user","content":"Hello!"}]}' \
-  http://<INSTANCE_IP>:<MAPPED_PORT_8000>/v1/chat/completions
-```
+The actual `VLLM_API_KEY` value must be configured as a Vast account-level env var and must not be committed.
 
 ## When changing models
 
-Replace machine and change only env vars:
+Add or edit profile files:
 
-```bash
-R2_PREFIX="new/org-or-user/model"
-MODEL_DIR="/workspace/models/new/org-or-user/model"
-VLLM_MODEL="$MODEL_DIR"
-VLLM_ARGS="--served-model-name new-name ..."
+```text
+config/models/<model>.json
+config/gpu-profiles/<gpu-profile>.json
+config/launch-profiles/<launch-profile>.json
 ```
 
-Keep the same official image and same provisioning script URL.
+Then:
+
+1. mirror the model with `transfer_model_to_R2.sh --model-profile ...`
+2. build a rendered template payload from the model profile
+3. create/apply a separate remote Vast template for that case
+4. launch directly with the launch profile

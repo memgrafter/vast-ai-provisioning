@@ -10,36 +10,38 @@ Preferred fast-start signal in Vast logs:
 Status: Image is up to date for vastai/vllm:v0.20.0-cuda-13.0
 ```
 
-This means the selected host already has the target Docker image cached. On machine `56761` this appeared immediately at:
-
-```text
-2026-05-05 08:36:47 UTC
-```
-
 The slow path to avoid looks like image layers downloading/verifying/pulling for minutes before the container starts.
 
 ## Current launcher mitigation
 
-`config/launch-policy.l40s-prototype.json` now prefers known-good cached-image machines:
+The active launch config is profile-based:
 
-```json
-"preferred_machine_ids": [56761, 51970]
+```text
+config/launch-profiles/qwen3.5-9b-awq.interruptible.json
 ```
 
-Selection order is now:
+That launch profile keeps model-specific preferred and greylisted machine IDs under:
+
+```json
+"selection": {
+  "preferred_machine_ids": [],
+  "greylisted_machine_ids": []
+}
+```
+
+Current known-good preferred machines are recorded in the profile and should be adjusted as more launches produce evidence.
+
+Selection order is:
 
 1. preferred machine ID
 2. effective cost
 3. reliability
 
-This is a proxy because the Vast offer payload does not currently expose an image-cache field. Current preferred machines:
-
-- `56761` — A100 PCIE, confirmed cached image via `Status: Image is up to date...`
-- `51970` — RTX 3090, reached container/provisioning quickly in prior launch
+This is a proxy because the Vast offer payload does not currently expose an image-cache field.
 
 ## Termination policy
 
-For an interruptible smoke-test launch, terminate and relaunch if neither of these events occurs quickly:
+For an interruptible smoke-test launch, terminate and relaunch if neither of these events occurs quickly.
 
 ### Event A: cached image confirmed
 
@@ -58,6 +60,7 @@ The instance log contains one of:
 ```text
 Provisioning instance with manifest
 Provisioning model from R2
+R2 speed test enabled
 Sync started at:
 ```
 
@@ -81,6 +84,7 @@ Do not terminate once any of these appears:
 
 ```text
 Provisioning model from R2
+R2 speed test enabled
 Sync started at:
 download:
 Sync finished at:
@@ -120,11 +124,7 @@ R2 speed test range: first <bytes> bytes across <N> parallel ranged GETs
 R2 speed test result: <bytes> bytes in <seconds>s = <MB/s> MB/s
 ```
 
-If below threshold it exits with code `42`. Treat that machine as bad for this R2/model path and add its machine ID to:
-
-```json
-"greylisted_machine_ids": []
-```
+If below threshold it exits with code `42`. Treat that machine as bad for this R2/model path and add its machine ID to the relevant launch profile greylist.
 
 Greylist reasons to track in commit/log notes:
 
@@ -134,14 +134,19 @@ Greylist reasons to track in commit/log notes:
 - bad disk bandwidth despite advertised offer fields
 - repeated provisioning failures unrelated to credentials
 
-## Future automation
+## Current automation
 
-Add `scripts/monitor_launch.py` to:
+The guarded launcher starts the readiness monitor by default:
 
-1. Poll `show_instance()` until status is `loading` or `running`.
-2. Fetch recent instance logs if the SDK exposes logs, or require user-pasted logs until log API is identified.
-3. Detect the cached-image and provisioning-start strings above.
-4. Call Vast destroy/detach instance if the kill rule fires.
-5. Relaunch via `scripts/select_and_launch.py`, preferring known-good cached machine IDs.
+```bash
+./run.sh scripts/select_and_launch.py \
+  --launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json
+```
 
-If no log API is available, implement a manual checklist command that prints the exact kill deadline from status timestamps and the strings to look for.
+The monitor is:
+
+```text
+scripts/monitor_instance_readiness.py
+```
+
+It detects provisioning, R2 sync, speed-test failures, vLLM startup, and hard provisioning failures. By default, launches from the guarded launcher monitor and destroy failed/stuck instances unless disabled with launcher flags.

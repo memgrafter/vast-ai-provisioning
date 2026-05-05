@@ -331,6 +331,7 @@ transfer_model_to_R2.sh
 - [x] Remove env-based model selection from the transfer script.
 - [x] Make model-profile full-repo transfer the active transfer interface.
 - [x] Keep `env.modeltransfer` only for credentials/private R2 destination settings.
+
 Note: env-based model selection was intentionally removed from the active interface. `env.modeltransfer` remains the source for credentials/private R2 settings only.
 
 ---
@@ -360,7 +361,7 @@ Note: env-based model selection was intentionally removed from the active interf
 
 # Phase 9 — Documentation cleanup
 
-## 8.1 Update operator docs
+## 9.1 Update operator docs
 
 - [x] Replace single-current-model language with profile language.
 - [x] Document model profiles.
@@ -368,13 +369,13 @@ Note: env-based model selection was intentionally removed from the active interf
 - [x] Document launch profiles.
 - [x] Document direct launcher use of launch profiles.
 
-## 8.2 Update operational commands
+## 9.2 Update operational commands
 
 - [x] Document direct launch-profile command.
 - [x] Document profile-aware template building.
 - [x] Document profile-aware model transfer.
 
-## 8.3 Keep public docs secret-free
+## 9.3 Keep public docs secret-free
 
 - [x] Do not include API keys.
 - [x] Do not include R2 secret keys.
