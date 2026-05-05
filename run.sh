@@ -9,7 +9,7 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 uv venv --python 3 .venv
-uv pip install --python .venv/bin/python -e .
+uv pip install --python .venv/bin/python -r pyproject.toml
 
 if [ "$#" -gt 0 ]; then
   exec .venv/bin/python "$@"
