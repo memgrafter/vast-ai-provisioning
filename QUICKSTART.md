@@ -77,7 +77,17 @@ or update an existing remote template by hash:
   --update-launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json
 ```
 
-## 4. Launch
+## 4. Optional one-command smoke loop
+
+For a short end-to-end test that launches, waits for readiness, sends one chat completion, and destroys the instance either way:
+
+```bash
+. env.vast-management
+./run.sh scripts/smoke_chat_once.py \
+  --launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json
+```
+
+## 5. Launch manually
 
 Use the profile-based launcher:
 
@@ -95,7 +105,7 @@ config/models/qwen3.5-9b-awq.json
 config/gpu-profiles/qwen-9b-awq-1gpu.json
 ```
 
-## 5. Check inside instance
+## 6. Check inside instance
 
 ```bash
 tail -f /var/log/portal/provisioning.log
@@ -104,7 +114,7 @@ supervisorctl tail -f vllm
 curl -H "Authorization: Bearer $VLLM_API_KEY" http://localhost:18000/v1/models
 ```
 
-## 6. External API
+## 7. External API
 
 Fetch mapped external port for container port `8000`, then call:
 
