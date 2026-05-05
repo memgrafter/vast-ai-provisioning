@@ -1,0 +1,312 @@
+#!/usr/bin/env python3
+"""Select and optionally launch a Vast instance with explicit cost gates."""
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+from vastai import VastAI
+
+COSTING_STATUSES = {"running", "loading", "starting", "stopped", "exited", "unknown", "offline"}
+BAD_STATUSES = {"exited", "unknown", "offline"}
+
+
+def money(value: Any) -> str:
+    try:
+        if value is None:
+            return "n/a"
+        return f"${float(value):.4f}"
+    except Exception:
+        return "n/a"
+
+
+def number(value: Any, digits: int = 2) -> str:
+    try:
+        if value is None:
+            return "n/a"
+        return f"{float(value):.{digits}f}"
+    except Exception:
+        return "n/a"
+
+
+def ask(prompt: str) -> bool:
+    return input(f"{prompt} [y/N] ").strip().lower() == "y"
+
+
+def save_json(path: Path, data: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, sort_keys=True, default=str) + "\n")
+
+
+def get_instances(vast: VastAI) -> list[dict[str, Any]]:
+    try:
+        return vast.show_instances()
+    except Exception as e:
+        print(f"WARN: show_instances failed: {e}", file=sys.stderr)
+        return []
+
+
+def get_volumes(vast: VastAI) -> dict[str, Any]:
+    result: dict[str, Any] = {"volumes": [], "network_volumes": []}
+    try:
+        result["volumes"] = vast.search_volumes()
+    except Exception as e:
+        result["volumes_error"] = str(e)
+    try:
+        result["network_volumes"] = vast.search_network_volumes()
+    except Exception as e:
+        result["network_volumes_error"] = str(e)
+    return result
+
+
+def instance_hourly_cost(inst: dict[str, Any]) -> float:
+    for key in ["dph_total", "actual_dph", "cur_state_dph", "dph_base"]:
+        val = inst.get(key)
+        if isinstance(val, (int, float)):
+            return float(val)
+    gpu_cost = inst.get("gpu_cost")
+    storage_cost = inst.get("storage_cost") or inst.get("storage_total_cost")
+    total = 0.0
+    found = False
+    for val in [gpu_cost, storage_cost]:
+        if isinstance(val, (int, float)):
+            total += float(val)
+            found = True
+    return total if found else 0.0
+
+
+def print_current_infra(instances: list[dict[str, Any]], volumes: dict[str, Any]) -> float:
+    print("Current Vast infra")
+    print("==================")
+    total_known = 0.0
+    if not instances:
+        print("Instances: none found")
+    else:
+        print("Instances:")
+        for inst in instances:
+            status = inst.get("actual_status") or inst.get("status") or "unknown"
+            if str(status).lower() not in COSTING_STATUSES:
+                continue
+            cost = instance_hourly_cost(inst)
+            total_known += cost
+            print(
+                "  "
+                f"id={inst.get('id') or inst.get('contract_id')} "
+                f"status={status} "
+                f"label={inst.get('label')!r} "
+                f"gpu={inst.get('gpu_name') or inst.get('gpu_names')} "
+                f"machine={inst.get('machine_id')} "
+                f"disk={inst.get('disk_space') or inst.get('disk')}GB "
+                f"known_cost={money(cost)}/hr"
+            )
+    print("Volumes:")
+    any_vol = False
+    for group in ["volumes", "network_volumes"]:
+        vals = volumes.get(group) or []
+        if vals:
+            any_vol = True
+            print(f"  {group}:")
+            for vol in vals:
+                cost = 0.0
+                for k in ["dph_total", "cost_per_hour", "storage_cost", "price_per_hour"]:
+                    if isinstance(vol.get(k), (int, float)):
+                        cost = float(vol[k])
+                        break
+                total_known += cost
+                print(
+                    "    "
+                    f"id={vol.get('id')} name={vol.get('name')!r} "
+                    f"status={vol.get('status')} size={vol.get('size') or vol.get('disk_space')} "
+                    f"known_cost={money(cost)}/hr"
+                )
+    if not any_vol:
+        print("  none found")
+    if volumes.get("volumes_error"):
+        print(f"  WARN volumes query: {volumes['volumes_error']}")
+    if volumes.get("network_volumes_error"):
+        print(f"  WARN network volumes query: {volumes['network_volumes_error']}")
+    print(f"Known current hourly burn: {money(total_known)}/hr")
+    print()
+    return total_known
+
+
+def offer_passes_policy(offer: dict[str, Any], policy: dict[str, Any]) -> tuple[bool, list[str]]:
+    reasons: list[str] = []
+    gpu = policy["gpu"]
+    pricing = policy["pricing"]
+    storage = policy["storage"]
+    network = policy["network"]
+    reliability = policy["reliability"]
+
+    checks = [
+        (offer.get("gpu_name") == gpu["preferred_gpu_name"], "gpu_name"),
+        (int(offer.get("num_gpus") or 0) == int(gpu["num_gpus"]), "num_gpus"),
+        (float(offer.get("gpu_total_ram") or 0) >= float(gpu["min_gpu_total_ram_mb"]), "gpu_total_ram"),
+        (float(offer.get("cuda_max_good") or 0) >= float(gpu["min_cuda_max_good"]), "cuda_max_good"),
+        (float(offer.get("dph_total") or math.inf) <= float(pricing["max_dph_total"]), "dph_total"),
+        (float(offer.get("storage_total_cost") or math.inf) <= float(storage["max_storage_total_cost_per_hour"]), "storage_total_cost"),
+        (float(offer.get("internet_down_cost_per_tb") or 0) <= float(network["max_internet_down_cost_per_tb"]), "internet_down_cost_per_tb"),
+        (float(offer.get("internet_up_cost_per_tb") or 0) <= float(network["max_internet_up_cost_per_tb"]), "internet_up_cost_per_tb"),
+        (float(offer.get("inet_down") or 0) >= float(network["min_inet_down"]), "inet_down"),
+        (int(offer.get("direct_port_count") or 0) >= int(network["min_direct_port_count"]), "direct_port_count"),
+        (float(offer.get("reliability2") or 0) >= float(reliability["min_reliability2"]), "reliability2"),
+        (float(offer.get("disk_space") or 0) >= float(storage["disk_gb"]), "disk_space"),
+    ]
+    for passed, name in checks:
+        if not passed:
+            reasons.append(name)
+    return not reasons, reasons
+
+
+def effective_cost(offer: dict[str, Any], policy: dict[str, Any]) -> float:
+    tb = float(policy["selection"].get("expected_model_download_tb", 0))
+    return float(offer.get("dph_total") or math.inf) + tb * float(offer.get("internet_down_cost_per_tb") or 0)
+
+
+def search_policy_offers(vast: VastAI, policy: dict[str, Any]) -> list[dict[str, Any]]:
+    gpu = policy["gpu"]
+    storage_gb = float(policy["storage"]["disk_gb"])
+    query = (
+        f"gpu_name={gpu['preferred_gpu_name']} "
+        f"num_gpus={gpu['num_gpus']} "
+        "rentable=true "
+        f"gpu_total_ram>={gpu['min_gpu_total_ram_mb']} "
+        f"cuda_max_good>={gpu['min_cuda_max_good']}"
+    )
+    raw = vast.search_offers(query=query, order="dph_total", limit=50, storage=storage_gb)
+    passing = []
+    print("Offer policy check")
+    print("==================")
+    print(f"query: {query}")
+    for offer in raw:
+        ok, reasons = offer_passes_policy(offer, policy)
+        status = "PASS" if ok else "FAIL " + ",".join(reasons)
+        print(
+            f"{status:22} "
+            f"id={offer.get('id')} gpu={offer.get('gpu_name')} "
+            f"cuda={offer.get('cuda_max_good')} "
+            f"dph={money(offer.get('dph_total'))}/hr "
+            f"storage={money(offer.get('storage_total_cost'))}/hr "
+            f"downTB={money(offer.get('internet_down_cost_per_tb'))} "
+            f"upTB={money(offer.get('internet_up_cost_per_tb'))} "
+            f"inet_down={number(offer.get('inet_down'), 1)} "
+            f"rel={number(offer.get('reliability2'), 4)} "
+            f"eff={money(effective_cost(offer, policy))}"
+        )
+        if ok:
+            passing.append(offer)
+    passing.sort(key=lambda o: (effective_cost(o, policy), -float(o.get("reliability2") or 0)))
+    print()
+    return passing
+
+
+def print_selected_offer(offer: dict[str, Any], policy: dict[str, Any]) -> None:
+    smoke_minutes = float(policy["pricing"].get("target_first_test_minutes", 10))
+    dph = float(offer.get("dph_total") or 0)
+    storage_hour = float(offer.get("storage_total_cost") or 0)
+    down_tb = float(offer.get("internet_down_cost_per_tb") or 0)
+    up_tb = float(offer.get("internet_up_cost_per_tb") or 0)
+    expected_tb = float(policy["selection"].get("expected_model_download_tb", 0))
+    smoke_compute = dph * smoke_minutes / 60.0
+    pull_cost = expected_tb * down_tb
+    print("Selected offer")
+    print("==============")
+    print(f"offer_id:       {offer.get('id')}")
+    print(f"machine_id:     {offer.get('machine_id')}")
+    print(f"gpu:            {offer.get('gpu_name')} {offer.get('gpu_total_ram')}MB")
+    print(f"cuda/driver:    {offer.get('cuda_max_good')} / {offer.get('driver_version')}")
+    print(f"reliability2:   {number(offer.get('reliability2'), 4)}")
+    print(f"direct ports:   {offer.get('direct_port_count')}")
+    print(f"disk available: {number(offer.get('disk_space'), 1)}GB")
+    print(f"inet down/up:   {number(offer.get('inet_down'), 1)} / {number(offer.get('inet_up'), 1)}")
+    print()
+    print("Costs")
+    print("=====")
+    print(f"base hourly:        {money(offer.get('dph_base'))}/hr")
+    print(f"storage hourly:     {money(storage_hour)}/hr for {policy['storage']['disk_gb']}GB")
+    print(f"total hourly:       {money(dph)}/hr")
+    print(f"per minute:         {money(dph / 60.0)}/min")
+    print(f"per second:         {money(dph / 3600.0)}/sec")
+    print(f"download cost/TB:   {money(down_tb)}/TB")
+    print(f"upload cost/TB:     {money(up_tb)}/TB")
+    print(f"expected pull TB:   {expected_tb}")
+    print(f"expected pull cost: {money(pull_cost)}")
+    print(f"{smoke_minutes:.0f}m smoke compute/storage: {money(smoke_compute)}")
+    print(f"{smoke_minutes:.0f}m smoke total estimate:  {money(smoke_compute + pull_cost)}")
+    print()
+
+
+def poll_instance(vast: VastAI, instance_id: int, timeout_s: int) -> dict[str, Any]:
+    start = time.time()
+    last: dict[str, Any] = {}
+    while time.time() - start < timeout_s:
+        last = vast.show_instance(id=instance_id)
+        status = str(last.get("actual_status") or last.get("status") or "unknown")
+        print(f"instance {instance_id} status={status}")
+        if status == "running":
+            return last
+        if status in BAD_STATUSES:
+            return last
+        time.sleep(10)
+    return last
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Select and launch Vast instance with approval gates")
+    parser.add_argument("--policy", type=Path, default=Path("config/launch-policy.l40s-prototype.json"))
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--yes-current-infra", action="store_true")
+    parser.add_argument("--yes-launch", action="store_true")
+    parser.add_argument("--poll-timeout", type=int, default=900)
+    args = parser.parse_args()
+
+    policy = json.loads(args.policy.read_text())
+    vast = VastAI()
+
+    instances = get_instances(vast)
+    volumes = get_volumes(vast)
+    save_json(Path("state/current-infra.json"), {"instances": instances, "volumes": volumes})
+    print_current_infra(instances, volumes)
+    if not args.yes_current_infra and not ask("Continue to search/select a new instance?"):
+        print("Aborted before search.")
+        return
+
+    offers = search_policy_offers(vast, policy)
+    if not offers:
+        raise SystemExit("No offers passed policy.")
+    selected = offers[0]
+    save_json(Path(f"offers/{selected['id']}.selected.json"), selected)
+    print_selected_offer(selected, policy)
+
+    if args.dry_run:
+        print("Dry run: not launching.")
+        return
+    if not args.yes_launch and not ask("Launch this instance?"):
+        print("Aborted before launch.")
+        return
+
+    result = vast.create_instance(
+        id=int(selected["id"]),
+        disk=float(policy["storage"]["disk_gb"]),
+        template_hash=policy["template"]["hash_id"],
+        label=f"{policy['name']}-{policy['model']['served_model_name']}",
+    )
+    print("Create result:")
+    print(json.dumps(result, indent=2, sort_keys=True, default=str))
+    save_json(Path("state/last-create-result.json"), result)
+    instance_id = result.get("new_contract") or result.get("id")
+    if not instance_id:
+        print("No instance id in create result; stop here.")
+        return
+    info = poll_instance(vast, int(instance_id), args.poll_timeout)
+    save_json(Path(f"instances/{instance_id}.json"), info)
+    print(f"Saved instance details to instances/{instance_id}.json")
+
+
+if __name__ == "__main__":
+    main()
