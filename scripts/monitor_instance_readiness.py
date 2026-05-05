@@ -189,13 +189,19 @@ def main() -> int:
     vast = VastAI()
     start = time.time()
     last_recommendation = "WAIT"
+    cumulative = Signals()
     while True:
         elapsed = time.time() - start
         try:
             info = get_instance(vast, args.instance_id)
             logs = get_logs(vast, args.instance_id, args.tail)
             save_snapshot(args.instance_id, info, logs)
-            signals = analyze_logs(logs, args.image)
+            current_signals = analyze_logs(logs, args.image)
+            signals = Signals(**{
+                field: bool(getattr(cumulative, field) or getattr(current_signals, field))
+                for field in cumulative.__dataclass_fields__
+            })
+            cumulative = signals
             last_recommendation = print_status(
                 args.instance_id,
                 info,

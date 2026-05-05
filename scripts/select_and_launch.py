@@ -519,7 +519,10 @@ def main() -> None:
         print("Starting readiness monitor:")
         print("  " + " ".join(monitor_cmd))
         result = subprocess.run(monitor_cmd, check=False)
-        if result.returncode not in {0, 4}:
+        if result.returncode == 4:
+            print("Monitor destroyed the instance; skipping post-launch smoke.")
+            return
+        if result.returncode != 0:
             raise SystemExit(result.returncode)
 
     if not args.no_smoke_chat:
