@@ -1,0 +1,11 @@
+{
+  "name": "qwen-27b-awq-96gb-rtx-pro-6000-ws",
+  "canonical_reference": "config/gpu-profiles/canonical-gpu-names.json#classes.current_qwen_27b_awq_candidates",
+  "preferred_gpu_name": null,
+  "allowed_gpu_names": [
+    "RTX PRO 6000 WS"
+  ],
+  "num_gpus": 1,
+  "min_gpu_total_ram_mb": 90000,
+  "min_cuda_max_good": 13.0
+}

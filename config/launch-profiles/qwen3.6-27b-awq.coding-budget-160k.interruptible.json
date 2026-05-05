@@ -1,5 +1,5 @@
 {
-  "gpu_profile": "config/gpu-profiles/qwen-27b-awq-48gb.json",
+  "gpu_profile": "config/gpu-profiles/qwen-27b-awq-96gb-rtx-pro-6000-ws.json",
   "market": "interruptible",
   "model_profile": "config/models/qwen3.6-27b-awq.coding-budget-160k.json",
   "name": "qwen3.6-27b-awq.coding-budget-160k.interruptible",
@@ -24,14 +24,13 @@
       8357
     ],
     "preferred_machine_ids": [
-      1569,
-      68063
+      51218
     ],
     "sort": "preferred_machine_then_effective_cost_then_reliability"
   },
   "spot": {
     "enabled_after_smoke_test": false,
-    "max_bid_dph": 2.0
+    "max_bid_dph": 0.9
   },
   "storage": {
     "disk_gb": 100,
