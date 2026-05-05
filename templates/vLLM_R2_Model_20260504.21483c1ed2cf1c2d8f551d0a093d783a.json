@@ -10,7 +10,7 @@
   "creator_id": 415074,
   "default_tag": null,
   "deleted_at": null,
-  "desc": "vLLM Inference Engine from R2 Model forked 2026-05-04",
+  "desc": "PUBLIC TEMPLATE: do not add secrets. vLLM Inference Engine from R2 Model forked 2026-05-04",
   "desc_count": 0,
   "docker_login_pass": "",
   "docker_login_repo": "",

@@ -1,3 +1,7 @@
+# Vast.ai provisioning
+
+> **Public template notice:** the Vast vLLM R2 template in this repo is intended to be public. Do not put secrets in template fields or committed files. Keep credentials in local env files or Vast account-level environment variables.
+
 # Hugging Face → Cloudflare R2 model transfer
 
 Cloudflare R2 uses an S3-compatible API, so the AWS CLI can upload to R2 when you pass the R2 endpoint. This does **not** upload to AWS.
