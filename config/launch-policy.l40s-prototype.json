@@ -59,7 +59,8 @@
     "sort": "preferred_machine_then_effective_cost_then_reliability",
     "preferred_machine_ids": [
       56761,
-      51970
+      51970,
+      1569
     ],
     "greylisted_machine_ids": [
       57621,
