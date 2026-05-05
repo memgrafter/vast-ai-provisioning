@@ -34,6 +34,7 @@
     "target_first_test_minutes": 10
   },
   "reliability": {
+    "require_verified": true,
     "min_reliability2": 0.98
   },
   "spot": {

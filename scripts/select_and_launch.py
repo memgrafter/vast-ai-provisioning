@@ -142,6 +142,7 @@ def offer_passes_policy(offer: dict[str, Any], policy: dict[str, Any]) -> tuple[
     storage = policy["storage"]
     network = policy["network"]
     reliability = policy["reliability"]
+    require_verified = bool(reliability.get("require_verified", False))
 
     checks = [
         (offer.get("gpu_name") == gpu["preferred_gpu_name"], "gpu_name"),
@@ -155,6 +156,7 @@ def offer_passes_policy(offer: dict[str, Any], policy: dict[str, Any]) -> tuple[
         (float(offer.get("inet_down") or 0) >= float(network["min_inet_down"]), "inet_down"),
         (int(offer.get("direct_port_count") or 0) >= int(network["min_direct_port_count"]), "direct_port_count"),
         (float(offer.get("reliability2") or 0) >= float(reliability["min_reliability2"]), "reliability2"),
+        ((not require_verified) or (offer.get("verified") is True), "verified"),
         (float(offer.get("disk_space") or 0) >= float(storage["disk_gb"]), "disk_space"),
     ]
     for passed, name in checks:
@@ -171,10 +173,13 @@ def effective_cost(offer: dict[str, Any], policy: dict[str, Any]) -> float:
 def search_policy_offers(vast: VastAI, policy: dict[str, Any]) -> list[dict[str, Any]]:
     gpu = policy["gpu"]
     storage_gb = float(policy["storage"]["disk_gb"])
+    require_verified = bool(policy["reliability"].get("require_verified", False))
+    verified_filter = "verified=true " if require_verified else ""
     query = (
         f"gpu_name={gpu['preferred_gpu_name']} "
         f"num_gpus={gpu['num_gpus']} "
         "rentable=true "
+        f"{verified_filter}"
         f"gpu_total_ram>={gpu['min_gpu_total_ram_mb']} "
         f"cuda_max_good>={gpu['min_cuda_max_good']}"
     )
