@@ -18,6 +18,8 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from vastai import VastAI
 
 from scripts.monitor_instance_readiness import port_url
