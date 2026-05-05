@@ -9,13 +9,18 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import subprocess
 import sys
 import time
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from vastai import VastAI
+
+from scripts.monitor_instance_readiness import port_url
 
 COSTING_STATUSES = {"running", "loading", "starting", "stopped", "exited", "unknown", "offline"}
 BAD_STATUSES = {"exited", "unknown", "offline"}
@@ -333,6 +338,71 @@ def print_selected_offer(offer: dict[str, Any], context: dict[str, Any]) -> None
     print()
 
 
+def api_get_json(url: str, api_key: str, timeout: int = 10) -> tuple[int, Any]:
+    req = Request(url, headers={"Authorization": f"Bearer {api_key}"})
+    try:
+        with urlopen(req, timeout=timeout) as resp:
+            return resp.status, json.loads(resp.read().decode() or "{}")
+    except HTTPError as exc:
+        return exc.code, exc.read().decode(errors="replace")
+    except URLError as exc:
+        return 0, str(exc)
+
+
+def api_post_json(url: str, api_key: str, payload: dict[str, Any], timeout: int = 120) -> tuple[int, Any]:
+    body = json.dumps(payload).encode()
+    req = Request(
+        url,
+        data=body,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(req, timeout=timeout) as resp:
+            return resp.status, json.loads(resp.read().decode() or "{}")
+    except HTTPError as exc:
+        return exc.code, exc.read().decode(errors="replace")
+    except URLError as exc:
+        return 0, str(exc)
+
+
+def print_api_config_and_smoke(vast: VastAI, instance_id: int, model_name: str, message: str) -> int:
+    api_key = os.environ.get("VLLM_API_KEY")
+    if not api_key:
+        print("WARN: local VLLM_API_KEY is missing; cannot smoke chat request.", file=sys.stderr)
+        return 1
+    info = vast.show_instance(id=instance_id)
+    url = port_url(info)
+    if not url:
+        print("WARN: no external URL found for container port 8000; cannot print chat endpoint.", file=sys.stderr)
+        return 1
+    base_url = f"{url}/v1"
+    chat_completions_url = f"{base_url}/chat/completions"
+    print("OpenAI-compatible API")
+    print("=====================")
+    print(f"base_url={base_url}")
+    print(f"chat_completions_url={chat_completions_url}")
+    print(f"model={model_name}")
+    print("auth_header=Authorization: Bearer $VLLM_API_KEY")
+    code, models = api_get_json(f"{base_url}/models", api_key)
+    print(f"models_http={code}")
+    if code == 200:
+        print("models:", json.dumps(models, default=str)[:500])
+    code, chat = api_post_json(
+        chat_completions_url,
+        api_key,
+        {
+            "model": model_name,
+            "messages": [{"role": "user", "content": message}],
+            "max_tokens": 64,
+            "temperature": 0,
+        },
+    )
+    print(f"chat_http={code}")
+    print(json.dumps(chat, indent=2, default=str)[:2000])
+    return 0 if code == 200 else 1
+
+
 def poll_instance(vast: VastAI, instance_id: int, timeout_s: int) -> dict[str, Any]:
     start = time.time()
     last: dict[str, Any] = {}
@@ -362,6 +432,8 @@ def main() -> None:
     parser.add_argument("--no-destroy-on-monitor-fail", action="store_true", help="leave failed monitored launches running")
     parser.add_argument("--monitor-timeout", type=int, default=1800, help="readiness monitor timeout seconds")
     parser.add_argument("--monitor-interval", type=int, default=15, help="readiness monitor poll interval seconds")
+    parser.add_argument("--no-smoke-chat", action="store_true", help="do not print endpoint and run one chat completion after readiness")
+    parser.add_argument("--smoke-message", default="Say hello in one short sentence.", help="message for post-launch chat smoke")
     args = parser.parse_args()
 
     context = load_launch_context(args.launch_profile)
@@ -447,6 +519,11 @@ def main() -> None:
         result = subprocess.run(monitor_cmd, check=False)
         if result.returncode not in {0, 4}:
             raise SystemExit(result.returncode)
+
+    if not args.no_smoke_chat:
+        smoke_code = print_api_config_and_smoke(vast, int(instance_id), model["served_model_name"], args.smoke_message)
+        if smoke_code != 0:
+            raise SystemExit(smoke_code)
 
 
 if __name__ == "__main__":
