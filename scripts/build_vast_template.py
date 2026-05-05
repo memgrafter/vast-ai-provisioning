@@ -88,6 +88,24 @@ def build_template(template: dict[str, Any], model: dict[str, Any]) -> dict[str,
     return payload
 
 
+def update_manifest(out: Path, args: argparse.Namespace, payload: dict[str, Any]) -> None:
+    manifest_path = out.parent / "manifest.json"
+    if manifest_path.exists():
+        manifest = load_json(manifest_path)
+    else:
+        manifest = {"templates": {}}
+    manifest.setdefault("templates", {})[out.name] = {
+        "file": out.name,
+        "template_spec": str(args.template_spec),
+        "model_profile": str(args.model_profile),
+        "private_overlay": str(args.private_overlay) if args.private_overlay else None,
+        "model_profile_name": payload.get("model_profile"),
+        "template_name": payload.get("name"),
+        "private": payload.get("private"),
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build a Vast template payload from local specs")
     parser.add_argument("--template-spec", type=Path, required=True)
@@ -104,6 +122,7 @@ def main() -> None:
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(text)
+        update_manifest(args.out, args, payload)
     else:
         print(text, end="")
 

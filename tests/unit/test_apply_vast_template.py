@@ -36,6 +36,19 @@ class ApplyVastTemplateTests(unittest.TestCase):
         self.assertEqual(apply_vast_template.result_hash_id({"template": {"hash_id": "nested"}}), "nested")
         self.assertIsNone(apply_vast_template.result_hash_id({"template": {}}))
 
+    def test_load_manifest_requires_template_entry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            template = folder / "rendered.json"
+            template.write_text("{}")
+            with self.assertRaises(SystemExit):
+                apply_vast_template.load_manifest_for_template(template)
+            (folder / "manifest.json").write_text(json.dumps({"templates": {"other.json": {}}}))
+            with self.assertRaises(SystemExit):
+                apply_vast_template.load_manifest_for_template(template)
+            (folder / "manifest.json").write_text(json.dumps({"templates": {"rendered.json": {"file": "rendered.json"}}}))
+            self.assertEqual(apply_vast_template.load_manifest_for_template(template)["file"], "rendered.json")
+
     def test_write_launch_profile_hash_updates_template_hash(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "launch.json"

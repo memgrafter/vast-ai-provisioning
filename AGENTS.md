@@ -67,15 +67,28 @@ Use:
   --out state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json
 ```
 
+The build writes `state/templates/manifest.json`. `scripts/apply_vast_template.py` only applies rendered templates listed in that manifest; running it with no args prints help.
+
 `config/private/` is ignored and may contain private-but-not-secret values such as real R2 bucket and endpoint. Rendered/live/private template files belong in ignored local paths such as `state/` or ignored `templates/` snapshots. Do not commit them.
 
-Apply a reviewed rendered payload explicitly:
+Create or apply a reviewed rendered payload explicitly:
 
 ```bash
 . env.vast-management
 ./run.sh scripts/apply_vast_template.py \
+  --create \
   --template state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json \
-  --hash-id <remote-template-hash>
+  --update-launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json
+```
+
+or update an existing remote template by hash:
+
+```bash
+. env.vast-management
+./run.sh scripts/apply_vast_template.py \
+  --hash-id <remote-template-hash> \
+  --template state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json \
+  --update-launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json
 ```
 
 ## Local setup

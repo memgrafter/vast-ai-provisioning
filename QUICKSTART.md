@@ -55,13 +55,26 @@ Build a rendered template payload for review:
 
 The public spec uses placeholders for private R2 identifiers. Put real private-but-not-secret identifiers in an ignored overlay under `config/private/`. Keep rendered live templates under ignored local paths only.
 
-Apply a reviewed rendered payload explicitly:
+The build also writes `state/templates/manifest.json`. The apply script only applies rendered templates listed in that manifest; running it with no args prints help.
+
+Create or apply a reviewed rendered payload explicitly:
 
 ```bash
 . env.vast-management
 ./run.sh scripts/apply_vast_template.py \
+  --create \
   --template state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json \
-  --hash-id <remote-template-hash>
+  --update-launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json
+```
+
+or update an existing remote template by hash:
+
+```bash
+. env.vast-management
+./run.sh scripts/apply_vast_template.py \
+  --hash-id <remote-template-hash> \
+  --template state/templates/vllm-r2.qwen3.5-9b-awq.rendered.json \
+  --update-launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json
 ```
 
 ## 4. Launch

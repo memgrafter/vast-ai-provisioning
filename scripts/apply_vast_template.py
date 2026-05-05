@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +46,17 @@ def load_payload(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text())
 
 
+def load_manifest_for_template(path: Path) -> dict[str, Any]:
+    manifest_path = path.parent / "manifest.json"
+    if not manifest_path.exists():
+        raise SystemExit(f"Missing required template manifest: {manifest_path}")
+    manifest = json.loads(manifest_path.read_text())
+    entry = (manifest.get("templates") or {}).get(path.name)
+    if not entry:
+        raise SystemExit(f"Template {path.name} is not listed in required manifest: {manifest_path}")
+    return entry
+
+
 def update_kwargs(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = {k: v for k, v in payload.items() if k not in REMOTE_IGNORED_KEYS and v is not None}
     if "tag" in normalized and "image_tag" not in normalized:
@@ -81,8 +93,12 @@ def main() -> None:
     mode.add_argument("--hash-id", help="remote Vast template hash_id to update")
     parser.add_argument("--update-launch-profile", type=Path, default=None, help="write resulting template hash into this launch profile")
     parser.add_argument("--yes", action="store_true", help="apply without interactive confirmation")
+    if len(sys.argv) == 1:
+        parser.print_help()
+        return
     args = parser.parse_args()
 
+    manifest_entry = load_manifest_for_template(args.template)
     payload = load_payload(args.template)
     kwargs = update_kwargs(payload)
     action = "create" if args.create else "update"
@@ -90,6 +106,7 @@ def main() -> None:
     if args.hash_id:
         print(f"Remote template hash: {args.hash_id}")
     print(f"Local template file:  {args.template}")
+    print(f"Manifest entry:       {manifest_entry.get('file')}")
     print(f"Template name:        {kwargs.get('name')}")
     print(f"Image/tag:            {kwargs.get('image')}:{kwargs.get('image_tag')}")
     print(f"Private:              {kwargs.get('private')}")

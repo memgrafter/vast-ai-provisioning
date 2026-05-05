@@ -1,7 +1,9 @@
 import importlib.util
 import json
 import shlex
+import tempfile
 import unittest
+from argparse import Namespace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -106,6 +108,22 @@ class BuildVastTemplateTests(unittest.TestCase):
         env, _ = self.parse_env(payload["env"])
         self.assertEqual(env["R2_BUCKET"], "private-bucket-placeholder")
         self.assertEqual(env["R2_ENDPOINT"], "https://private-account.example.invalid")
+
+    def test_update_manifest_records_rendered_template(self):
+        payload = build_vast_template.build_template(self.template, self.model)
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "rendered.json"
+            args = Namespace(
+                template_spec=Path("config/templates/fixture.json"),
+                model_profile=Path("config/models/fixture.json"),
+                private_overlay=Path("config/private/fixture.json"),
+            )
+            build_vast_template.update_manifest(out, args, payload)
+            manifest = json.loads((out.parent / "manifest.json").read_text())
+            entry = manifest["templates"]["rendered.json"]
+            self.assertEqual(entry["file"], "rendered.json")
+            self.assertEqual(entry["model_profile_name"], "fixture-model")
+            self.assertEqual(entry["template_name"], "fixture-template")
 
     def test_payload_contains_no_obvious_secret_or_pii_values(self):
         payload = build_vast_template.build_template(self.template, self.model)
