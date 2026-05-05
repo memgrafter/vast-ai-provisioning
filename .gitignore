@@ -1,0 +1,18 @@
+# Local model downloads
+model/
+models/
+*.safetensors
+*.bin
+*.gguf
+*.pt
+*.pth
+
+# Secrets / local env files
+env.modeltransfer
+.env
+.env.*
+
+# Python/cache noise
+__pycache__/
+*.pyc
+.cache/
