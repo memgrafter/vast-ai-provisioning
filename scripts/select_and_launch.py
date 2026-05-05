@@ -351,7 +351,10 @@ def poll_instance(vast: VastAI, instance_id: int, timeout_s: int) -> dict[str, A
 def main() -> None:
     parser = argparse.ArgumentParser(description="Select and launch Vast instance with approval gates")
     parser.add_argument("--launch-profile", type=Path, default=DEFAULT_LAUNCH_PROFILE)
-    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--dry-run", action="store_true", help="show selected offer, then exit before launch")
+    parser.add_argument("--check-only", action="store_true", help="read-only check: no approval prompts and no launch")
+    parser.add_argument("--skip-current-infra", action="store_true", help="with --check-only, skip current infra query")
+    parser.add_argument("--top", type=int, default=1, help="with --check-only, number of passing offers to summarize")
     parser.add_argument("--yes-current-infra", action="store_true")
     parser.add_argument("--yes-launch", action="store_true")
     parser.add_argument("--poll-timeout", type=int, default=900)
@@ -374,15 +377,14 @@ def main() -> None:
     print(f"r2 prefix:     {model.get('r2_prefix')}")
     print(f"market:        {launch.get('market')}")
     print()
-    print("Tip: run scripts/check_launch_profile.py for a read-only infra/offer check without launch prompts.")
-    print()
     vast = VastAI()
 
-    instances = get_instances(vast)
-    volumes = get_volumes(vast)
-    save_json(Path("state/current-infra.json"), {"instances": instances, "volumes": volumes})
-    print_current_infra(instances, volumes)
-    if not args.yes_current_infra and not ask("Continue to search/select a new instance?"):
+    if not (args.check_only and args.skip_current_infra):
+        instances = get_instances(vast)
+        volumes = get_volumes(vast)
+        save_json(Path("state/current-infra.json"), {"instances": instances, "volumes": volumes})
+        print_current_infra(instances, volumes)
+    if not args.check_only and not args.yes_current_infra and not ask("Continue to search/select a new instance?"):
         print("Aborted before search.")
         return
 
@@ -390,9 +392,17 @@ def main() -> None:
     if not offers:
         raise SystemExit("No offers passed policy.")
     selected = offers[0]
-    save_json(Path(f"offers/{selected['id']}.selected.json"), selected)
-    print_selected_offer(selected, context)
+    top = max(1, args.top if args.check_only else 1)
+    for idx, offer in enumerate(offers[:top], start=1):
+        if top > 1:
+            print(f"Passing offer #{idx}")
+            print("================")
+        save_json(Path(f"offers/{offer['id']}.selected.json"), offer)
+        print_selected_offer(offer, context)
 
+    if args.check_only:
+        print("Check only: not launching.")
+        return
     if args.dry_run:
         print("Dry run: not launching.")
         return

@@ -95,11 +95,12 @@ For the 27B AWQ profile, use this composed one-liner:
 
 ## 5. Check launch availability and cost
 
-Run the same current-infra and offer-policy checks as the launcher without launching:
+Run the launcher in read-only check mode to show current infra, offer-policy PASS/FAIL reasons, and the selected offer without launching:
 
 ```bash
-. env.vast-management && ./run.sh scripts/check_launch_profile.py \
+. env.vast-management && ./run.sh scripts/select_and_launch.py \
   --launch-profile config/launch-profiles/qwen3.6-27b-awq.interruptible.json \
+  --check-only \
   --top 1
 ```
 
