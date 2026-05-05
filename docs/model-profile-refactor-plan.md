@@ -131,13 +131,24 @@ vLLM_R2_Qwen3_6_27B_AWQ
   --out state/templates/vllm-r2.qwen3.6-27b-awq.rendered.json
 ```
 
-- [ ] Apply it explicitly to the separate 27B remote Vast template:
+- [ ] Create the separate 27B remote Vast template on first use and write the resulting hash directly into the 27B launch profile:
 
 ```bash
 . env.vast-management
 ./run.sh scripts/apply_vast_template.py \
+  --create \
   --template state/templates/vllm-r2.qwen3.6-27b-awq.rendered.json \
-  --hash-id <remote-27b-template-hash>
+  --update-launch-profile config/launch-profiles/qwen3.6-27b-awq.interruptible.json
+```
+
+- [ ] For later edits to the same 27B template, update by the 27B template hash:
+
+```bash
+. env.vast-management
+./run.sh scripts/apply_vast_template.py \
+  --hash-id <remote-27b-template-hash> \
+  --template state/templates/vllm-r2.qwen3.6-27b-awq.rendered.json \
+  --update-launch-profile config/launch-profiles/qwen3.6-27b-awq.interruptible.json
 ```
 
 - [ ] Record the resulting 27B template hash in the 27B launch profile.

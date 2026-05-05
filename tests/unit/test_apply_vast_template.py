@@ -1,4 +1,6 @@
 import importlib.util
+import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -28,6 +30,20 @@ class ApplyVastTemplateTests(unittest.TestCase):
             "image_tag": "v0.20.0-cuda-13.0",
             "env": "-e A=B",
         })
+
+    def test_result_hash_id_accepts_top_level_or_template_hash(self):
+        self.assertEqual(apply_vast_template.result_hash_id({"hash_id": "top"}), "top")
+        self.assertEqual(apply_vast_template.result_hash_id({"template": {"hash_id": "nested"}}), "nested")
+        self.assertIsNone(apply_vast_template.result_hash_id({"template": {}}))
+
+    def test_write_launch_profile_hash_updates_template_hash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "launch.json"
+            path.write_text(json.dumps({"name": "profile", "template": {"name": "template"}}))
+            apply_vast_template.write_launch_profile_hash(path, "new-hash")
+            data = json.loads(path.read_text())
+            self.assertEqual(data["template"]["hash_id"], "new-hash")
+            self.assertEqual(data["template"]["name"], "template")
 
 
 if __name__ == "__main__":

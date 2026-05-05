@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply a locally rendered Vast template payload to a remote Vast template."""
+"""Create or update a remote Vast template from a local rendered payload."""
 from __future__ import annotations
 
 import argparse
@@ -58,29 +58,63 @@ def update_kwargs(payload: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in normalized.items() if k in REMOTE_ALLOWED_KEYS}
 
 
+def write_launch_profile_hash(path: Path, template_hash: str) -> None:
+    data = json.loads(path.read_text())
+    data.setdefault("template", {})["hash_id"] = template_hash
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+
+
+def result_hash_id(result: dict[str, Any]) -> str | None:
+    if result.get("hash_id"):
+        return str(result["hash_id"])
+    template = result.get("template") or {}
+    if template.get("hash_id"):
+        return str(template["hash_id"])
+    return None
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Apply a rendered Vast template payload")
+    parser = argparse.ArgumentParser(description="Create or update a Vast template from a rendered local payload")
     parser.add_argument("--template", type=Path, required=True, help="rendered local template JSON")
-    parser.add_argument("--hash-id", required=True, help="remote Vast template hash_id to update")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--create", action="store_true", help="create a new remote Vast template")
+    mode.add_argument("--hash-id", help="remote Vast template hash_id to update")
+    parser.add_argument("--update-launch-profile", type=Path, default=None, help="write resulting template hash into this launch profile")
     parser.add_argument("--yes", action="store_true", help="apply without interactive confirmation")
     args = parser.parse_args()
 
     payload = load_payload(args.template)
     kwargs = update_kwargs(payload)
-    print(f"Remote template hash: {args.hash_id}")
+    action = "create" if args.create else "update"
+    print(f"Action:              {action}")
+    if args.hash_id:
+        print(f"Remote template hash: {args.hash_id}")
     print(f"Local template file:  {args.template}")
     print(f"Template name:        {kwargs.get('name')}")
-    print(f"Image/tag:            {kwargs.get('image')}:{kwargs.get('tag') or kwargs.get('image_tag')}")
+    print(f"Image/tag:            {kwargs.get('image')}:{kwargs.get('image_tag')}")
+    print(f"Private:              {kwargs.get('private')}")
     print(f"Env bytes:            {len(kwargs.get('env') or '')}")
+    if args.update_launch_profile:
+        print(f"Launch profile:       {args.update_launch_profile}")
     if not args.yes:
-        answer = input("Apply this local rendered template to remote Vast template? [y/N] ").strip().lower()
+        answer = input(f"{action.capitalize()} this remote Vast template from local rendered payload? [y/N] ").strip().lower()
         if answer != "y":
             print("Aborted.")
             return
 
     vast = VastAI()
-    result = vast.update_template(args.hash_id, **kwargs)
+    if args.create:
+        result = vast.create_template(**kwargs)
+    else:
+        result = vast.update_template(args.hash_id, **kwargs)
     print(json.dumps(result, indent=2, sort_keys=True, default=str))
+
+    new_hash = result_hash_id(result)
+    if args.update_launch_profile:
+        if not new_hash:
+            raise SystemExit("Could not find hash_id in Vast result; launch profile not updated.")
+        write_launch_profile_hash(args.update_launch_profile, new_hash)
+        print(f"Updated {args.update_launch_profile} template.hash_id = {new_hash}")
 
 
 if __name__ == "__main__":
