@@ -43,7 +43,13 @@ PROVISIONING_SCRIPT="https://raw.githubusercontent.com/memgrafter/vast-ai-provis
 
 Use the `vLLM_R2_Model_20260504` template.
 
-Start with one GPU and enough disk, e.g. 80GB.
+Start with the prototype launch policy:
+
+```text
+config/launch-policy.l40s-prototype.json
+```
+
+Current prototype default: one L40S, 40GB disk, <= $0.65/hr, CUDA >= 13.0.
 
 ## 5. Check inside instance
 

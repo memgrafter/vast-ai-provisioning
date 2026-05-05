@@ -1,0 +1,48 @@
+{
+  "name": "l40s-prototype",
+  "purpose": "First-success vLLM launch for Qwen3.5-9B-AWQ-4bit from R2",
+  "market": "on-demand-first-then-spot",
+  "template": {
+    "name": "vLLM_R2_Model_20260504",
+    "hash_id": "71660d832be5a4b7fb76730e6e36d1bc"
+  },
+  "model": {
+    "id": "cyankiwi/Qwen3.5-9B-AWQ-4bit",
+    "served_model_name": "qwen3.5-9b-awq",
+    "quantization": "awq",
+    "max_model_len": 8192
+  },
+  "storage": {
+    "disk_gb": 40,
+    "max_storage_total_cost_per_hour": 0.012,
+    "max_storage_cost_per_gb_hour": 0.0003
+  },
+  "gpu": {
+    "preferred_gpu_name": "L40S",
+    "num_gpus": 1,
+    "min_gpu_total_ram_mb": 21000,
+    "min_cuda_max_good": 13.0
+  },
+  "network": {
+    "min_direct_port_count": 1,
+    "min_inet_down": 300,
+    "max_internet_down_cost_per_tb": 3.0,
+    "max_internet_up_cost_per_tb": 4.0
+  },
+  "pricing": {
+    "max_dph_total": 0.65,
+    "target_first_test_minutes": 10
+  },
+  "reliability": {
+    "min_reliability2": 0.98
+  },
+  "spot": {
+    "enabled_after_smoke_test": true,
+    "max_bid_dph": 0.35
+  },
+  "selection": {
+    "sort": "effective_cost_then_reliability",
+    "expected_model_download_tb": 0.01,
+    "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb"
+  }
+}
