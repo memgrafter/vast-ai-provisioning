@@ -1,7 +1,7 @@
 {
   "name": "l40s-prototype",
   "purpose": "First-success vLLM launch for Qwen3.5-9B-AWQ-4bit from R2",
-  "market": "on-demand-first-then-spot",
+  "market": "interruptible",
   "template": {
     "name": "vLLM_R2_Model_20260504",
     "hash_id": "71660d832be5a4b7fb76730e6e36d1bc"
@@ -38,7 +38,7 @@
     "min_reliability2": 0.98
   },
   "spot": {
-    "enabled_after_smoke_test": true,
+    "enabled_after_smoke_test": false,
     "max_bid_dph": 0.35
   },
   "selection": {

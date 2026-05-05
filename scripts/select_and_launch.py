@@ -52,16 +52,14 @@ def get_instances(vast: VastAI) -> list[dict[str, Any]]:
 
 
 def get_volumes(vast: VastAI) -> dict[str, Any]:
-    result: dict[str, Any] = {"volumes": [], "network_volumes": []}
-    try:
-        result["volumes"] = vast.search_volumes()
-    except Exception as e:
-        result["volumes_error"] = str(e)
-    try:
-        result["network_volumes"] = vast.search_network_volumes()
-    except Exception as e:
-        result["network_volumes_error"] = str(e)
-    return result
+    # VastAI.search_volumes/search_network_volumes return marketplace offers,
+    # not owned/costing volumes. Until we wire an owned-volume endpoint, do not
+    # include them in current burn calculations.
+    return {
+        "volumes": [],
+        "network_volumes": [],
+        "note": "owned volumes not checked; marketplace volume offers skipped",
+    }
 
 
 def instance_hourly_cost(inst: dict[str, Any]) -> float:
@@ -126,11 +124,13 @@ def print_current_infra(instances: list[dict[str, Any]], volumes: dict[str, Any]
                 )
     if not any_vol:
         print("  none found")
+    if volumes.get("note"):
+        print(f"  NOTE: {volumes['note']}")
     if volumes.get("volumes_error"):
         print(f"  WARN volumes query: {volumes['volumes_error']}")
     if volumes.get("network_volumes_error"):
         print(f"  WARN network volumes query: {volumes['network_volumes_error']}")
-    print(f"Known current hourly burn: {money(total_known)}/hr")
+    print(f"Known current hourly burn, excluding unchecked owned volumes: {money(total_known)}/hr")
     print()
     return total_known
 
@@ -145,7 +145,7 @@ def offer_passes_policy(offer: dict[str, Any], policy: dict[str, Any]) -> tuple[
     require_verified = bool(reliability.get("require_verified", False))
 
     checks = [
-        (offer.get("gpu_name") == gpu["preferred_gpu_name"], "gpu_name"),
+        ((not gpu.get("preferred_gpu_name")) or offer.get("gpu_name") == gpu["preferred_gpu_name"], "gpu_name"),
         (int(offer.get("num_gpus") or 0) == int(gpu["num_gpus"]), "num_gpus"),
         (float(offer.get("gpu_total_ram") or 0) >= float(gpu["min_gpu_total_ram_mb"]), "gpu_total_ram"),
         (float(offer.get("cuda_max_good") or 0) >= float(gpu["min_cuda_max_good"]), "cuda_max_good"),
@@ -175,18 +175,26 @@ def search_policy_offers(vast: VastAI, policy: dict[str, Any]) -> list[dict[str,
     storage_gb = float(policy["storage"]["disk_gb"])
     require_verified = bool(policy["reliability"].get("require_verified", False))
     verified_filter = "verified=true " if require_verified else ""
-    query = (
-        f"gpu_name={gpu['preferred_gpu_name']} "
-        f"num_gpus={gpu['num_gpus']} "
-        "rentable=true "
-        f"{verified_filter}"
-        f"gpu_total_ram>={gpu['min_gpu_total_ram_mb']} "
-        f"cuda_max_good>={gpu['min_cuda_max_good']}"
-    )
-    raw = vast.search_offers(query=query, order="dph_total", limit=50, storage=storage_gb)
+    filters = [
+        f"num_gpus={gpu['num_gpus']}",
+        "rentable=true",
+    ]
+    if gpu.get("preferred_gpu_name"):
+        filters.append(f"gpu_name={gpu['preferred_gpu_name']}")
+    if require_verified:
+        filters.append("verified=true")
+    # Vast search query expects GPU RAM in GB-ish units; offer field is returned in MB.
+    min_gpu_ram_gb = float(gpu["min_gpu_total_ram_mb"]) / 1000.0
+    filters.append(f"gpu_total_ram>={min_gpu_ram_gb}")
+    if float(gpu.get("min_cuda_max_good") or 0) > 0:
+        filters.append(f"cuda_max_good>={gpu['min_cuda_max_good']}")
+    query = " ".join(filters)
+    market = "interruptible" if policy.get("market") in {"interruptible", "bid", "spot"} else "on-demand"
+    raw = vast.search_offers(query=query, type=market, order="dph_total", limit=50, storage=storage_gb)
     passing = []
     print("Offer policy check")
     print("==================")
+    print(f"market: {market}")
     print(f"query: {query}")
     for offer in raw:
         ok, reasons = offer_passes_policy(offer, policy)
@@ -295,12 +303,15 @@ def main() -> None:
         print("Aborted before launch.")
         return
 
-    result = vast.create_instance(
-        id=int(selected["id"]),
-        disk=float(policy["storage"]["disk_gb"]),
-        template_hash=policy["template"]["hash_id"],
-        label=f"{policy['name']}-{policy['model']['served_model_name']}",
-    )
+    create_kwargs = {
+        "id": int(selected["id"]),
+        "disk": float(policy["storage"]["disk_gb"]),
+        "template_hash": policy["template"]["hash_id"],
+        "label": f"{policy['name']}-{policy['model']['served_model_name']}",
+    }
+    if policy.get("market") in {"interruptible", "bid", "spot"}:
+        create_kwargs["price"] = float(policy["spot"]["max_bid_dph"])
+    result = vast.create_instance(**create_kwargs)
     print("Create result:")
     print(json.dumps(result, indent=2, sort_keys=True, default=str))
     save_json(Path("state/last-create-result.json"), result)
