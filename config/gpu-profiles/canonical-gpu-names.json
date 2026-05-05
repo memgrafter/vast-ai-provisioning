@@ -1,0 +1,39 @@
+{
+  "source": "Observed Vast SDK offer gpu_name values. Keep profile allowed_gpu_names aligned with these exact strings.",
+  "last_observed_date": "2026-05-05",
+  "min_cuda_max_good": 13.0,
+  "classes": {
+    "large_vram_45gb_plus": [
+      "A100 PCIE",
+      "A100 SXM4",
+      "B200",
+      "L40",
+      "L40S",
+      "RTX 4090",
+      "RTX 6000Ada",
+      "RTX PRO 5000",
+      "RTX PRO 6000 S",
+      "RTX PRO 6000 WS"
+    ],
+    "current_qwen_27b_awq_candidates": [
+      "A100 PCIE",
+      "A100 SXM4",
+      "L40",
+      "L40S",
+      "RTX 4090",
+      "RTX 6000Ada",
+      "RTX PRO 5000",
+      "RTX PRO 6000 S",
+      "RTX PRO 6000 WS"
+    ],
+    "excluded_initially_for_cost_or_availability": [
+      "B200"
+    ]
+  },
+  "notes": {
+    "rtx_4090": "Some Vast RTX 4090 offers report about 49140 MB and pass the 45GB gate; keep gated by min_gpu_total_ram_mb rather than assuming all 4090s are 24GB.",
+    "rtx_6000_ada": "Observed Vast string is RTX 6000Ada, not RTX 6000 Ada.",
+    "rtx_pro_6000": "Observed Vast distinguishes RTX PRO 6000 WS and RTX PRO 6000 S.",
+    "h100": "Do not include H100 names until observed in current Vast offer results for this query."
+  }
+}
