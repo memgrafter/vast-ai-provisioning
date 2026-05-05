@@ -20,10 +20,21 @@ if [ -z "$model_profile" ]; then
   exit 2
 fi
 
-source env.modeltransfer
-pip install -U huggingface_hub hf_transfer awscli
+cd "$(dirname "${BASH_SOURCE[0]}")"
 
-profile_values="$(python3 - "$model_profile" <<'PY'
+if ! command -v uv >/dev/null 2>&1; then
+  echo "ERROR: uv is required. Install from https://docs.astral.sh/uv/" >&2
+  exit 1
+fi
+
+if [ ! -x .venv/bin/python ]; then
+  uv venv --python 3 .venv
+fi
+uv pip install --python .venv/bin/python -U huggingface_hub hf_transfer awscli
+
+source env.modeltransfer
+
+profile_values="$(.venv/bin/python - "$model_profile" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -40,8 +51,8 @@ mkdir -p "$MODEL_DIR"
 
 # Do not pass HF_TOKEN as a CLI argument; process listings can expose argv.
 # The Hugging Face CLI reads HF_TOKEN from the environment after env.modeltransfer is sourced.
-hf download "$profile_hf_model_id" \
+.venv/bin/hf download "$profile_hf_model_id" \
   --local-dir "$MODEL_DIR"
 
-aws s3 sync "$MODEL_DIR" "s3://$R2_BUCKET/$profile_r2_prefix" \
+.venv/bin/aws s3 sync "$MODEL_DIR" "s3://$R2_BUCKET/$profile_r2_prefix" \
   --endpoint-url "$R2_ENDPOINT"

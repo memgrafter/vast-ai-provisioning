@@ -22,6 +22,13 @@ class TransferScriptStaticTests(unittest.TestCase):
         self.assertIn("$R2_BUCKET", self.text)
         self.assertIn("$R2_ENDPOINT", self.text)
 
+    def test_transfer_uses_project_root_uv_venv(self):
+        self.assertIn("uv venv --python 3 .venv", self.text)
+        self.assertIn("uv pip install --python .venv/bin/python", self.text)
+        self.assertIn(".venv/bin/hf download", self.text)
+        self.assertIn(".venv/bin/aws s3 sync", self.text)
+        self.assertNotIn("pip install -U", self.text)
+
 
 if __name__ == "__main__":
     unittest.main()
