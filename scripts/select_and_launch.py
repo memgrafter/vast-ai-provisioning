@@ -374,6 +374,8 @@ def main() -> None:
     print(f"r2 prefix:     {model.get('r2_prefix')}")
     print(f"market:        {launch.get('market')}")
     print()
+    print("Tip: run scripts/check_launch_profile.py for a read-only infra/offer check without launch prompts.")
+    print()
     vast = VastAI()
 
     instances = get_instances(vast)

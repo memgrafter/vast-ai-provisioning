@@ -93,7 +93,19 @@ For the 27B AWQ profile, use this composed one-liner:
 . env.vast-management && ./run.sh scripts/smoke_chat_once.py --launch-profile config/launch-profiles/qwen3.6-27b-awq.interruptible.json --launch-attempts 2 --ready-timeout 1800 --message 'Say hello in one short sentence.'
 ```
 
-## 5. Launch manually
+## 5. Check launch availability and cost
+
+Run the same current-infra and offer-policy checks as the launcher without launching:
+
+```bash
+. env.vast-management && ./run.sh scripts/check_launch_profile.py \
+  --launch-profile config/launch-profiles/qwen3.6-27b-awq.interruptible.json \
+  --top 1
+```
+
+Use `--skip-current-infra` if you only want the marketplace offer check.
+
+## 6. Launch manually
 
 Use the profile-based launcher:
 
@@ -111,7 +123,7 @@ config/models/qwen3.5-9b-awq.json
 config/gpu-profiles/qwen-9b-awq-1gpu.json
 ```
 
-## 6. Check inside instance
+## 7. Check inside instance
 
 ```bash
 tail -f /var/log/portal/provisioning.log
@@ -120,7 +132,7 @@ supervisorctl tail -f vllm
 curl -H "Authorization: Bearer $VLLM_API_KEY" http://localhost:18000/v1/models
 ```
 
-## 7. External API
+## 8. External API
 
 Fetch mapped external port for container port `8000`, then call:
 
