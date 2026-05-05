@@ -331,8 +331,6 @@ transfer_model_to_R2.sh
 - [x] Remove env-based model selection from the transfer script.
 - [x] Make model-profile full-repo transfer the active transfer interface.
 - [x] Keep `env.modeltransfer` only for credentials/private R2 destination settings.
-- [ ] Add optional profile-driven single-file transfer later only if needed.
-
 Note: env-based model selection was intentionally removed from the active interface. `env.modeltransfer` remains the source for credentials/private R2 settings only.
 
 ---

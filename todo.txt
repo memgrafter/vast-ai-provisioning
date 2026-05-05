@@ -20,3 +20,5 @@
   - Record measured facts: image cached or not, time to provisioning, R2 speed test MB/s, sync duration, vLLM ready time, API success, outbid/stopped time, and failure reason.
   - Use the DB for scoring machines over time instead of relying only on static preferred/greylisted arrays.
   - Derive decision quality metrics: success rate, expected useful minutes, effective cost per useful hour, launch-time percentage, and interruption probability by machine/GPU/market.
+
+- Add optional profile-driven single-file transfer later only if needed.
