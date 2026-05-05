@@ -40,6 +40,7 @@ class Signals:
     vllm_waiting_for_provisioning: bool
     vllm_started: bool
     api_ready: bool
+    speed_test_failed: bool
     errors: list[str]
 
 
@@ -80,6 +81,7 @@ def analyze_logs(logs: str, image: str) -> Signals:
         provisioning_started=(
             "Provisioning instance with manifest" in logs
             or "Provisioning model from R2" in logs
+            or "R2 speed test enabled" in logs
         ),
         r2_sync_started=("Sync started at:" in logs or "Syncing s3://" in logs),
         r2_transfer_active=("download:" in lower or "copy:" in lower),
@@ -100,6 +102,10 @@ def analyze_logs(logs: str, image: str) -> Signals:
             "Uvicorn running on http://127.0.0.1:18000" in logs
             or "Uvicorn running on http://0.0.0.0:18000" in logs
             or "vLLM API server" in logs and "ready" in lower
+        ),
+        speed_test_failed=(
+            "R2 speed test below threshold" in logs
+            or "Provisioning script failed (exit 42)" in logs
         ),
         errors=error_lines,
     )
@@ -128,12 +134,15 @@ def print_status(instance_id: int, info: dict[str, Any], signals: Signals, elaps
         f"r2_sync_started={signals.r2_sync_started} "
         f"r2_transfer_active={signals.r2_transfer_active} "
         f"r2_sync_finished={signals.r2_sync_finished} "
+        f"speed_test_failed={signals.speed_test_failed} "
         f"vllm_waiting={signals.vllm_waiting_for_provisioning} "
         f"vllm_started={signals.vllm_started} "
         f"api_ready={signals.api_ready}"
     )
     recommendation = "WAIT"
-    if signals.api_ready or signals.vllm_started:
+    if signals.speed_test_failed:
+        recommendation = "TERMINATE_R2_SPEED_TEST_FAILED"
+    elif signals.api_ready or signals.vllm_started:
         recommendation = "READY_OR_STARTING_VLLM"
     elif signals.r2_sync_finished:
         recommendation = "WAIT_VLLM_LOADING"
@@ -162,6 +171,8 @@ def main() -> int:
     parser.add_argument("--image-deadline", type=int, default=60, help="seconds before warning on slow image pull")
     parser.add_argument("--provisioning-deadline", type=int, default=180, help="seconds before warning if provisioning has not started")
     parser.add_argument("--once", action="store_true", help="single poll then exit")
+    parser.add_argument("--destroy-on-fail", action="store_true", help="destroy instance when a terminate recommendation is reached")
+    parser.add_argument("--yes-destroy", action="store_true", help="required with --destroy-on-fail to actually destroy without prompting")
     args = parser.parse_args()
 
     vast = VastAI()
@@ -182,6 +193,15 @@ def main() -> int:
                 args.image_deadline,
                 args.provisioning_deadline,
             )
+            should_destroy = last_recommendation.startswith("TERMINATE_") or last_recommendation.startswith("CONSIDER_TERMINATE_")
+            if should_destroy and args.destroy_on_fail:
+                if not args.yes_destroy:
+                    print("Destroy requested by recommendation but --yes-destroy was not set; leaving instance running.", file=sys.stderr)
+                    return 3
+                print(f"Destroying instance {args.instance_id}: {last_recommendation}", file=sys.stderr)
+                result = vast.destroy_instance(id=args.instance_id)
+                print(json.dumps(result, indent=2, sort_keys=True, default=str))
+                return 4
             if signals.api_ready or signals.vllm_started:
                 return 0
             if args.once:
