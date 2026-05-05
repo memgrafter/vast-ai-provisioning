@@ -9,6 +9,8 @@ models/
 
 # Secrets / local env files
 env.modeltransfer
+env.*
+!env.*example
 .env
 .env.*
 
