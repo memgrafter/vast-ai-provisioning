@@ -48,9 +48,13 @@ if [ -f "$MODEL_DIR/config.json" ] && find "$MODEL_DIR" -maxdepth 1 -name '*.saf
   echo "Model appears present at $MODEL_DIR; skipping R2 sync"
 else
   echo "Syncing s3://$R2_BUCKET/$R2_PREFIX -> $MODEL_DIR"
+  echo "Sync started at: $(date -Is)"
+  # Intentionally do not use --only-show-errors here. Vast UI logs need transfer
+  # activity so we can tell R2 sync is progressing before vLLM starts.
   aws s3 sync "s3://$R2_BUCKET/$R2_PREFIX" "$MODEL_DIR" \
-    --endpoint-url "$R2_ENDPOINT" \
-    --only-show-errors
+    --endpoint-url "$R2_ENDPOINT"
+  echo "Sync finished at: $(date -Is)"
+  echo "Synced bytes: $(du -sh "$MODEL_DIR" | awk '{print $1}')"
 fi
 
 # Ensure vLLM will use the local model path even if the template forgot to set it.

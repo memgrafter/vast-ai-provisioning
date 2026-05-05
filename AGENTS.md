@@ -16,9 +16,10 @@ Provision Vast.ai vLLM instances that sync a private R2-hosted Hugging Face mode
 ```bash
 AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY
+VLLM_API_KEY
 ```
 
-Do not put those in public templates.
+Do not put those values in public templates. Templates may reference `VLLM_API_KEY` by name only.
 
 ## Current model
 
@@ -35,7 +36,7 @@ Private working template:
 
 ```text
 name: vLLM_R2_Model_20260504
-hash: 71660d832be5a4b7fb76730e6e36d1bc
+hash: eadfe895130faf4eb8a8283ceccff0cd
 ```
 
 Public-safe skeleton:
@@ -55,6 +56,7 @@ MODEL_DIR="/workspace/models/cyankiwi/Qwen3.5-9B-AWQ-4bit"
 VLLM_MODEL="/workspace/models/cyankiwi/Qwen3.5-9B-AWQ-4bit"
 VLLM_ARGS="--served-model-name qwen3.5-9b-awq --quantization awq --dtype half --max-model-len 8192 --host 127.0.0.1 --port 18000 --download-dir /workspace/models --gpu-memory-utilization 0.90 --trust-remote-code"
 AUTO_PARALLEL="false"
+AUTH_EXCLUDE="8000"
 PROVISIONING_SCRIPT="https://raw.githubusercontent.com/memgrafter/vast-ai-provisioning/main/provision_vast_vllm_from_r2.sh"
 ```
 
@@ -137,10 +139,10 @@ PY
 
 Wait for `actual_status == "running"`, then inspect port mappings for container port `8000`.
 
-External vLLM API:
+External vLLM API uses the account-level `VLLM_API_KEY`:
 
 ```bash
-curl -H "Authorization: Bearer 1" \
+curl -H "Authorization: Bearer $VLLM_API_KEY" \
   http://<host>:<mapped_8000>/v1/models
 ```
 

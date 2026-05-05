@@ -164,6 +164,7 @@ def offer_passes_policy(offer: dict[str, Any], policy: dict[str, Any]) -> tuple[
         (float(offer.get("cuda_max_good") or 0) >= float(gpu["min_cuda_max_good"]), "cuda_max_good"),
         (float(offer.get("dph_total") or math.inf) <= float(pricing["max_dph_total"]), "dph_total"),
         (float(offer.get("storage_total_cost") or math.inf) <= float(storage["max_storage_total_cost_per_hour"]), "storage_total_cost"),
+        (float(offer.get("disk_bw") or offer.get("disk_io") or 0) >= float(storage.get("min_disk_bw") or 0), "disk_bw"),
         (float(offer.get("internet_down_cost_per_tb") or 0) <= float(network["max_internet_down_cost_per_tb"]), "internet_down_cost_per_tb"),
         (float(offer.get("internet_up_cost_per_tb") or 0) <= float(network["max_internet_up_cost_per_tb"]), "internet_up_cost_per_tb"),
         (float(offer.get("inet_down") or 0) >= float(network["min_inet_down"]), "inet_down"),
@@ -180,6 +181,22 @@ def offer_passes_policy(offer: dict[str, Any], policy: dict[str, Any]) -> tuple[
 def effective_cost(offer: dict[str, Any], policy: dict[str, Any]) -> float:
     tb = float(policy["selection"].get("expected_model_download_tb", 0))
     return float(offer.get("dph_total") or math.inf) + tb * float(offer.get("internet_down_cost_per_tb") or 0)
+
+
+def is_preferred_machine(offer: dict[str, Any], policy: dict[str, Any]) -> bool:
+    preferred = {int(x) for x in policy.get("selection", {}).get("preferred_machine_ids", [])}
+    try:
+        return int(offer.get("machine_id")) in preferred
+    except Exception:
+        return False
+
+
+def selection_sort_key(offer: dict[str, Any], policy: dict[str, Any]) -> tuple[bool, float, float]:
+    return (
+        not is_preferred_machine(offer, policy),
+        effective_cost(offer, policy),
+        -float(offer.get("reliability2") or 0),
+    )
 
 
 def search_policy_offers(vast: VastAI, policy: dict[str, Any]) -> list[dict[str, Any]]:
@@ -211,12 +228,15 @@ def search_policy_offers(vast: VastAI, policy: dict[str, Any]) -> list[dict[str,
     for offer in raw:
         ok, reasons = offer_passes_policy(offer, policy)
         status = "PASS" if ok else "FAIL " + ",".join(reasons)
+        preferred = "*" if is_preferred_machine(offer, policy) else " "
         print(
             f"{status:22} "
+            f"pref={preferred} "
             f"id={offer.get('id')} gpu={offer.get('gpu_name')} "
             f"cuda={offer.get('cuda_max_good')} "
             f"dph={money(offer.get('dph_total'))}/hr "
             f"storage={money(offer.get('storage_total_cost'))}/hr "
+            f"disk_bw={number(offer.get('disk_bw') or offer.get('disk_io'), 1)} "
             f"downTB={money(offer.get('internet_down_cost_per_tb'))} "
             f"upTB={money(offer.get('internet_up_cost_per_tb'))} "
             f"inet_down={number(offer.get('inet_down'), 1)} "
@@ -225,7 +245,7 @@ def search_policy_offers(vast: VastAI, policy: dict[str, Any]) -> list[dict[str,
         )
         if ok:
             passing.append(offer)
-    passing.sort(key=lambda o: (effective_cost(o, policy), -float(o.get("reliability2") or 0)))
+    passing.sort(key=lambda o: selection_sort_key(o, policy))
     print()
     return passing
 
@@ -242,12 +262,13 @@ def print_selected_offer(offer: dict[str, Any], policy: dict[str, Any]) -> None:
     print("Selected offer")
     print("==============")
     print(f"offer_id:       {offer.get('id')}")
-    print(f"machine_id:     {offer.get('machine_id')}")
+    print(f"machine_id:     {offer.get('machine_id')}{' (preferred)' if is_preferred_machine(offer, policy) else ''}")
     print(f"gpu:            {offer.get('gpu_name')} {offer.get('gpu_total_ram')}MB")
     print(f"cuda/driver:    {offer.get('cuda_max_good')} / {offer.get('driver_version')}")
     print(f"reliability2:   {number(offer.get('reliability2'), 4)}")
     print(f"direct ports:   {offer.get('direct_port_count')}")
     print(f"disk available: {number(offer.get('disk_space'), 1)}GB")
+    print(f"disk bw:        {number(offer.get('disk_bw') or offer.get('disk_io'), 1)} MB/s")
     print(f"inet down/up:   {number(offer.get('inet_down'), 1)} / {number(offer.get('inet_up'), 1)}")
     print()
     print("Costs")
