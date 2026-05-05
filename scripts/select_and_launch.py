@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Select and optionally launch a Vast instance with explicit cost gates."""
+"""Select and optionally launch a Vast instance with explicit cost gates.
+
+Note: verified=true is enforced in the Vast search query only; returned offers may
+report verified as null, so we do not post-filter it client-side.
+"""
 from __future__ import annotations
 
 import argparse
@@ -145,7 +149,16 @@ def offer_passes_policy(offer: dict[str, Any], policy: dict[str, Any]) -> tuple[
     require_verified = bool(reliability.get("require_verified", False))
 
     checks = [
-        ((not gpu.get("preferred_gpu_name")) or offer.get("gpu_name") == gpu["preferred_gpu_name"], "gpu_name"),
+        (
+            (not gpu.get("preferred_gpu_name"))
+            or offer.get("gpu_name") == gpu["preferred_gpu_name"],
+            "gpu_name",
+        ),
+        (
+            (not gpu.get("allowed_gpu_names"))
+            or offer.get("gpu_name") in set(gpu["allowed_gpu_names"]),
+            "allowed_gpu_names",
+        ),
         (int(offer.get("num_gpus") or 0) == int(gpu["num_gpus"]), "num_gpus"),
         (float(offer.get("gpu_total_ram") or 0) >= float(gpu["min_gpu_total_ram_mb"]), "gpu_total_ram"),
         (float(offer.get("cuda_max_good") or 0) >= float(gpu["min_cuda_max_good"]), "cuda_max_good"),
@@ -156,7 +169,6 @@ def offer_passes_policy(offer: dict[str, Any], policy: dict[str, Any]) -> tuple[
         (float(offer.get("inet_down") or 0) >= float(network["min_inet_down"]), "inet_down"),
         (int(offer.get("direct_port_count") or 0) >= int(network["min_direct_port_count"]), "direct_port_count"),
         (float(offer.get("reliability2") or 0) >= float(reliability["min_reliability2"]), "reliability2"),
-        ((not require_verified) or (offer.get("verified") is True), "verified"),
         (float(offer.get("disk_space") or 0) >= float(storage["disk_gb"]), "disk_space"),
     ]
     for passed, name in checks:
