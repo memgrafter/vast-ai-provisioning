@@ -28,3 +28,10 @@
 
 - Review public template portal auth placeholder:
   - `config/templates/vllm-r2-base.public.json` contains `OPEN_BUTTON_TOKEN=1`; it is not the vLLM API key, but it is token-shaped public template data. Confirm this remains intentional or replace with a safer placeholder/private overlay value.
+
+- Add spot-vs-on-demand savings guard for interruptible launches:
+  - Treat submitted `spot.max_bid_dph` as the effective possible compute price, because Vast running instance pricing appeared to use the submitted bid (`dph_base=0.9`) rather than the lower listed interruptible price.
+  - Add env var `VAST_MIN_SPOT_SAVINGS_RATIO` defaulting to `0.20`.
+  - For interruptible profiles, compare `(max_bid_dph + storage)` to matching on-demand total for the same offer/machine/GPU when available.
+  - If spot-at-bid is not at least `VAST_MIN_SPOT_SAVINGS_RATIO` cheaper than on-demand, warn and prefer/fallback to on-demand or reject with `insufficient_spot_savings`.
+  - Print listed spot dph, submitted bid dph, spot total at bid, on-demand total, savings %, threshold %, and decision before launch.
