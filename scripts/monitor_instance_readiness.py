@@ -189,7 +189,21 @@ def main() -> int:
     vast = VastAI()
     start = time.time()
     last_recommendation = "WAIT"
-    cumulative = Signals()
+    cumulative = Signals(
+        image_cached=False,
+        image_pull_seen=False,
+        provisioning_started=False,
+        r2_sync_started=False,
+        r2_transfer_active=False,
+        r2_sync_finished=False,
+        provisioning_complete=False,
+        vllm_waiting_for_provisioning=False,
+        vllm_started=False,
+        api_ready=False,
+        speed_test_failed=False,
+        provisioning_failed=False,
+        errors=[],
+    )
     while True:
         elapsed = time.time() - start
         try:
