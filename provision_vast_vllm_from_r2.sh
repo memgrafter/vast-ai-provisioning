@@ -10,7 +10,20 @@ set -euo pipefail
 
 export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-auto}"
 
+MODEL_MIN_FREE_GB="${MODEL_MIN_FREE_GB:-5}"
+
 mkdir -p "$MODEL_DIR" ~/.aws
+
+available_gb="$(df -BG "$MODEL_DIR" | awk 'NR==2 {gsub(/G/, "", $4); print $4}')"
+if [ "${available_gb:-0}" -lt "$MODEL_MIN_FREE_GB" ]; then
+  echo "ERROR: only ${available_gb:-0}GB free at $MODEL_DIR; need at least ${MODEL_MIN_FREE_GB}GB" >&2
+  exit 1
+fi
+
+echo "Provisioning model from R2"
+echo "  R2 source: s3://$R2_BUCKET/$R2_PREFIX"
+echo "  Target:    $MODEL_DIR"
+echo "  Free GB:   $available_gb"
 
 # Tune S3/R2 transfer concurrency for model repos with multiple safetensor shards.
 cat > ~/.aws/config <<'EOF'
