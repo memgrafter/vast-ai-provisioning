@@ -31,6 +31,12 @@ VLLM_DOWNLOAD_DIR="${VLLM_DOWNLOAD_DIR:-/workspace/models}"
 VLLM_GPU_MEMORY_UTILIZATION="${VLLM_GPU_MEMORY_UTILIZATION:-0.90}"
 VLLM_TRUST_REMOTE_CODE="${VLLM_TRUST_REMOTE_CODE:-true}"
 VLLM_FORCE_QUANTIZATION="${VLLM_FORCE_QUANTIZATION:-}"
+VLLM_MAX_NEW_TOKENS="${VLLM_MAX_NEW_TOKENS:-}"
+VLLM_ENABLE_AUTO_TOOL_CHOICE="${VLLM_ENABLE_AUTO_TOOL_CHOICE:-false}"
+VLLM_TOOL_CALL_PARSER="${VLLM_TOOL_CALL_PARSER:-}"
+VLLM_REASONING_PARSER="${VLLM_REASONING_PARSER:-}"
+VLLM_ENABLE_PREFIX_CACHING="${VLLM_ENABLE_PREFIX_CACHING:-false}"
+VLLM_LANGUAGE_MODEL_ONLY="${VLLM_LANGUAGE_MODEL_ONLY:-false}"
 VLLM_EXTRA_ARGS="${VLLM_EXTRA_ARGS:-}"
 
 # Use a file for complex vLLM args. This avoids Docker/template/env quoting
@@ -48,6 +54,24 @@ VLLM_EXTRA_ARGS="${VLLM_EXTRA_ARGS:-}"
   fi
   if [ -n "$VLLM_FORCE_QUANTIZATION" ]; then
     printf -- '--quantization %q ' "$VLLM_FORCE_QUANTIZATION"
+  fi
+  if [ -n "$VLLM_MAX_NEW_TOKENS" ]; then
+    printf -- '--override-generation-config %q ' "{\"max_new_tokens\":${VLLM_MAX_NEW_TOKENS}}"
+  fi
+  if [ "$VLLM_ENABLE_AUTO_TOOL_CHOICE" = "true" ]; then
+    printf -- '--enable-auto-tool-choice '
+  fi
+  if [ -n "$VLLM_TOOL_CALL_PARSER" ]; then
+    printf -- '--tool-call-parser %q ' "$VLLM_TOOL_CALL_PARSER"
+  fi
+  if [ -n "$VLLM_REASONING_PARSER" ]; then
+    printf -- '--reasoning-parser %q ' "$VLLM_REASONING_PARSER"
+  fi
+  if [ "$VLLM_ENABLE_PREFIX_CACHING" = "true" ]; then
+    printf -- '--enable-prefix-caching '
+  fi
+  if [ "$VLLM_LANGUAGE_MODEL_ONLY" = "true" ]; then
+    printf -- '--language-model-only '
   fi
   if [ -n "$VLLM_EXTRA_ARGS" ]; then
     printf -- '%s ' "$VLLM_EXTRA_ARGS"

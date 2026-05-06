@@ -63,6 +63,12 @@ def env_from_specs(template: dict[str, Any], model: dict[str, Any]) -> dict[str,
             "VLLM_GPU_MEMORY_UTILIZATION": str(vllm.get("gpu_memory_utilization", 0.9)),
             "VLLM_TRUST_REMOTE_CODE": str(vllm.get("trust_remote_code", True)).lower(),
             "VLLM_FORCE_QUANTIZATION": "" if vllm.get("force_quantization") is None else str(vllm.get("force_quantization")),
+            "VLLM_MAX_NEW_TOKENS": "" if vllm.get("max_new_tokens") is None else str(vllm.get("max_new_tokens")),
+            "VLLM_ENABLE_AUTO_TOOL_CHOICE": str(vllm.get("enable_auto_tool_choice", False)).lower(),
+            "VLLM_TOOL_CALL_PARSER": "" if vllm.get("tool_call_parser") is None else str(vllm.get("tool_call_parser")),
+            "VLLM_REASONING_PARSER": "" if vllm.get("reasoning_parser") is None else str(vllm.get("reasoning_parser")),
+            "VLLM_ENABLE_PREFIX_CACHING": str(vllm.get("enable_prefix_caching", False)).lower(),
+            "VLLM_LANGUAGE_MODEL_ONLY": str(vllm.get("language_model_only", False)).lower(),
             "VLLM_EXTRA_ARGS": " ".join(str(x) for x in vllm.get("extra_args", [])),
         }
     )
