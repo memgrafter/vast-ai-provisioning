@@ -212,7 +212,7 @@ def main() -> int:
             save_snapshot(args.instance_id, info, logs)
             current_signals = analyze_logs(logs, args.image)
             signals = Signals(**{
-                field: bool(getattr(cumulative, field) or getattr(current_signals, field))
+                field: (cumulative.errors + current_signals.errors if field == "errors" else bool(getattr(cumulative, field) or getattr(current_signals, field)))
                 for field in cumulative.__dataclass_fields__
             })
             cumulative = signals
