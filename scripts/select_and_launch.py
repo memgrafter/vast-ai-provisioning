@@ -125,6 +125,7 @@ def print_current_infra(instances: list[dict[str, Any]], volumes: dict[str, Any]
                 continue
             cost = instance_hourly_cost(inst)
             total_known += cost
+            api_url = port_url(inst)
             print(
                 "  "
                 f"id={inst.get('id') or inst.get('contract_id')} "
@@ -135,6 +136,9 @@ def print_current_infra(instances: list[dict[str, Any]], volumes: dict[str, Any]
                 f"disk={inst.get('disk_space') or inst.get('disk')}GB "
                 f"known_cost={money(cost)}/hr"
             )
+            if api_url:
+                print(f"    base_url={api_url}/v1")
+                print(f"    chat_completions_url={api_url}/v1/chat/completions")
     print("Volumes:")
     any_vol = False
     for group in ["volumes", "network_volumes"]:
