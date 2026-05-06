@@ -14,7 +14,10 @@
     "host": "127.0.0.1",
     "port": 18000,
     "download_dir": "/workspace/models",
-    "extra_args": [],
+    "extra_args": [
+      "--override-generation-config",
+      "{\"max_new_tokens\":8192}"
+    ],
     "force_quantization": null
   }
 }
