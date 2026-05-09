@@ -1,0 +1,45 @@
+{
+  "gpu_profile": "config/gpu-profiles/qwen-27b-awq-96gb-rtx-pro-6000-ws.json",
+  "market": "interruptible",
+  "model_profile": "config/models/qwen3.6-35b-a3b-awq.coding-budget-160k.json",
+  "name": "qwen3.6-35b-a3b-awq.coding-budget-160k.interruptible",
+  "network": {
+    "max_internet_down_cost_per_tb": 8.0,
+    "max_internet_up_cost_per_tb": 10.0,
+    "min_direct_port_count": 1,
+    "min_inet_down": 1000
+  },
+  "pricing": {
+    "max_dph_total": 2.0,
+    "target_first_test_minutes": 60
+  },
+  "purpose": "Coding-agent budget test for QuantTrio/Qwen3.6-35B-A3B-AWQ with 160k context from R2",
+  "reliability": {
+    "min_reliability2": 0.98,
+    "require_verified": true
+  },
+  "selection": {
+    "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
+    "greylisted_machine_ids": [
+      8357
+    ],
+    "preferred_machine_ids": [
+      51218
+    ],
+    "sort": "preferred_machine_then_effective_cost_then_reliability"
+  },
+  "spot": {
+    "enabled_after_smoke_test": false,
+    "max_bid_dph": 0.9
+  },
+  "storage": {
+    "disk_gb": 100,
+    "max_storage_cost_per_gb_hour": 0.0003,
+    "max_storage_total_cost_per_hour": 0.03,
+    "min_disk_bw": 500
+  },
+  "template": {
+    "hash_id": "5b0bdf91d564840e759e70b029d1ab56",
+    "name": "vLLM_R2_Qwen3_6_35B_A3B_AWQ_Coding_160K"
+  }
+}
