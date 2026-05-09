@@ -197,6 +197,8 @@ def one_request(base_url: str, model: str, api_key: str, bucket: Bucket, request
 
 
 def run_step(base_url: str, model: str, api_key: str, concurrency: int, requests: int, timeout: int) -> None:
+    if requests < concurrency:
+        raise ValueError(f"requests ({requests}) must be >= concurrency ({concurrency})")
     weighted = [bucket for bucket in BUCKETS for _ in range(bucket.weight)]
     submitted = 0
     results: list[dict[str, Any]] = []
@@ -222,7 +224,7 @@ def run_step(base_url: str, model: str, api_key: str, concurrency: int, requests
     prompt_tokens = sum(int(r.get("prompt_tokens") or 0) for r in ok)
     completion_tokens = sum(int(r.get("completion_tokens") or 0) for r in ok)
 
-    print(f"concurrency={concurrency} requests={requests} wall_s={wall:.1f}")
+    print(f"concurrency={concurrency} simulated_users={concurrency} requests={requests} wall_s={wall:.1f}")
     print(f"  ok={len(ok)} errors={len(bad)} rps={len(ok) / wall:.2f}")
     print(f"  client_prompt_tps={prompt_tokens / wall:.2f} client_generation_tps={completion_tokens / wall:.2f} client_total_tps={(prompt_tokens + completion_tokens) / wall:.2f}")
     print(f"  latency_s avg={statistics.mean(latencies) if latencies else 0:.2f} p50={percentile(latencies, 50):.2f} p95={percentile(latencies, 95):.2f} max={max(latencies) if latencies else 0:.2f}")
@@ -253,8 +255,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Coding-agent-shaped saturation ramp")
     parser.add_argument("--base-url", required=True, help="Server root, e.g. http://host:port, not /v1")
     parser.add_argument("--model", required=True)
-    parser.add_argument("--concurrency", default="48,64,96,128,160", help="Comma-separated concurrency steps")
-    parser.add_argument("--requests-per-step", type=int, default=60)
+    parser.add_argument("--concurrency", default="96,128,160", help="Comma-separated concurrency steps")
+    parser.add_argument("--min-requests-per-step", type=int, default=120, help="Minimum requests to run at each concurrency step")
+    parser.add_argument("--requests-per-concurrency", type=int, default=3, help="Requests per simulated user; requests per step = max(min requests, concurrency * this value)")
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--pause", action="store_true", help="Pause for Enter between concurrency steps")
     args = parser.parse_args()
@@ -273,8 +276,9 @@ def main() -> int:
     print()
 
     for concurrency in [int(x) for x in args.concurrency.split(",") if x.strip()]:
+        requests = max(args.min_requests_per_step, concurrency * args.requests_per_concurrency)
         print("=" * 72)
-        run_step(args.base_url, args.model, api_key, concurrency, args.requests_per_step, args.timeout)
+        run_step(args.base_url, args.model, api_key, concurrency, requests, args.timeout)
         if args.pause:
             print("Press Enter for next step, Ctrl-C to stop.")
             input()
