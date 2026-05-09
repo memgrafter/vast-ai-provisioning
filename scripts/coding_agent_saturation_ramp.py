@@ -28,25 +28,33 @@ from typing import Any
 
 
 @dataclass(frozen=True)
-class Bucket:
+class PrefixBucket:
     name: str
     weight: int
-    input_tokens: int
+    user_prefix_tokens: int
     max_tokens: int | None
 
 
-# Rough coding-agent-ish mix: many normal turns, some long-context turns.
-# Prompt bodies are ~90% shared prefix and ~10% unique suffix to exercise
-# prefix-cache-heavy coding sessions. Output is not capped per request; the
-# server/model profile generation config owns the default limit.
+@dataclass(frozen=True)
+class SimUser:
+    user_id: int
+    bucket: PrefixBucket
+    stable_prefix: str
+
+
+# Simulated-user session buckets. Each user gets a stable prefix and submits
+# multiple serial turns against it. This is meant to reveal prefix/KV cache
+# behavior as many distinct user prefixes become resident. Output is not capped
+# per request; the server/model profile generation config owns the limit.
 BUCKETS = [
-    Bucket("small_edit", 45, 2_000, None),
-    Bucket("medium_task", 30, 8_000, None),
-    Bucket("large_context", 20, 32_000, None),
-    Bucket("huge_context", 5, 80_000, None),
+    PrefixBucket("user_prefix_5k", 10, 5_000, None),
+    PrefixBucket("user_prefix_30k", 30, 30_000, None),
+    PrefixBucket("user_prefix_60k", 30, 60_000, None),
+    PrefixBucket("user_prefix_90k", 30, 90_000, None),
 ]
 
-CACHEABLE_PREFIX_RATIO = 0.90
+GLOBAL_PREFIX_TOKENS = 100
+TURN_UNIQUE_TOKENS = 256
 
 
 def percentile(values: list[float], p: float) -> float:
@@ -57,20 +65,30 @@ def percentile(values: list[float], p: float) -> float:
     return values[idx]
 
 
-def make_prompt(bucket: Bucket, request_id: int) -> str:
-    # Repeated "tok " is approximately one token per repeat for this Qwen tokenizer path.
-    # Shared prefix comes first so vLLM prefix caching can reuse it across requests.
-    overhead_budget = 96
-    filler_count = max(1, bucket.input_tokens - overhead_budget)
-    shared_count = int(filler_count * CACHEABLE_PREFIX_RATIO)
-    unique_count = max(1, filler_count - shared_count)
+def make_user(user_id: int, bucket: PrefixBucket) -> SimUser:
+    # Repeated "TOK " is close to one token per repeat for this Qwen tokenizer path.
+    # Put user identity before the long body: exact-prefix matching cannot cross the
+    # differing header, so users do not share each other's long prefix, while the
+    # body stays token-efficient enough to fit 90k-class prompts under 160k.
+    stable_prefix = (
+        f"Stable synthetic repository/session prefix for unique simulated user {user_id} bucket {bucket.name}.\n"
+        + ("TOK " * max(1, bucket.user_prefix_tokens))
+    )
+    return SimUser(user_id=user_id, bucket=bucket, stable_prefix=stable_prefix)
+
+
+def make_prompt(user: SimUser, turn: int) -> str:
+    # Global prefix first, then user-stable prefix, then turn-unique tail. This
+    # lets vLLM reuse a tiny global prefix across everyone and a large stable
+    # prefix across serial turns for the same simulated user.
     return (
         "You are acting as a coding agent. Inspect the synthetic repository context, then provide a concise implementation plan.\n"
-        f"Shared cacheable context bucket: {bucket.name}\n\n"
-        + ("tok " * shared_count)
-        + "\n\nUnique request tail:\n"
-        f"Request id: {request_id}\n"
-        + ("uniq " * unique_count)
+        + ("TOK " * GLOBAL_PREFIX_TOKENS)
+        + "\n\n"
+        + user.stable_prefix
+        + "\n\nCurrent turn:\n"
+        f"user_id={user.user_id} turn={turn}\n"
+        + ("TOK " * TURN_UNIQUE_TOKENS)
         + "\n\nReturn a concise answer."
     )
 
@@ -162,14 +180,26 @@ class MetricsSampler:
         }
 
 
-def one_request(base_url: str, model: str, api_key: str, bucket: Bucket, request_id: int, timeout: int) -> dict[str, Any]:
+def token_count(base_url: str, model: str, api_key: str, prompt: str, timeout: int) -> int:
+    payload = {"model": model, "prompt": prompt}
+    req = urllib.request.Request(
+        base_url.rstrip("/") + "/tokenize",
+        data=json.dumps(payload).encode(),
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        body = json.loads(response.read().decode())
+    return int(body.get("count") or len(body.get("tokens") or []))
+
+
+def one_request(base_url: str, model: str, api_key: str, user: SimUser, turn: int, timeout: int) -> dict[str, Any]:
     payload = {
         "model": model,
-        "messages": [{"role": "user", "content": make_prompt(bucket, request_id)}],
+        "messages": [{"role": "user", "content": make_prompt(user, turn)}],
         "temperature": 0,
     }
-    if bucket.max_tokens is not None:
-        payload["max_tokens"] = bucket.max_tokens
+    if user.bucket.max_tokens is not None:
+        payload["max_tokens"] = user.bucket.max_tokens
     req = urllib.request.Request(
         base_url.rstrip("/") + "/v1/chat/completions",
         data=json.dumps(payload).encode(),
@@ -184,37 +214,69 @@ def one_request(base_url: str, model: str, api_key: str, bucket: Bucket, request
         choice = (body.get("choices") or [{}])[0]
         return {
             "ok": True,
-            "bucket": bucket.name,
+            "bucket": user.bucket.name,
+            "user_id": user.user_id,
+            "turn": turn,
             "elapsed": elapsed,
             "prompt_tokens": int(usage.get("prompt_tokens") or 0),
             "completion_tokens": int(usage.get("completion_tokens") or 0),
             "finish_reason": choice.get("finish_reason"),
         }
     except urllib.error.HTTPError as exc:
-        return {"ok": False, "bucket": bucket.name, "elapsed": time.monotonic() - started, "error": f"HTTP {exc.code}"}
+        return {"ok": False, "bucket": user.bucket.name, "user_id": user.user_id, "turn": turn, "elapsed": time.monotonic() - started, "error": f"HTTP {exc.code}"}
     except Exception as exc:
-        return {"ok": False, "bucket": bucket.name, "elapsed": time.monotonic() - started, "error": type(exc).__name__}
+        return {"ok": False, "bucket": user.bucket.name, "user_id": user.user_id, "turn": turn, "elapsed": time.monotonic() - started, "error": type(exc).__name__}
 
 
-def run_step(base_url: str, model: str, api_key: str, concurrency: int, requests: int, timeout: int) -> None:
-    if requests < concurrency:
-        raise ValueError(f"requests ({requests}) must be >= concurrency ({concurrency})")
+def run_step(base_url: str, model: str, api_key: str, concurrency: int, turns_per_user: int, timeout: int) -> None:
     weighted = [bucket for bucket in BUCKETS for _ in range(bucket.weight)]
+    users = [make_user(user_id, random.choice(weighted)) for user_id in range(1, concurrency + 1)]
+    requests = concurrency * turns_per_user
     submitted = 0
+    skipped_followup_turns = 0
     results: list[dict[str, Any]] = []
     started = time.monotonic()
+    last_progress = started
+
+    def submit_turn(pool: futures.ThreadPoolExecutor, user: SimUser, turn: int) -> futures.Future[dict[str, Any]]:
+        nonlocal submitted
+        submitted += 1
+        return pool.submit(one_request, base_url, model, api_key, user, turn, timeout)
+
+    def print_progress(pending_count: int) -> None:
+        ok_count = sum(1 for r in results if r.get("ok"))
+        error_count = len(results) - ok_count
+        print(
+            "  progress "
+            f"planned={requests} submitted={submitted} completed={len(results)} "
+            f"ok={ok_count} errors={error_count} in_flight={pending_count} "
+            f"skipped_followup_turns={skipped_followup_turns}"
+        )
 
     with MetricsSampler(base_url, api_key) as sampler:
         with futures.ThreadPoolExecutor(max_workers=concurrency) as pool:
-            pending: set[futures.Future[dict[str, Any]]] = set()
-            while submitted < requests or pending:
-                while submitted < requests and len(pending) < concurrency:
-                    submitted += 1
-                    bucket = random.choice(weighted)
-                    pending.add(pool.submit(one_request, base_url, model, api_key, bucket, submitted, timeout))
-                done, pending = futures.wait(pending, return_when=futures.FIRST_COMPLETED)
+            pending: set[futures.Future[dict[str, Any]]] = {submit_turn(pool, user, 1) for user in users}
+            print_progress(len(pending))
+            while pending:
+                done, pending = futures.wait(pending, timeout=5, return_when=futures.FIRST_COMPLETED)
+                now = time.monotonic()
+                if not done:
+                    if now - last_progress >= 30:
+                        print_progress(len(pending))
+                        last_progress = now
+                    continue
                 for fut in done:
-                    results.append(fut.result())
+                    result = fut.result()
+                    results.append(result)
+                    turn = int(result.get("turn") or 0)
+                    if result.get("ok") and turn < turns_per_user:
+                        user = users[int(result["user_id"]) - 1]
+                        pending.add(submit_turn(pool, user, turn + 1))
+                    elif not result.get("ok"):
+                        skipped_followup_turns += max(0, turns_per_user - turn)
+                if now - last_progress >= 30 or len(results) == requests:
+                    print_progress(len(pending))
+                    last_progress = now
 
     wall = time.monotonic() - started
     server = sampler.report(wall)
@@ -224,7 +286,7 @@ def run_step(base_url: str, model: str, api_key: str, concurrency: int, requests
     prompt_tokens = sum(int(r.get("prompt_tokens") or 0) for r in ok)
     completion_tokens = sum(int(r.get("completion_tokens") or 0) for r in ok)
 
-    print(f"concurrency={concurrency} simulated_users={concurrency} requests={requests} wall_s={wall:.1f}")
+    print(f"concurrency={concurrency} simulated_users={concurrency} planned_requests={requests} submitted_requests={submitted} completed_results={len(results)} skipped_followup_turns={skipped_followup_turns} wall_s={wall:.1f}")
     print(f"  ok={len(ok)} errors={len(bad)} rps={len(ok) / wall:.2f}")
     print(f"  client_prompt_tps={prompt_tokens / wall:.2f} client_generation_tps={completion_tokens / wall:.2f} client_total_tps={(prompt_tokens + completion_tokens) / wall:.2f}")
     print(f"  latency_s avg={statistics.mean(latencies) if latencies else 0:.2f} p50={percentile(latencies, 50):.2f} p95={percentile(latencies, 95):.2f} max={max(latencies) if latencies else 0:.2f}")
@@ -255,11 +317,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Coding-agent-shaped saturation ramp")
     parser.add_argument("--base-url", required=True, help="Server root, e.g. http://host:port, not /v1")
     parser.add_argument("--model", required=True)
-    parser.add_argument("--concurrency", default="96,128,160", help="Comma-separated concurrency steps")
-    parser.add_argument("--min-requests-per-step", type=int, default=120, help="Minimum requests to run at each concurrency step")
-    parser.add_argument("--requests-per-concurrency", type=int, default=3, help="Requests per simulated user; requests per step = max(min requests, concurrency * this value)")
+    parser.add_argument("--concurrency", default="16,32,48,64", help="Comma-separated concurrency steps")
+    parser.add_argument("--requests-per-concurrency", type=int, default=3, help="Serial turns per simulated user")
     parser.add_argument("--timeout", type=int, default=600)
-    parser.add_argument("--pause", action="store_true", help="Pause for Enter between concurrency steps")
+    parser.add_argument("--step-gap", type=float, default=10.0, help="Seconds to sleep between concurrency steps")
+    parser.add_argument("--pause", action="store_true", help="Pause for Enter between concurrency steps, after --step-gap")
     args = parser.parse_args()
 
     api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("VLLM_API_KEY")
@@ -268,17 +330,43 @@ def main() -> int:
     if args.base_url.rstrip("/").endswith("/v1"):
         raise SystemExit("--base-url should be the server root, e.g. http://host:port, not .../v1")
 
+    avg_user_prefix = sum(bucket.weight * bucket.user_prefix_tokens for bucket in BUCKETS) / sum(bucket.weight for bucket in BUCKETS)
+    theoretical_cache_share = max(0, args.requests_per_concurrency - 1) / args.requests_per_concurrency
     print("Buckets:")
-    print(f"  cacheable_prefix_ratio≈{CACHEABLE_PREFIX_RATIO:.0%}; output cap=server default")
+    print(f"  global_prefix≈{GLOBAL_PREFIX_TOKENS} tokens; turn_unique_tail≈{TURN_UNIQUE_TOKENS} tokens; output cap=server default")
+    print(f"  requests_per_simulated_user={args.requests_per_concurrency}; theoretical_warm_prefix_share≈{theoretical_cache_share:.0%}")
+    print(f"  weighted_avg_user_prefix≈{avg_user_prefix:.0f} tokens")
     for bucket in BUCKETS:
         max_out = "server_default" if bucket.max_tokens is None else str(bucket.max_tokens)
-        print(f"  {bucket.name}: weight={bucket.weight} input≈{bucket.input_tokens} max_out={max_out}")
+        print(f"  {bucket.name}: weight={bucket.weight}% user_prefix≈{bucket.user_prefix_tokens} max_out={max_out}")
+    print("Preflight token counts:")
+    for bucket in BUCKETS:
+        user = make_user(1, bucket)
+        count = token_count(args.base_url, args.model, api_key, make_prompt(user, 1), args.timeout)
+        print(f"  {bucket.name}: configured_user_prefix={bucket.user_prefix_tokens} actual_prompt_tokens={count}")
+        if count >= 160_000:
+            raise SystemExit(f"preflight failed: {bucket.name} prompt has {count} tokens, >= 160000 max_model_len")
     print()
 
     for concurrency in [int(x) for x in args.concurrency.split(",") if x.strip()]:
-        requests = max(args.min_requests_per_step, concurrency * args.requests_per_concurrency)
+        total_requests = concurrency * args.requests_per_concurrency
+        estimated_prefix_footprint = concurrency * avg_user_prefix
         print("=" * 72)
-        run_step(args.base_url, args.model, api_key, concurrency, requests, args.timeout)
+        print(
+            "Starting step: "
+            f"simulated_users={concurrency} "
+            f"turns_per_user={args.requests_per_concurrency} "
+            f"total_requests={total_requests} "
+            f"estimated_user_prefix_footprint≈{estimated_prefix_footprint:.0f} "
+            f"global_prefix≈{GLOBAL_PREFIX_TOKENS} "
+            f"turn_unique_tail≈{TURN_UNIQUE_TOKENS} "
+            "user_prefix_distribution="
+            + ",".join(f"{bucket.name}:{bucket.weight}%/{bucket.user_prefix_tokens}" for bucket in BUCKETS)
+        )
+        run_step(args.base_url, args.model, api_key, concurrency, args.requests_per_concurrency, args.timeout)
+        if args.step_gap > 0:
+            print(f"Sleeping {args.step_gap:.1f}s before next step...")
+            time.sleep(args.step_gap)
         if args.pause:
             print("Press Enter for next step, Ctrl-C to stop.")
             input()
