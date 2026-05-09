@@ -35,3 +35,5 @@
   - For interruptible profiles, compare `(max_bid_dph + storage)` to matching on-demand total for the same offer/machine/GPU when available.
   - If spot-at-bid is not at least `VAST_MIN_SPOT_SAVINGS_RATIO` cheaper than on-demand, warn and prefer/fallback to on-demand or reject with `insufficient_spot_savings`.
   - Print listed spot dph, submitted bid dph, spot total at bid, on-demand total, savings %, threshold %, and decision before launch.
+
+- Benchmark cache diagnostics: add per-step /metrics deltas for prompt_total/local_compute/local_cache_hit and compute token_cache_share; add prefix identity assertion; add single-user fixed-bucket probe (e.g. 1 user x 3 turns x 90k) to verify exact prefix caching before multi-user runs.
