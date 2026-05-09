@@ -169,6 +169,33 @@ curl -H "Authorization: Bearer $VLLM_API_KEY" \
   http://<host>:<mapped_8000>/v1/models
 ```
 
+Summarize vLLM runtime metrics with:
+
+```bash
+. env.vast-management
+./run.sh scripts/summarize_vllm_metrics.py \
+  --base-url http://<host>:<mapped_8000>/v1
+```
+
+or:
+
+```bash
+. env.vast-management
+./run.sh scripts/summarize_vllm_metrics.py \
+  --metrics-url http://<host>:<mapped_8000>/metrics
+```
+
+The metrics summary prints request counts, token totals, prefix-cache hit rate, prompt-token sources, TTFT buckets, queue time, and inference time. For a recent TPS gauge, take two scrapes with `--interval`:
+
+```bash
+. env.vast-management
+./run.sh scripts/summarize_vllm_metrics.py \
+  --base-url http://<host>:<mapped_8000>/v1 \
+  --interval 10
+```
+
+Use shell `watch` around that command if repeated gauges are needed.
+
 ## Provisioning logs
 
 The provisioner script is:
