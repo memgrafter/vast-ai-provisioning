@@ -34,6 +34,7 @@ VLLM_DOWNLOAD_DIR="${VLLM_DOWNLOAD_DIR:-/workspace/models}"
 VLLM_GPU_MEMORY_UTILIZATION="${VLLM_GPU_MEMORY_UTILIZATION:-0.90}"
 VLLM_TRUST_REMOTE_CODE="${VLLM_TRUST_REMOTE_CODE:-true}"
 VLLM_FORCE_QUANTIZATION="${VLLM_FORCE_QUANTIZATION:-}"
+VLLM_MAX_NUM_SEQS="${VLLM_MAX_NUM_SEQS:-}"
 VLLM_MAX_NEW_TOKENS="${VLLM_MAX_NEW_TOKENS:-}"
 VLLM_ENABLE_AUTO_TOOL_CHOICE="${VLLM_ENABLE_AUTO_TOOL_CHOICE:-false}"
 VLLM_TOOL_CALL_PARSER="${VLLM_TOOL_CALL_PARSER:-}"
@@ -57,6 +58,9 @@ VLLM_EXTRA_ARGS="${VLLM_EXTRA_ARGS:-}"
   fi
   if [ -n "$VLLM_FORCE_QUANTIZATION" ]; then
     printf -- '--quantization %q ' "$VLLM_FORCE_QUANTIZATION"
+  fi
+  if [ -n "$VLLM_MAX_NUM_SEQS" ]; then
+    printf -- '--max-num-seqs %q ' "$VLLM_MAX_NUM_SEQS"
   fi
   if [ -n "$VLLM_MAX_NEW_TOKENS" ]; then
     printf -- '--override-generation-config %q ' "{\"max_new_tokens\":${VLLM_MAX_NEW_TOKENS}}"

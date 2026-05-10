@@ -260,7 +260,10 @@ def search_policy_offers(vast: VastAI, context: dict[str, Any]) -> list[dict[str
         "rentable=true",
     ]
     if gpu.get("preferred_gpu_name"):
-        filters.append(f"gpu_name={gpu['preferred_gpu_name']}")
+        gpu_name = str(gpu["preferred_gpu_name"])
+        if any(ch.isspace() for ch in gpu_name):
+            gpu_name = json.dumps(gpu_name)
+        filters.append(f"gpu_name={gpu_name}")
     if require_verified:
         filters.append("verified=true")
     # Vast search query expects GPU RAM in GB-ish units; offer field is returned in MB.

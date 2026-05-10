@@ -31,7 +31,9 @@ class ProvisioningScriptStaticTests(unittest.TestCase):
             "VLLM_GPU_MEMORY_UTILIZATION=",
             "VLLM_TRUST_REMOTE_CODE=",
             "VLLM_FORCE_QUANTIZATION=",
+            "VLLM_MAX_NUM_SEQS=",
             "VLLM_EXTRA_ARGS=",
+            "--max-num-seqs",
             "--api-key ${VLLM_API_KEY}",
         ]:
             self.assertIn(snippet, self.text)

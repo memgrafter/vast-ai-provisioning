@@ -1,0 +1,44 @@
+{
+  "gpu_profile": "config/gpu-profiles/h200-1gpu.json",
+  "market": "interruptible",
+  "model_profile": "config/models/qwen3.6-27b-awq.json",
+  "name": "qwen3.6-27b-awq.h200.interruptible",
+  "network": {
+    "max_internet_down_cost_per_tb": 4.0,
+    "max_internet_up_cost_per_tb": 4.0,
+    "min_direct_port_count": 1,
+    "min_inet_down": 1000
+  },
+  "pricing": {
+    "max_dph_total": 2.68,
+    "target_first_test_minutes": 20
+  },
+  "purpose": "First-success vLLM launch for QuantTrio/Qwen3.6-27B-AWQ from R2",
+  "reliability": {
+    "min_reliability2": 0.96,
+    "require_verified": true
+  },
+  "selection": {
+    "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
+    "greylisted_machine_ids": [
+      8357,
+      100707
+    ],
+    "preferred_machine_ids": [],
+    "sort": "preferred_machine_then_effective_cost_then_reliability"
+  },
+  "spot": {
+    "enabled_after_smoke_test": false,
+    "max_bid_dph": 2.64
+  },
+  "storage": {
+    "disk_gb": 100,
+    "max_storage_cost_per_gb_hour": 0.0003,
+    "max_storage_total_cost_per_hour": 0.03,
+    "min_disk_bw": 500
+  },
+  "template": {
+    "hash_id": "35e6e77a965509be76d0cd647202cb47",
+    "name": "vLLM_R2_Qwen3_6_27B_AWQ"
+  }
+}
