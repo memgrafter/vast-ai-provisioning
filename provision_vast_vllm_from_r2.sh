@@ -15,6 +15,9 @@ MODEL_MIN_FREE_GB="${MODEL_MIN_FREE_GB:-5}"
 # Set R2_SPEED_TEST_MIN_MBPS=0 to disable.
 R2_SPEED_TEST_MIN_MBPS="${R2_SPEED_TEST_MIN_MBPS:-100}"
 R2_SPEED_TEST_MAX_MB="${R2_SPEED_TEST_MAX_MB:-512}"
+# Optional stable bucket-level object for speed tests. If unset, try this key
+# first and fall back to the largest object under the model prefix.
+R2_SPEED_TEST_KEY="${R2_SPEED_TEST_KEY:-_vast/r2-speed-test.bin}"
 R2_TRANSFER_TOOL="${R2_TRANSFER_TOOL:-rclone}"
 RCLONE_TRANSFERS="${RCLONE_TRANSFERS:-16}"
 RCLONE_CHECKERS="${RCLONE_CHECKERS:-32}"
@@ -128,50 +131,92 @@ fi
 
 if [ "$R2_SPEED_TEST_MIN_MBPS" != "0" ]; then
   echo "R2 speed test enabled: minimum ${R2_SPEED_TEST_MIN_MBPS} MB/s, max ${R2_SPEED_TEST_MAX_MB} MB"
-  speed_key="$(aws s3 ls "s3://$R2_BUCKET/$R2_PREFIX/" --recursive --endpoint-url "$R2_ENDPOINT" \
-    | awk '$3 > 0 {print $3 " " $4}' \
-    | sort -nr \
-    | head -1 \
-    | cut -d' ' -f2-)"
+  speed_key=""
+  speed_size=""
+  if [ -n "$R2_SPEED_TEST_KEY" ]; then
+    if speed_size="$(aws s3api head-object \
+      --bucket "$R2_BUCKET" \
+      --key "$R2_SPEED_TEST_KEY" \
+      --endpoint-url "$R2_ENDPOINT" \
+      --query ContentLength \
+      --output text 2>/dev/null)"; then
+      speed_key="$R2_SPEED_TEST_KEY"
+      echo "R2 speed test using static object key from R2_SPEED_TEST_KEY"
+    else
+      echo "WARN: R2 speed test static object not found: s3://$R2_BUCKET/$R2_SPEED_TEST_KEY; falling back to model prefix"
+    fi
+  fi
   if [ -z "$speed_key" ]; then
+    speed_row="$(aws s3 ls "s3://$R2_BUCKET/$R2_PREFIX/" --recursive --endpoint-url "$R2_ENDPOINT" \
+      | awk '$3 > 0 {print $3 " " $4}' \
+      | sort -nr \
+      | head -1)"
+    speed_size="${speed_row%% *}"
+    speed_key="${speed_row#* }"
+  fi
+  if [ -z "$speed_key" ] || [ -z "$speed_size" ] || [ "$speed_key" = "$speed_size" ]; then
     echo "ERROR: R2 speed test could not find any non-empty object under s3://$R2_BUCKET/$R2_PREFIX" >&2
     exit 1
   fi
+  case "$speed_size" in
+    ''|*[!0-9]*)
+      echo "ERROR: R2 speed test object size is not numeric for s3://$R2_BUCKET/$speed_key: $speed_size" >&2
+      exit 1
+      ;;
+  esac
   speed_dir="/tmp/r2-speed-test"
   rm -rf "$speed_dir"
   mkdir -p "$speed_dir"
   test_bytes="$(( R2_SPEED_TEST_MAX_MB * 1000 * 1000 ))"
+  if [ "$speed_size" -lt "$test_bytes" ]; then
+    test_bytes="$speed_size"
+  fi
+  if [ "$test_bytes" -lt 1 ]; then
+    echo "ERROR: R2 speed test object is empty: s3://$R2_BUCKET/$speed_key" >&2
+    exit 1
+  fi
   chunk_count="$RCLONE_MULTI_THREAD_STREAMS"
   [ "$chunk_count" -lt 1 ] && chunk_count=1
-  chunk_bytes="$(( test_bytes / chunk_count ))"
-  echo "R2 speed test object: s3://$R2_BUCKET/$speed_key"
+  [ "$chunk_count" -gt "$test_bytes" ] && chunk_count="$test_bytes"
+  chunk_bytes="$(( (test_bytes + chunk_count - 1) / chunk_count ))"
+  echo "R2 speed test object: s3://$R2_BUCKET/$speed_key (${speed_size} bytes)"
   echo "R2 speed test range: first ${test_bytes} bytes across ${chunk_count} parallel ranged GETs"
   start_ts="$(date +%s)"
   pids=""
   i=0
   while [ "$i" -lt "$chunk_count" ]; do
     range_start="$(( i * chunk_bytes ))"
-    if [ "$i" -eq "$(( chunk_count - 1 ))" ]; then
-      range_end="$(( test_bytes - 1 ))"
-    else
-      range_end="$(( range_start + chunk_bytes - 1 ))"
-    fi
+    range_end="$(( range_start + chunk_bytes - 1 ))"
+    [ "$range_end" -ge "$test_bytes" ] && range_end="$(( test_bytes - 1 ))"
     aws s3api get-object \
       --bucket "$R2_BUCKET" \
       --key "$speed_key" \
       --range "bytes=${range_start}-${range_end}" \
       --endpoint-url "$R2_ENDPOINT" \
-      "$speed_dir/part-$i" >/dev/null &
+      "$speed_dir/part-$i" >"$speed_dir/part-$i.log" 2>&1 &
     pids="$pids $!"
     i="$(( i + 1 ))"
   done
+  failed=0
   for pid in $pids; do
-    wait "$pid"
+    if ! wait "$pid"; then
+      failed=1
+    fi
   done
+  if [ "$failed" -ne 0 ]; then
+    echo "ERROR: R2 speed test ranged GET failed for s3://$R2_BUCKET/$speed_key" >&2
+    for log in "$speed_dir"/*.log; do
+      [ -f "$log" ] || continue
+      echo "--- $log ---" >&2
+      tail -20 "$log" >&2 || true
+    done
+    rm -rf "$speed_dir"
+    exit 1
+  fi
   end_ts="$(date +%s)"
   elapsed_s="$(( end_ts - start_ts ))"
   [ "$elapsed_s" -lt 1 ] && elapsed_s=1
-  bytes="$(find "$speed_dir" -type f -printf '%s\n' | awk '{s += $1} END {print s + 0}')"
+  bytes="$(find "$speed_dir" -type f -name 'part-[0-9]*' ! -name '*.log' -printf '%s\n' | awk '{s += $1} END {print s + 0}')"
   mbps="$(awk -v b="$bytes" -v s="$elapsed_s" 'BEGIN {printf "%.2f", b / 1000000 / s}')"
   echo "R2 speed test result: ${bytes} bytes in ${elapsed_s}s = ${mbps} MB/s"
   rm -rf "$speed_dir"

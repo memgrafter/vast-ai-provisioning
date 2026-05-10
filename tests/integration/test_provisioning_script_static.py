@@ -46,6 +46,13 @@ class ProvisioningScriptStaticTests(unittest.TestCase):
         self.assertIn("--transfers", self.text)
         self.assertIn("--multi-thread-streams", self.text)
 
+    def test_speed_test_prefers_static_object_and_logs_range_failures(self):
+        self.assertIn("R2_SPEED_TEST_KEY=\"${R2_SPEED_TEST_KEY:-_vast/r2-speed-test.bin}\"", self.text)
+        self.assertIn("head-object", self.text)
+        self.assertIn("falling back to model prefix", self.text)
+        self.assertIn("R2 speed test ranged GET failed", self.text)
+        self.assertIn("tail -20", self.text)
+
     def test_no_obvious_secret_echoes(self):
         forbidden = [
             "echo $AWS_ACCESS_KEY_ID",
