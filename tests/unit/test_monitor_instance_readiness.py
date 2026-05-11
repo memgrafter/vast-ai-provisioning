@@ -43,6 +43,11 @@ class AnalyzeLogsTests(unittest.TestCase):
         self.assertTrue(signals.speed_test_failed)
         self.assertTrue(signals.provisioning_failed)
 
+    def test_warn_only_speed_test_below_threshold_is_not_fatal(self):
+        logs = "WARN: R2 speed test below threshold; continuing because R2_SPEED_TEST_WARN_ONLY=true: 85.33 MB/s < 100 MB/s"
+        signals = analyze_logs(logs, IMAGE)
+        self.assertFalse(signals.speed_test_failed)
+
     def test_detects_vllm_start_and_api_ready(self):
         logs = "\n".join([
             "vllm serve /workspace/models/model --host 127.0.0.1 --port 18000",

@@ -104,7 +104,7 @@ def analyze_logs(logs: str, image: str) -> Signals:
             or "vLLM API server" in logs and "ready" in lower
         ),
         speed_test_failed=(
-            "R2 speed test below threshold" in logs
+            "ERROR: R2 speed test below threshold" in logs
             or "Provisioning script failed (exit 42)" in logs
         ),
         provisioning_failed=(
