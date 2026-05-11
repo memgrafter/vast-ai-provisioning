@@ -235,6 +235,72 @@ total_tps: 60.27 tok/s
 
 Instance was destroyed after the bench.
 
+### 2x RTX 3090 MTP1 follow-up
+
+Prepared and tested AWQ + fp8-KV + MTP n=1 at the same 160K target:
+
+```text
+model profile: config/models/qwen3.6-27b-awq.rtx3090-2gpu-160k-fp8kv-mtp1.json
+launch profile: config/launch-profiles/qwen3.6-27b-awq.rtx3090-2gpu-160k-fp8kv-mtp1.on-demand.json
+template hash: 24aa18d263b9754cbdf114107761f78e
+speculative_config: {"method":"qwen3_next_mtp","num_speculative_tokens":1}
+```
+
+Launched and tested on the same relaxed-policy host:
+
+```text
+instance_id: 36565384
+offer_id: 36354557
+machine_id: 104433
+gpu: 2x RTX 3090
+reliability2: 0.9493
+dph_total: $0.2643/hr
+```
+
+Startup details:
+
+```text
+R2 speed test: 73.14 MB/s, below 100 MB/s threshold but warn-only continued
+Resolved architecture: Qwen3_5MTP
+speculative_config=SpeculativeConfig(method='mtp', model='/workspace/models/QuantTrio/Qwen3.6-27B-AWQ', num_spec_tokens=1)
+max_seq_len=160000
+tensor_parallel_size=2
+Available KV cache memory: 10.2 GiB
+GPU KV cache size: 156,816 tokens
+Maximum concurrency for 160,000 tokens per request: 3.58x
+```
+
+Small smoke result:
+
+```text
+requests_ok: 2
+requests_error: 0
+latency_avg: 10.87s
+TTFT_avg: 1.86s
+prompt_tokens: 1,711
+generation_tokens: 256
+prompt_tps: 78.67 tok/s
+generation_tps: 11.77 tok/s
+total_tps: 90.44 tok/s
+```
+
+Acceptance:
+
+```text
+Mean acceptance length: 2.00
+Per-position acceptance rate: 1.000
+Avg Draft acceptance rate: 100.0%
+```
+
+A/B against no-MTP on same machine:
+
+```text
+No MTP: generation_tps 7.86, TTFT_avg 1.61s, latency_avg 16.28s
+MTP1:   generation_tps 11.77, TTFT_avg 1.86s, latency_avg 10.87s
+```
+
+Instance was destroyed after the bench.
+
 ## Practical takeaways
 
 ### Best currently validated 2x budget path
@@ -253,7 +319,7 @@ no MTP for small concurrency-1 request pattern
 2x RTX 3090
 Qwen3.6-27B-AWQ
 fp8 KV
-no MTP
+MTP n=1 appears beneficial on tiny smoke
 160K target
 single-user
 validated startup + small smoke, but only under relaxed reliability policy
@@ -278,18 +344,19 @@ Practical single-user context is closer to ~56K than a true 64K with output head
 
 1. If continuing 2x RTX 3090, prefer strict policy first, then use the relaxed reliability state profile only if cost/availability matters more than host quality.
 
-2. Run a larger 2x3090 single-user benchmark now that startup at 160K is proven:
+2. Run a larger 2x3090 MTP1 vs no-MTP single-user benchmark now that both start at 160K:
 
 ```text
 input_tokens: 4K-16K first, then larger context-fill tests
 output_tokens: 512-2048
 concurrency: 1
+compare no-MTP vs MTP1
 ```
 
 3. Re-check key startup lines in future runs:
 
 ```text
-speculative_config=None
+speculative_config=None or SpeculativeConfig(method='mtp', num_spec_tokens=1)
 max_seq_len=160000
 GPU KV cache size
 Maximum concurrency for 160,000 tokens per request

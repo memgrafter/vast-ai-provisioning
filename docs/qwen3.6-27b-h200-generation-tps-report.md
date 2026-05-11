@@ -835,6 +835,88 @@ total_tps: 60.27 tok/s
 
 Interpretation: the 2x RTX 3090 AWQ + fp8-KV path successfully starts at true `max_model_len=160000`, and reported KV capacity is above the configured context. Throughput is much lower than the newer 2x Blackwell consumer-GPU paths, but it is a viable ultra-cheap 160K smoke baseline when a relaxed-reliability 2x3090 offer is acceptable. The instance was destroyed after the bench.
 
+### RTX 3090 2-GPU AWQ fp8-KV 160K MTP1 A/B
+
+A conservative MTP n=1 comparator was prepared for the same 2x RTX 3090 host class:
+
+```text
+model profile: config/models/qwen3.6-27b-awq.rtx3090-2gpu-160k-fp8kv-mtp1.json
+launch profile: config/launch-profiles/qwen3.6-27b-awq.rtx3090-2gpu-160k-fp8kv-mtp1.on-demand.json
+template: vLLM_R2_Qwen3_6_27B_AWQ_RTX3090_2GPU_160K_FP8KV_MTP1
+template_hash_id: 24aa18d263b9754cbdf114107761f78e
+max_model_len: 160000
+kv_cache_dtype: fp8
+tensor_parallel_size: 2
+speculative_config: {"method":"qwen3_next_mtp","num_speculative_tokens":1}
+```
+
+Launched the same relaxed-policy 2x3090 machine:
+
+```text
+instance_id: 36565384
+machine_id: 104433
+offer_id: 36354557
+gpu: 2x RTX 3090 24GB
+reliability2: 0.9493
+inet_down: 832.6 Mbps
+dph_total: $0.2643/hr
+```
+
+Startup confirmed MTP was active and the server still started at 160K:
+
+```text
+R2 speed test result: 512000000 bytes in 7s = 73.14 MB/s
+WARN: R2 speed test below threshold; continuing because R2_SPEED_TEST_WARN_ONLY=true
+method `qwen3_next_mtp` is deprecated and replaced with mtp
+Resolved architecture: Qwen3_5MTP
+speculative_config=SpeculativeConfig(method='mtp', model='/workspace/models/QuantTrio/Qwen3.6-27B-AWQ', num_spec_tokens=1)
+max_seq_len=160000
+tensor_parallel_size=2
+Detected MTP model. Sharing target model embedding weights with the draft model.
+Detected MTP model. Sharing target model lm_head weights with the draft model.
+Available KV cache memory: 10.2 GiB
+GPU KV cache size: 156,816 tokens
+Maximum concurrency for 160,000 tokens per request: 3.58x
+```
+
+Small smoke benchmark:
+
+```text
+input goal: 500 words
+max_output_tokens: 128
+requests_ok: 2
+requests_error: 0
+latency_avg: 10.87s
+latency_p50: 9.24s
+latency_p95: 12.51s
+TTFT_avg: 1.86s
+prompt_tokens: 1,711
+generation_tokens: 256
+prompt_tps: 78.67 tok/s
+generation_tps: 11.77 tok/s
+total_tps: 90.44 tok/s
+```
+
+Speculative decoding metrics:
+
+```text
+Mean acceptance length: 2.00
+Per-position acceptance rate: 1.000
+Avg Draft acceptance rate: 100.0%
+Accepted: 70 tokens
+Drafted: 70 tokens
+```
+
+A/B against the preceding no-MTP run on the same machine:
+
+```text
+No MTP: generation_tps 7.86, TTFT_avg 1.61s, latency_avg 16.28s
+MTP n=1: generation_tps 11.77, TTFT_avg 1.86s, latency_avg 10.87s
+MTP1 lift: ~49.7% generation TPS on this tiny smoke; TTFT was slightly worse.
+```
+
+Interpretation: unlike the 2x RTX 5070 Ti Carnice test where MTP overhead hurt, the 2x RTX 3090 AWQ path benefited from native MTP n=1 on this tiny 128-token smoke and still launched with `max_model_len=160000`. The result should be confirmed with longer outputs and a larger context-fill workload before treating it as a stable default. The instance was destroyed after the bench.
+
 ### Unsloth Qwen3.6-27B-NVFP4 on RTX 5090
 
 The Unsloth NVFP4 checkpoint was also tested on RTX 5090 using the same R2/provisioning path. The baseline profile intentionally keeps the model-card vLLM guidance conservative (`dtype=bfloat16`, 16K context, no forced quantization). For speculative tests, temporary MTP variants used `qwen3_next_mtp` with `num_speculative_tokens` set to 2 and then 1.
