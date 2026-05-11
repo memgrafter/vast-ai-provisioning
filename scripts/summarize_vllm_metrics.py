@@ -21,12 +21,14 @@ Or:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import re
 import sys
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Iterable
 
@@ -292,6 +294,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument("--no-auth", action="store_true", help="Do not send Authorization header")
     parser.add_argument("--timeout", type=int, default=30)
     parser.add_argument("--interval", type=float, help="Print a recent throughput gauge using two scrapes this many seconds apart")
+    parser.add_argument("--log-file", help="Append output to this file instead of stdout")
+    parser.add_argument("--repeat", action="store_true", help="Repeat interval gauges forever; requires --interval")
     args = parser.parse_args(argv)
 
     if args.metrics_url:
@@ -310,17 +314,39 @@ def main(argv: Iterable[str] | None = None) -> int:
         return 2
 
     try:
-        text = fetch_metrics(url, api_key, args.timeout)
-        if args.interval is not None:
-            if args.interval <= 0:
-                parser.error("--interval must be > 0")
-            before = parse_metrics(text)
-            start = time.monotonic()
-            time.sleep(args.interval)
-            after = parse_metrics(fetch_metrics(url, api_key, args.timeout))
-            print_gauge(before, after, time.monotonic() - start)
+        if args.repeat and args.interval is None:
+            parser.error("--repeat requires --interval")
+        if args.interval is not None and args.interval <= 0:
+            parser.error("--interval must be > 0")
+
+        def emit_once() -> None:
+            text = fetch_metrics(url, api_key, args.timeout)
+            if args.interval is not None:
+                before = parse_metrics(text)
+                start = time.monotonic()
+                time.sleep(args.interval)
+                after = parse_metrics(fetch_metrics(url, api_key, args.timeout))
+                print(f"=== {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')} ===")
+                print_gauge(before, after, time.monotonic() - start)
+            else:
+                print_summary(parse_metrics(text))
+
+        if args.log_file:
+            while True:
+                with open(args.log_file, "a", encoding="utf-8") as log:
+                    with contextlib.redirect_stdout(log):
+                        emit_once()
+                        print()
+                if not args.repeat:
+                    break
+                time.sleep(1)
         else:
-            print_summary(parse_metrics(text))
+            while True:
+                emit_once()
+                if not args.repeat:
+                    break
+                print()
+                time.sleep(1)
     except urllib.error.HTTPError as exc:
         print(f"ERROR: HTTP {exc.code}: {exc.read().decode(errors='replace')[:500]}", file=sys.stderr)
         return 1
