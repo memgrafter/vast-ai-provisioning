@@ -22,7 +22,8 @@
     "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
     "greylisted_machine_ids": [
       8357,
-      51352
+      51352,
+      57883
     ],
     "preferred_machine_ids": [],
     "search_no_default": true,
