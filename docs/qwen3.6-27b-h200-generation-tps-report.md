@@ -700,6 +700,70 @@ total_tps: 245.96 tok/s
 
 Interpretation: 2x RTX 5070 Ti with fp8 KV is a better budget path than the 2x RTX 5060 Ti no-KV-compression fallback in this small smoke: lower average TTFT and higher generation TPS, while also preserving 64K context. The instance was destroyed after the bench.
 
+### RTX 5070 Ti 2-GPU fp8-KV no-MTP A/B
+
+A no-speculative-decoding comparator was prepared for the same machine class and same fp8-KV 64K context:
+
+```text
+model profile: config/models/carnice-v2-27b-nvfp4-text-mtp.rtx5070ti-2gpu-agentic-64k-fp8kv-no-mtp.json
+launch profile: config/launch-profiles/carnice-v2-27b-nvfp4-text-mtp.rtx5070ti-2gpu.agentic-64k-fp8kv-no-mtp.on-demand.json
+template: vLLM_R2_Carnice_V2_27B_NVFP4_TEXT_MTP_RTX5070TI_2GPU_AGENTIC_64K_FP8KV_NO_MTP
+template_hash_id: e6235ab0b6f42ff02426b35ec94901a3
+max_model_len: 65536
+kv_cache_dtype: fp8
+tensor_parallel_size: 2
+speculative_config: None
+```
+
+Launched the same preferred machine:
+
+```text
+instance_id: 36562438
+machine_id: 28069
+gpu: 2x RTX 5070 Ti 16GB
+geolocation: South Korea, KR
+dph_total: $0.2144/hr
+```
+
+Logs confirmed MTP was off and fp8 KV was active:
+
+```text
+speculative_config=None
+Resolved architecture: Qwen3_5ForConditionalGeneration
+max_seq_len=65536
+Using KV cache scaling factor 1.0 for fp8_e4m3
+GPU KV cache size: 58,016 tokens
+Starting vLLM server on http://127.0.0.1:18000
+```
+
+Same small benchmark shape as the MTP run:
+
+```text
+input goal: 500 words
+max_output_tokens: 128
+requests_ok: 6
+requests_error: 0
+latency_avg: 3.47s
+latency_p50: 2.97s
+latency_p95: 6.03s
+TTFT_avg: 0.80s
+prompt_tokens: 5,132
+generation_tokens: 768
+prompt_tps: 246.78 tok/s
+generation_tps: 36.93 tok/s
+total_tps: 283.71 tok/s
+```
+
+A/B against the preceding MTP n=3 run on the same machine:
+
+```text
+MTP n=3:     generation_tps 32.06, TTFT_avg 1.02s, latency_avg 3.99s
+No MTP:      generation_tps 36.93, TTFT_avg 0.80s, latency_avg 3.47s
+No-MTP lift: ~15.2% generation TPS, lower TTFT and latency on this small concurrency-1 workload
+```
+
+Interpretation: despite good draft acceptance in the MTP run (76-84%), MTP overhead was a net loss for this 2x RTX 5070 Ti fp8-KV small-request benchmark. For this budget 2-GPU class, default to no MTP unless a longer-output or higher-concurrency A/B shows a reversal. The instance was destroyed after the bench.
+
 ### Unsloth Qwen3.6-27B-NVFP4 on RTX 5090
 
 The Unsloth NVFP4 checkpoint was also tested on RTX 5090 using the same R2/provisioning path. The baseline profile intentionally keeps the model-card vLLM guidance conservative (`dtype=bfloat16`, 16K context, no forced quantization). For speculative tests, temporary MTP variants used `qwen3_next_mtp` with `num_speculative_tokens` set to 2 and then 1.
