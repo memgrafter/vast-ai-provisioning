@@ -39,7 +39,7 @@
     "min_disk_bw": 500
   },
   "template": {
-    "hash_id": "",
+    "hash_id": "e6235ab0b6f42ff02426b35ec94901a3",
     "name": "vLLM_R2_Carnice_V2_27B_NVFP4_TEXT_MTP_RTX5070TI_2GPU_AGENTIC_64K_FP8KV_NO_MTP"
   }
 }
