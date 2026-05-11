@@ -27,6 +27,146 @@ RCLONE_MULTI_THREAD_STREAMS="${RCLONE_MULTI_THREAD_STREAMS:-8}"
 
 mkdir -p "$MODEL_DIR" ~/.aws
 
+emit_nvlink_status() {
+  python3 - <<'PY' || true
+import base64
+import csv
+import datetime as _dt
+import json
+import shutil
+import subprocess
+
+PREFIX = "VAST_GPU_NVLINK_JSON "
+
+def now() -> str:
+    return _dt.datetime.now(_dt.timezone.utc).isoformat()
+
+
+def run_cmd(args):
+    try:
+        proc = subprocess.run(args, text=True, capture_output=True, timeout=20, check=False)
+        return {
+            "args": args,
+            "returncode": proc.returncode,
+            "stdout": proc.stdout,
+            "stderr": proc.stderr,
+        }
+    except Exception as exc:  # pragma: no cover - runs on remote host
+        return {
+            "args": args,
+            "returncode": None,
+            "stdout": "",
+            "stderr": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def b64(text: str) -> str:
+    return base64.b64encode(text.encode("utf-8", "replace")).decode("ascii")
+
+
+def emit(payload):
+    payload.setdefault("schema_version", 1)
+    payload.setdefault("ts", now())
+    print(PREFIX + json.dumps(payload, sort_keys=True, separators=(",", ":")), flush=True)
+
+
+nvidia_smi = shutil.which("nvidia-smi")
+if not nvidia_smi:
+    emit({
+        "event": "gpu_nvlink_topology",
+        "nvidia_smi_present": False,
+        "gpu_count": 0,
+        "gpus": [],
+        "links": [],
+        "raw": {},
+    })
+    raise SystemExit(0)
+
+gpu_query = run_cmd([
+    nvidia_smi,
+    "--query-gpu=index,name,uuid,pci.bus_id",
+    "--format=csv,noheader,nounits",
+])
+topo = run_cmd([nvidia_smi, "topo", "-m"])
+nvlink = run_cmd([nvidia_smi, "nvlink", "-s"])
+
+gpus = []
+if gpu_query["returncode"] == 0:
+    for row in csv.reader(gpu_query["stdout"].splitlines()):
+        if len(row) < 4:
+            continue
+        try:
+            index = int(row[0].strip())
+        except ValueError:
+            continue
+        gpus.append({
+            "index": index,
+            "name": row[1].strip(),
+            "uuid": row[2].strip(),
+            "pci_bus_id": row[3].strip(),
+        })
+
+gpu_names = {gpu["index"]: f"GPU{gpu['index']}" for gpu in gpus}
+links = []
+if topo["returncode"] == 0:
+    lines = [line.rstrip() for line in topo["stdout"].splitlines() if line.strip()]
+    header = []
+    for line in lines:
+        parts = line.split()
+        if not parts:
+            continue
+        if parts[0].startswith("GPU") and not header:
+            # First matrix line can be header: GPU0 GPU1 CPU Affinity ...
+            header = [p for p in parts if p.startswith("GPU")]
+            continue
+        row_label = parts[0]
+        if not row_label.startswith("GPU") or not header:
+            continue
+        try:
+            src = int(row_label[3:])
+        except ValueError:
+            continue
+        for pos, dst_label in enumerate(header):
+            if pos + 1 >= len(parts):
+                continue
+            try:
+                dst = int(dst_label[3:])
+            except ValueError:
+                continue
+            if src == dst:
+                continue
+            code = parts[pos + 1]
+            links.append({
+                "source": src,
+                "target": dst,
+                "source_label": gpu_names.get(src, row_label),
+                "target_label": gpu_names.get(dst, dst_label),
+                "topology": code,
+                "nvlink": code.startswith("NV"),
+            })
+
+emit({
+    "event": "gpu_nvlink_topology",
+    "nvidia_smi_present": True,
+    "gpu_count": len(gpus),
+    "gpus": gpus,
+    "links": links,
+    "has_nvlink": any(link.get("nvlink") for link in links),
+    "commands": {
+        "gpu_query": {"returncode": gpu_query["returncode"], "stderr_b64": b64(gpu_query["stderr"])},
+        "topo": {"returncode": topo["returncode"], "stderr_b64": b64(topo["stderr"])},
+        "nvlink": {"returncode": nvlink["returncode"], "stderr_b64": b64(nvlink["stderr"])},
+    },
+    "raw": {
+        "topo_m_b64": b64(topo["stdout"]),
+        "nvlink_s_b64": b64(nvlink["stdout"]),
+    },
+})
+PY
+}
+
+emit_nvlink_status
+
 SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-$(basename "$MODEL_DIR" | tr '[:upper:]_' '[:lower:]-')}"
 VLLM_DTYPE="${VLLM_DTYPE:-half}"
 VLLM_MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-8192}"

@@ -63,6 +63,16 @@ class ProvisioningScriptStaticTests(unittest.TestCase):
         self.assertIn("R2 speed test ranged GET failed", self.text)
         self.assertIn("tail -20", self.text)
 
+    def test_emits_structured_gpu_nvlink_topology(self):
+        self.assertIn("emit_nvlink_status", self.text)
+        self.assertIn("VAST_GPU_NVLINK_JSON ", self.text)
+        self.assertIn("gpu_nvlink_topology", self.text)
+        self.assertIn("nvidia-smi", self.text)
+        self.assertIn("topo", self.text)
+        self.assertIn("nvlink", self.text)
+        self.assertIn("topo_m_b64", self.text)
+        self.assertIn("has_nvlink", self.text)
+
     def test_no_obvious_secret_echoes(self):
         forbidden = [
             "echo $AWS_ACCESS_KEY_ID",
