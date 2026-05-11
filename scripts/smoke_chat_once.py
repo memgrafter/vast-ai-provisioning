@@ -274,7 +274,14 @@ def main() -> int:
     parser.add_argument("--interval", type=int, default=15)
     parser.add_argument("--tail", type=int, default=2500)
     parser.add_argument("--message", default="Say hello in one short sentence.")
-    parser.add_argument("--bench-seconds", type=float, default=0, help="after readiness, run a quick load bench for this many seconds instead of one smoke chat")
+    parser.add_argument(
+        "--bench-seconds",
+        type=float,
+        nargs="?",
+        const=90.0,
+        default=0,
+        help="after readiness, run a quick load bench instead of one smoke chat; pass without a value for the 90s default",
+    )
     parser.add_argument("--bench-concurrency", type=int, default=48, help="coding bench concurrency; sized to load H100-class GPUs without cache-prefix testing")
     parser.add_argument("--bench-input-tokens", type=int, default=6000, help="approximate prompt words for coding bench")
     parser.add_argument("--bench-output-tokens", type=int, default=0, help="max generated tokens for bench; <=0 omits max_tokens and uses model default")

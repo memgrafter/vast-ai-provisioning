@@ -463,6 +463,16 @@ Avg draft acceptance rate: ~74-93%
 
 Interpretation: on RTX PRO 6000 WS with this AWQ/modelopt path, the extra drafter work appears to offset or exceed the benefit. For this AWQ model on PRO 6000 WS, MTP is probably not worth enabling; `num_speculative_tokens=2` is clearly worse than the prior `num_speculative_tokens=1` smoke. This contrasts with official FP8 on H200, where MTP gave a large gain.
 
+Likely reason: for speculative decoding to help, the saved target-model forward passes must exceed the extra drafter/speculation overhead. On this AWQ + PRO 6000 WS path, that trade appears to lose. The target AWQ decode may already be efficient enough, or bottlenecked differently enough, that recursive MTP does not save much wall-clock time. Meanwhile `num_speculative_tokens=2` makes vLLM run multiple recursive forwards through the single MTP layer, adding overhead and reducing second-position acceptance. The logged accepted/drafted throughput looked reasonable in isolation, but final user-visible generation throughput fell to only `37.41 tok/s` total at concurrency 2.
+
+Working rule after these runs:
+
+```text
+AWQ on PRO 6000 WS: MTP off or n=1 max; n=2 is a bad tradeoff
+Official FP8 on H200: n=2 works well per Qwen card
+Carnice/modelopt NVFP4 on PRO 6000 WS: test n=3 per its model card
+```
+
 ## Takeaways
 
 1. H200 was not suspiciously slow when tested at 5 concurrent streams; the earlier 48-way burst created a thundering-herd effect.
