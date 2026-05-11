@@ -1139,9 +1139,15 @@ Results:
 ```text
 MTP0 / no spec, instance 36574177:
   requests_ok: 3
+  requests_error: 0
+  prompt tokens/request: ~159,022
+  output tokens/request: 64
   latency_avg: 177.93s
   TTFT_avg: 176.01s
+  estimated decode time: ~1.92s/request
   inference_avg: 176.89s
+  prefill_tps_est: ~903.5 tok/s/request (= prompt tokens/request / TTFT_avg)
+  decode_tps_est: ~33.3 tok/s/request (= 64 / (latency_avg - TTFT_avg))
   prompt_tps wall-clock: 884.65 tok/s
   generation_tps wall-clock: 0.36 tok/s
   server window generation: ~2.1-6.4 tok/s
@@ -1149,9 +1155,15 @@ MTP0 / no spec, instance 36574177:
 
 MTP1, instance 36573076:
   requests_ok: 3
+  requests_error: 0
+  prompt tokens/request: ~159,021
+  output tokens/request: 64
   latency_avg: 184.61s
   TTFT_avg: 182.07s
+  estimated decode time: ~2.54s/request
   inference_avg: 183.18s
+  prefill_tps_est: ~873.4 tok/s/request
+  decode_tps_est: ~25.2 tok/s/request
   prompt_tps wall-clock: 852.45 tok/s
   generation_tps wall-clock: 0.34 tok/s
   server window generation: ~6.4 tok/s
@@ -1161,9 +1173,15 @@ MTP1, instance 36573076:
 
 MTP2, instance 36575195:
   requests_ok: 3
+  requests_error: 0
+  prompt tokens/request: ~159,022
+  output tokens/request: 64
   latency_avg: 184.13s
   TTFT_avg: 181.99s
+  estimated decode time: ~2.14s/request
   inference_avg: 183.00s
+  prefill_tps_est: ~873.8 tok/s/request
+  decode_tps_est: ~29.9 tok/s/request
   prompt_tps wall-clock: 855.00 tok/s
   generation_tps wall-clock: 0.34 tok/s
   server window generation: ~6.3-6.4 tok/s
@@ -1172,7 +1190,31 @@ MTP2, instance 36575195:
   GPU KV cache size: 160,000 tokens
 ```
 
-Interpretation: at a near-160K prompt and only 64 generated tokens, prefill dominates all variants. MTP1/MTP2 acceptance is good, but neither beat no-MTP on end-to-end latency in this context-fill shape. The no-MTP run had slightly better latency and TTFT, while MTP2 had better acceptance than feared and similar wall-clock to MTP1. For this 2x3090 path, MTP choice should be decided with a longer-output decode-heavy test; context-fill tests mostly measure prefill.
+Metric notes:
+
+```text
+wall-clock generation_tps = generated tokens / whole benchmark wall time
+  - useful for end-to-end user experience with fresh long prompts
+  - dominated by prefill in this test
+
+estimated decode_tps = output_tokens / (latency_avg - TTFT_avg)
+  - better estimate of post-prefill decode speed
+  - uses aggregate averages, not paired per-request timing, so treat as approximate
+
+server window generation = vLLM logger's coarse 10s generation window
+  - not equivalent to decode-only TPS for 64-token outputs
+  - can understate short decode bursts because the log bucket includes idle/prefill intervals
+```
+
+Interpretation: at a near-160K prompt and only 64 generated tokens, prefill dominates all variants. MTP1/MTP2 acceptance is good, but neither beat no-MTP on end-to-end latency in this context-fill shape. The no-MTP run had slightly better latency and TTFT, while MTP2 had better acceptance than feared and similar wall-clock to MTP1. This does **not** prove MTP is bad for agent continuation workloads. A more realistic second-turn agent shape is:
+
+```text
+cached prefix: ~140K tokens
+new uncached prefill: ~1K tokens
+output: ~1000 tokens
+```
+
+In that shape, prefix caching avoids most of the long prefill and decode dominates. MTP is much more likely to pay off there, especially given the observed acceptance. For this 2x3090 path, MTP choice should be decided with a cached-prefix, longer-output decode-heavy A/B, not only a fresh 160K context-fill test.
 
 ### Unsloth Qwen3.6-27B-NVFP4 on RTX 5090
 

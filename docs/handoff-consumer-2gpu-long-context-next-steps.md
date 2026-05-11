@@ -448,30 +448,61 @@ Results:
 
 ```text
 MTP0 / no spec, instance 36574177:
+  requests_ok: 3
+  requests_error: 0
+  prompt tokens/request: ~159,022
+  output tokens/request: 64
   latency_avg: 177.93s
   TTFT_avg: 176.01s
+  estimated decode time: ~1.92s/request
+  prefill_tps_est: ~903.5 tok/s/request
+  decode_tps_est: ~33.3 tok/s/request
   prompt_tps wall-clock: 884.65 tok/s
   generation_tps wall-clock: 0.36 tok/s
   server generation windows: ~2.1-6.4 tok/s
 
 MTP1, instance 36573076:
+  requests_ok: 3
+  requests_error: 0
+  prompt tokens/request: ~159,021
+  output tokens/request: 64
   latency_avg: 184.61s
   TTFT_avg: 182.07s
+  estimated decode time: ~2.54s/request
+  prefill_tps_est: ~873.4 tok/s/request
+  decode_tps_est: ~25.2 tok/s/request
   prompt_tps wall-clock: 852.45 tok/s
   generation_tps wall-clock: 0.34 tok/s
   mean acceptance length: 1.97 / 2.0
   avg draft acceptance: 96.9%
 
 MTP2, instance 36575195:
+  requests_ok: 3
+  requests_error: 0
+  prompt tokens/request: ~159,022
+  output tokens/request: 64
   latency_avg: 184.13s
   TTFT_avg: 181.99s
+  estimated decode time: ~2.14s/request
+  prefill_tps_est: ~873.8 tok/s/request
+  decode_tps_est: ~29.9 tok/s/request
   prompt_tps wall-clock: 855.00 tok/s
   generation_tps wall-clock: 0.34 tok/s
   mean acceptance length: 2.78-2.95 / 3.0
   avg draft acceptance: 89.1%-97.7%
 ```
 
-Interpretation: at 160K with only 64 output tokens, prefill dominates. No-MTP was slightly better end-to-end. MTP1/MTP2 acceptance was good, but not enough to overcome overhead in this context-fill shape. Need a longer-output decode-heavy A/B to choose MTP for actual generation throughput.
+Interpretation: at 160K with only 64 output tokens, prefill dominates. No-MTP was slightly better end-to-end. MTP1/MTP2 acceptance was good, but not enough to overcome overhead in this context-fill shape. The decode TPS values above are estimates from aggregate averages (`64 / (latency_avg - TTFT_avg)`), not direct paired per-request decode counters.
+
+This does not prove MTP is bad for agent continuation workloads. A more realistic second-turn shape is:
+
+```text
+cached prefix: ~140K tokens
+new uncached prefill: ~1K tokens
+output: ~1000 tokens
+```
+
+In that shape, prefix caching avoids most long-prefill cost and decode dominates, so MTP1/MTP2 may pay off. Need a cached-prefix, longer-output decode-heavy A/B to choose MTP for actual generation throughput.
 
 All instances were destroyed after the bench.
 
@@ -519,13 +550,14 @@ Practical single-user context is closer to ~56K than a true 64K with output head
 
 1. If continuing 2x RTX 3090, prefer strict policy first, then use the relaxed reliability state profile only if cost/availability matters more than host quality.
 
-2. Run a larger 2x3090 MTP1 vs no-MTP single-user benchmark now that both start at 160K:
+2. Run a cached-prefix 2x3090 MTP0/MTP1/MTP2 decode-heavy A/B:
 
 ```text
-input_tokens: 4K-16K first, then larger context-fill tests
-output_tokens: 512-2048
+first turn: seed ~140K-token prefix
+second turn: reuse cached prefix + ~1K new tokens
+output_tokens: 1000-2048
 concurrency: 1
-compare no-MTP vs MTP1
+compare no-MTP vs MTP1 vs MTP2
 ```
 
 3. Re-check key startup lines in future runs:
