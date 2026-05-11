@@ -425,7 +425,43 @@ mean acceptance length: ~1.86-1.99 / 2.0
 draft acceptance: ~86-99%
 ```
 
-Interpretation: on RTX PRO 6000 WS with this AWQ/modelopt path, the extra drafter work appears to offset the benefit. For this AWQ model on PRO 6000 WS, MTP is probably not worth enabling unless a longer, controlled benchmark proves otherwise. This contrasts with official FP8 on H200, where MTP gave a large gain.
+A follow-up on-demand smoke tried the official Qwen3.6-27B-card setting `num_speculative_tokens=2` for the same AWQ profile:
+
+```text
+instance_id: 36508333
+market: on-demand
+machine_id: 44351
+gpu: RTX PRO 6000 WS
+concurrency: 2
+avg prompt/request: ~6,294 tokens
+avg generation/request: ~2,048 tokens
+requests_ok: 2
+requests_error: 0
+vllm_generation_tps: 37.41 tok/s total
+wall-clock per stream: 18.70 tok/s/stream
+active inference per stream: ~25.11 tok/s/stream
+avg TTFT: 61.92s
+avg queue: ~0.00s
+avg inference: 81.57s
+```
+
+MTP was active:
+
+```text
+speculative_config=SpeculativeConfig(method='mtp', model='/workspace/models/QuantTrio/Qwen3.6-27B-AWQ', num_spec_tokens=2)
+Resolved architecture: Qwen3_5MTP
+```
+
+Acceptance was still decent, but vLLM warned that recursive use of one MTP layer can reduce acceptance, and total throughput collapsed:
+
+```text
+Enabling num_speculative_tokens > 1 will run multiple times of forward on same MTP layer, which may result in lower acceptance rate
+Mean acceptance length: ~2.49-2.86 / 3.0
+Per-position acceptance rate: roughly 0.83-0.95, 0.65-0.90
+Avg draft acceptance rate: ~74-93%
+```
+
+Interpretation: on RTX PRO 6000 WS with this AWQ/modelopt path, the extra drafter work appears to offset or exceed the benefit. For this AWQ model on PRO 6000 WS, MTP is probably not worth enabling; `num_speculative_tokens=2` is clearly worse than the prior `num_speculative_tokens=1` smoke. This contrasts with official FP8 on H200, where MTP gave a large gain.
 
 ## Takeaways
 
