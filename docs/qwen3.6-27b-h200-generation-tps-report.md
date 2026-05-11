@@ -655,6 +655,31 @@ served model: carnice-v2-27b-nvfp4-text-mtp-rtx5070ti-2gpu-agentic-64k-fp8kv
 max_model_len: 65536
 ```
 
+MTP was active in logs:
+
+```text
+speculative_config=SpeculativeConfig(method='mtp', model='/workspace/models/sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP', num_spec_tokens=3)
+Resolved architecture: Qwen3_5MTP
+Loading drafter model...
+Detected MTP model. Sharing target model embedding weights with the draft model.
+```
+
+Speculative acceptance during the small bench:
+
+```text
+Mean acceptance length: 3.52 / 4.0
+Accepted throughput: 5.86 tokens/s, Drafted throughput: 6.97 tokens/s
+Accepted: 63, Drafted: 75
+Per-position acceptance: 0.920, 0.840, 0.760
+Avg draft acceptance: 84.0%
+
+Mean acceptance length: 3.28 / 4.0
+Accepted throughput: 29.70 tokens/s, Drafted throughput: 39.00 tokens/s
+Accepted: 297, Drafted: 390
+Per-position acceptance: 0.915, 0.746, 0.623
+Avg draft acceptance: 76.2%
+```
+
 Small warm benchmark:
 
 ```text
