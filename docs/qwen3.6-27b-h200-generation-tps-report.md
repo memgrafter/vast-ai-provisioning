@@ -399,6 +399,124 @@ Official FP8 MTP n=2:       ~86.45 tok/s/stream wall-clock at concurrency 2
 
 For the PRO 6000 WS, official FP8+MTP n=2 and Carnice NVFP4+MTP n=3 landed close together on this coding-shaped benchmark. Both beat AWQ low-concurrency behavior; AWQ n=2 was a clear regression.
 
+## RTX 5090 Carnice NVFP4 smoke
+
+Prepared a 32GB RTX 5090-specific Carnice profile from the tested PRO 6000 WS NVFP4+MTP profile using copy-then-edit. The 5090 variant follows the model card's smaller-context recommendation rather than the full 256K PRO 6000 WS profile:
+
+```text
+model: carnice-v2-27b-nvfp4-text-mtp-rtx5090-16k
+source: sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP
+gpu profile: config/gpu-profiles/carnice-v2-27b-nvfp4-mtp-rtx5090-1gpu.json
+launch profile: config/launch-profiles/carnice-v2-27b-nvfp4-text-mtp.rtx5090.on-demand.json
+template: vLLM_R2_Carnice_V2_27B_NVFP4_TEXT_MTP_RTX5090_16K
+template_hash_id: 9c9da26e008eb4069ee25fc5f82751e3
+max_model_len: 16384
+gpu_memory_utilization: 0.85
+kv_cache_dtype: unset
+max_num_seqs: 2
+force_quantization: modelopt
+language_model_only: true
+tool_call_parser: qwen3_xml
+reasoning_parser: qwen3
+speculative_config: {"method":"qwen3_5_mtp","num_speculative_tokens":3}
+```
+
+Vast search notes:
+
+```text
+require_verified: false
+search_no_default: true
+greylisted_machine_ids includes 51352
+min_inet_down: 1000 Mbps
+provisioner R2 speed test: kept enabled at 100 MB/s minimum
+```
+
+The first unverified RTX 5090 host (`machine_id: 51352`) failed before provisioning because Docker/NVIDIA CDI could not inject the requested GPU device:
+
+```text
+failed to inject CDI devices: unresolvable CDI devices .../gpu=2
+```
+
+That was treated as a host/runtime issue and the machine was greylisted.
+
+Geo-restricted search was then tried manually:
+
+```text
+US only: no passing offer
+NA [CA,US]: no passing offer
+Western Europe + JP: passing offer found
+```
+
+Completed 5090 smoke:
+
+```text
+instance_id: 36514355
+machine_id: 58434
+gpu: RTX 5090
+geolocation: France, FR
+market: on-demand
+dph_total: $0.5211/hr
+bench_seconds: 90
+concurrency: 1
+requests_ok: 4
+requests_error: 0
+avg prompt/request: ~6,295 tokens
+avg generation/request: ~1,449 tokens
+```
+
+R2 speed test passed before model sync:
+
+```text
+minimum: 100 MB/s
+object: _vast/r2-speed-test.bin, 536,870,912 bytes
+range: first 512,000,000 bytes across 8 parallel ranged GETs
+result: 512,000,000 bytes in 2s = 256.00 MB/s
+```
+
+Throughput:
+
+```text
+prompt_tps:      268.83 tok/s
+generation_tps:   61.89 tok/s
+total_tps:       330.72 tok/s
+```
+
+Per-stream generation at concurrency 1:
+
+```text
+wall-clock:       61.89 tok/s/stream
+active inference: ~1,449.25 / 22.88 = ~63.34 tok/s/stream
+```
+
+Latency:
+
+```text
+avg TTFT:        9.34s
+avg queue:       ~0.00s
+avg inference:  22.88s
+latency_avg:    23.41s
+latency_p50:    20.43s
+latency_p95:    49.62s
+```
+
+MTP was active:
+
+```text
+speculative_config=SpeculativeConfig(method='mtp', model='/workspace/models/sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP', num_spec_tokens=3)
+Resolved architecture: Qwen3_5MTP
+Loading drafter model...
+```
+
+Speculative acceptance was good after warmup:
+
+```text
+Mean acceptance length: ~3.26-3.61 / 4.0
+Per-position acceptance: roughly 0.894-0.936, 0.739-0.857, 0.626-0.814
+Avg draft acceptance: ~75.3-86.9%
+```
+
+Interpretation: the 5090 can run the 16K Carnice NVFP4+MTP profile, but this first unverified/deverified host was materially slower than RTX PRO 6000 WS for the same family of workload. The high average TTFT was driven by one outlier; three of four requests had TTFT <= 2.5s.
+
 ## HF model-card guidance used
 
 The Qwen model card recommends vLLM MTP with:
