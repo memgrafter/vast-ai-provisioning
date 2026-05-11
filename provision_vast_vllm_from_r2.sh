@@ -264,8 +264,25 @@ else
       --checkers "$RCLONE_CHECKERS" \
       --multi-thread-cutoff 1M \
       --multi-thread-streams "$RCLONE_MULTI_THREAD_STREAMS" \
-      --stats 10s \
-      --stats-one-line
+      --stats 30s &
+    rclone_pid="$!"
+    (
+      while kill -0 "$rclone_pid" 2>/dev/null; do
+        bytes="$(find "$MODEL_DIR" -type f -printf '%s\n' 2>/dev/null | awk '{s += $1} END {print s + 0}')"
+        files="$(find "$MODEL_DIR" -type f 2>/dev/null | wc -l | awk '{print $1}')"
+        largest="$(find "$MODEL_DIR" -type f -printf '%s %f\n' 2>/dev/null | sort -nr | head -1 || true)"
+        echo "R2 sync progress: ${bytes} bytes across ${files} files at $MODEL_DIR; largest=${largest:-none}"
+        sleep 30
+      done
+    ) &
+    progress_pid="$!"
+    rclone_rc=0
+    wait "$rclone_pid" || rclone_rc="$?"
+    kill "$progress_pid" 2>/dev/null || true
+    wait "$progress_pid" 2>/dev/null || true
+    if [ "$rclone_rc" -ne 0 ]; then
+      exit "$rclone_rc"
+    fi
   else
     aws s3 sync "s3://$R2_BUCKET/$R2_PREFIX" "$MODEL_DIR" \
       --endpoint-url "$R2_ENDPOINT"

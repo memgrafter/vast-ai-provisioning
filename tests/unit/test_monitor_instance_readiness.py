@@ -20,6 +20,7 @@ class AnalyzeLogsTests(unittest.TestCase):
             "Syncing s3://bucket/prefix -> /workspace/models/model",
             "Sync started at: 2026-05-05T10:00:00+00:00",
             "Transferred: 1 GiB / 10 GiB, 10%, 150 MiB/s, ETA 1m",
+            "R2 sync progress: 1000000000 bytes across 3 files at /workspace/models/model; largest=900000000 model.safetensors",
             "download: file.safetensors",
             "Sync finished at: 2026-05-05T10:02:00+00:00",
             "Synced bytes: 10G",

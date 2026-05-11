@@ -85,7 +85,7 @@ def analyze_logs(logs: str, image: str) -> Signals:
             or "R2 speed test enabled" in logs
         ),
         r2_sync_started=("Sync started at:" in logs or "Syncing s3://" in logs),
-        r2_transfer_active=("download:" in lower or "copy:" in lower),
+        r2_transfer_active=("download:" in lower or "copy:" in lower or "R2 sync progress:" in logs),
         r2_sync_finished=("Sync finished at:" in logs or "Synced bytes:" in logs),
         provisioning_complete=(
             "Provisioning complete" in logs
