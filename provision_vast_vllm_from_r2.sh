@@ -13,7 +13,9 @@ export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-auto}"
 MODEL_MIN_FREE_GB="${MODEL_MIN_FREE_GB:-5}"
 # Built-in smoke gate for R2 path quality. Override with env if needed.
 # Set R2_SPEED_TEST_MIN_MBPS=0 to disable.
+# Set R2_SPEED_TEST_WARN_ONLY=true to run/log the test but continue below threshold.
 R2_SPEED_TEST_MIN_MBPS="${R2_SPEED_TEST_MIN_MBPS:-100}"
+R2_SPEED_TEST_WARN_ONLY="${R2_SPEED_TEST_WARN_ONLY:-false}"
 R2_SPEED_TEST_MAX_MB="${R2_SPEED_TEST_MAX_MB:-512}"
 # Optional stable bucket-level object for speed tests. If unset, try this key
 # first and fall back to the largest object under the model prefix.
@@ -234,8 +236,12 @@ if [ "$R2_SPEED_TEST_MIN_MBPS" != "0" ]; then
   echo "R2 speed test result: ${bytes} bytes in ${elapsed_s}s = ${mbps} MB/s"
   rm -rf "$speed_dir"
   if awk -v got="$mbps" -v min="$R2_SPEED_TEST_MIN_MBPS" 'BEGIN {exit !(got < min)}'; then
-    echo "ERROR: R2 speed test below threshold: ${mbps} MB/s < ${R2_SPEED_TEST_MIN_MBPS} MB/s" >&2
-    exit 42
+    if [ "$R2_SPEED_TEST_WARN_ONLY" = "true" ]; then
+      echo "WARN: R2 speed test below threshold; continuing because R2_SPEED_TEST_WARN_ONLY=true: ${mbps} MB/s < ${R2_SPEED_TEST_MIN_MBPS} MB/s" >&2
+    else
+      echo "ERROR: R2 speed test below threshold: ${mbps} MB/s < ${R2_SPEED_TEST_MIN_MBPS} MB/s" >&2
+      exit 42
+    fi
   fi
 fi
 

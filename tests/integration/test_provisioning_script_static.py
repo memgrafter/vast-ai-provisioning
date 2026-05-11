@@ -54,6 +54,8 @@ class ProvisioningScriptStaticTests(unittest.TestCase):
 
     def test_speed_test_prefers_static_object_and_logs_range_failures(self):
         self.assertIn("R2_SPEED_TEST_KEY=\"${R2_SPEED_TEST_KEY:-_vast/r2-speed-test.bin}\"", self.text)
+        self.assertIn("R2_SPEED_TEST_WARN_ONLY=\"${R2_SPEED_TEST_WARN_ONLY:-false}\"", self.text)
+        self.assertIn("continuing because R2_SPEED_TEST_WARN_ONLY=true", self.text)
         self.assertIn("head-object", self.text)
         self.assertIn("falling back to model prefix", self.text)
         self.assertIn("R2 speed test ranged GET failed", self.text)

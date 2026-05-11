@@ -23,6 +23,7 @@
     "R2_BUCKET": "<your-r2-bucket>",
     "R2_ENDPOINT": "https://<account-id>.r2.cloudflarestorage.com",
     "AWS_DEFAULT_REGION": "auto",
+    "R2_SPEED_TEST_WARN_ONLY": "false",
     "PROVISIONING_SCRIPT": "https://raw.githubusercontent.com/memgrafter/vast-ai-provisioning/main/provision_vast_vllm_from_r2.sh"
   },
   "ports": {
