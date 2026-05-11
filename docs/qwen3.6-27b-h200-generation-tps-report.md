@@ -764,6 +764,77 @@ No-MTP lift: ~15.2% generation TPS, lower TTFT and latency on this small concurr
 
 Interpretation: despite good draft acceptance in the MTP run (76-84%), MTP overhead was a net loss for this 2x RTX 5070 Ti fp8-KV small-request benchmark. For this budget 2-GPU class, default to no MTP unless a longer-output or higher-concurrency A/B shows a reversal. The instance was destroyed after the bench.
 
+## RTX 3090 2-GPU Qwen3.6 AWQ fp8-KV 160K smoke
+
+Prepared a 2x RTX 3090 profile for the original low-cost 160K-context target using AWQ weights, tensor parallelism, fp8 KV cache, and no speculative decoding:
+
+```text
+gpu profile: config/gpu-profiles/qwen-27b-awq-rtx3090-2gpu.json
+model profile: config/models/qwen3.6-27b-awq.rtx3090-2gpu-160k-fp8kv-no-mtp.json
+launch profile: config/launch-profiles/qwen3.6-27b-awq.rtx3090-2gpu-160k-fp8kv-no-mtp.on-demand.json
+template: vLLM_R2_Qwen3_6_27B_AWQ_RTX3090_2GPU_160K_FP8KV_NO_MTP
+template_hash_id: 7ef02c850d306d43ccdad8a38918889f
+max_model_len: 160000
+kv_cache_dtype: fp8
+tensor_parallel_size: 2
+speculative_config: None
+```
+
+The strict launch profile required `reliability2 >= 0.98` and found no passing 2x3090 offers. A temporary local relaxed profile was used with `reliability2 >= 0.94`:
+
+```text
+state/launch-profiles/qwen3.6-27b-awq.rtx3090-2gpu-160k-fp8kv-no-mtp.rel094.on-demand.json
+```
+
+Launched offer:
+
+```text
+instance_id: 36564163
+machine_id: 104433
+offer_id: 36354557
+gpu: 2x RTX 3090 24GB, 49152 MB total
+geolocation: Quebec, CA
+reliability2: 0.9488
+inet down/up: 827 / 777 Mbps
+disk_bw: 1660 MB/s
+dph_total: $0.2643/hr
+```
+
+Provisioning and startup notes:
+
+```text
+R2 speed test result: 512000000 bytes in 6s = 85.33 MB/s
+WARN: R2 speed test below threshold; continuing because R2_SPEED_TEST_WARN_ONLY=true
+R2 sync progress lines emitted during model pull
+Using fp8 data type to store kv cache
+speculative_config=None
+max_seq_len=160000
+tensor_parallel_size=2
+Available KV cache memory: 10.65 GiB
+GPU KV cache size: 174,048 tokens
+Maximum concurrency for 160,000 tokens per request: 4.08x
+```
+
+Small smoke benchmark:
+
+```text
+input goal: 500 words
+max_output_tokens: 128
+requests_ok: 2
+requests_error: 0
+latency_avg: 16.28s
+latency_p50: 15.55s
+latency_p95: 17.02s
+TTFT_avg: 1.61s
+prompt_tokens: 1,707
+generation_tokens: 256
+prompt_tps: 52.41 tok/s
+generation_tps: 7.86 tok/s
+total_tps: 60.27 tok/s
+```
+
+Interpretation: the 2x RTX 3090 AWQ + fp8-KV path successfully starts at true `max_model_len=160000`, and reported KV capacity is above the configured context. Throughput is much lower than the newer 2x Blackwell consumer-GPU paths, but it is a viable ultra-cheap 160K smoke baseline when a relaxed-reliability 2x3090 offer is acceptable. The instance was destroyed after the bench.
+
 ### Unsloth Qwen3.6-27B-NVFP4 on RTX 5090
 
 The Unsloth NVFP4 checkpoint was also tested on RTX 5090 using the same R2/provisioning path. The baseline profile intentionally keeps the model-card vLLM guidance conservative (`dtype=bfloat16`, 16K context, no forced quantization). For speculative tests, temporary MTP variants used `qwen3_next_mtp` with `num_speculative_tokens` set to 2 and then 1.

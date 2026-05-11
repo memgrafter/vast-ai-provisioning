@@ -164,7 +164,7 @@ For this budget 2x 5070 Ti path, default to no MTP unless a different workload
 (longer outputs / higher concurrency) reverses the result.
 ```
 
-## 2x RTX 3090 160K exploration
+## 2x RTX 3090 160K result
 
 Prepared AWQ + fp8-KV + no-MTP 160K single-user profile:
 
@@ -175,7 +175,7 @@ launch profile: config/launch-profiles/qwen3.6-27b-awq.rtx3090-2gpu-160k-fp8kv-n
 template hash: 7ef02c850d306d43ccdad8a38918889f
 ```
 
-Target idea:
+Target settings:
 
 ```text
 Qwen3.6-27B-AWQ
@@ -186,28 +186,54 @@ max_num_seqs: 1
 speculative_config: None
 ```
 
-Best candidate seen:
-
-```text
-offer_id: 36379411
-machine_id: 42967
-geo: British Columbia, CA
-gpu: 2x RTX 3090
-reliability2: 0.9863
-inet_down: 1986 Mbps
-disk_bw: 5995 MB/s
-dph_total: $0.2815/hr
-```
-
-But by launch time, the market moved and no passing 2x3090 offer remained.
-
-A temporary relaxed state profile was also checked:
+Strict profile (`reliability2 >= 0.98`) found no passing 2x3090 offers. A temporary relaxed state profile (`reliability2 >= 0.94`) was used:
 
 ```text
 state/launch-profiles/qwen3.6-27b-awq.rtx3090-2gpu-160k-fp8kv-no-mtp.rel094.on-demand.json
 ```
 
-but still ended with no passing offer in the subsequent check.
+Launched and tested:
+
+```text
+instance_id: 36564163
+offer_id: 36354557
+machine_id: 104433
+geo: Quebec, CA
+gpu: 2x RTX 3090
+reliability2: 0.9488
+inet_down: 827 Mbps
+disk_bw: 1660 MB/s
+dph_total: $0.2643/hr
+```
+
+Provisioning/startup details:
+
+```text
+R2 speed test: 85.33 MB/s, below 100 MB/s threshold but warn-only continued
+speculative_config=None
+max_seq_len=160000
+tensor_parallel_size=2
+Using fp8 data type to store kv cache
+Available KV cache memory: 10.65 GiB
+GPU KV cache size: 174,048 tokens
+Maximum concurrency for 160,000 tokens per request: 4.08x
+```
+
+Small smoke result:
+
+```text
+requests_ok: 2
+requests_error: 0
+latency_avg: 16.28s
+TTFT_avg: 1.61s
+prompt_tokens: 1,707
+generation_tokens: 256
+prompt_tps: 52.41 tok/s
+generation_tps: 7.86 tok/s
+total_tps: 60.27 tok/s
+```
+
+Instance was destroyed after the bench.
 
 ## Practical takeaways
 
@@ -221,7 +247,7 @@ fp8 KV
 no MTP for small concurrency-1 request pattern
 ```
 
-### Best currently prepared but not yet validated long-context 160K path
+### Best currently validated ultra-cheap long-context 160K path
 
 ```text
 2x RTX 3090
@@ -230,6 +256,7 @@ fp8 KV
 no MTP
 160K target
 single-user
+validated startup + small smoke, but only under relaxed reliability policy
 ```
 
 ### 5070 Ti headroom note
@@ -249,20 +276,17 @@ Practical single-user context is closer to ~56K than a true 64K with output head
 
 ## Suggested next actions
 
-1. Retry the 2x RTX 3090 profile first:
+1. If continuing 2x RTX 3090, prefer strict policy first, then use the relaxed reliability state profile only if cost/availability matters more than host quality.
 
-```bash
-. env.vast-management
-./run.sh scripts/select_and_launch.py \
-  --launch-profile config/launch-profiles/qwen3.6-27b-awq.rtx3090-2gpu-160k-fp8kv-no-mtp.on-demand.json \
-  --check-only \
-  --skip-current-infra \
-  --top 5
+2. Run a larger 2x3090 single-user benchmark now that startup at 160K is proven:
+
+```text
+input_tokens: 4K-16K first, then larger context-fill tests
+output_tokens: 512-2048
+concurrency: 1
 ```
 
-2. If `machine_id: 42967` or another clean 2x3090 reappears, launch immediately.
-
-3. On successful 2x3090 startup, inspect for:
+3. Re-check key startup lines in future runs:
 
 ```text
 speculative_config=None
@@ -271,13 +295,13 @@ GPU KV cache size
 Maximum concurrency for 160,000 tokens per request
 ```
 
-4. If 160K fails on 2x3090, step down in this order:
+4. If 160K regresses on a different 2x3090 host, step down in this order:
 
 ```text
 160K -> 128K -> 96K
 ```
 
-5. If 160K succeeds, run a tiny smoke first, then a slightly larger single-user check.
+5. For a better budget default, keep 2x RTX 5070 Ti no-MTP as the faster path and 2x RTX 3090 as the ultra-cheap long-context fallback.
 
 ## Useful commands
 
