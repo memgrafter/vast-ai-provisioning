@@ -1,0 +1,45 @@
+{
+  "gpu_profile": "config/gpu-profiles/carnice-v2-27b-nvfp4-mtp-rtx5070ti-2gpu.json",
+  "market": "on-demand",
+  "model_profile": "config/models/carnice-v2-27b-nvfp4-text-mtp.rtx5070ti-2gpu-agentic-64k-fp8kv-no-mtp.json",
+  "name": "carnice-v2-27b-nvfp4-text-mtp.rtx5070ti-2gpu.agentic-64k-fp8kv-no-mtp.on-demand",
+  "network": {
+    "max_internet_down_cost_per_tb": 8.0,
+    "max_internet_up_cost_per_tb": 10.0,
+    "min_direct_port_count": 1,
+    "min_inet_down": 431
+  },
+  "pricing": {
+    "max_dph_total": 0.35,
+    "target_first_test_minutes": 60
+  },
+  "purpose": "On-demand 2x RTX 5070 Ti A/B profile for Carnice NVFP4 without MTP, using fp8 KV cache at 64K from R2",
+  "reliability": {
+    "min_reliability2": 0.99,
+    "require_verified": true
+  },
+  "selection": {
+    "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
+    "geo_query": "geolocation not in [CN]",
+    "greylisted_machine_ids": [],
+    "preferred_machine_ids": [
+      28069
+    ],
+    "search_no_default": true,
+    "sort": "preferred_machine_then_effective_cost_then_reliability"
+  },
+  "spot": {
+    "enabled_after_smoke_test": false,
+    "max_bid_dph": 0
+  },
+  "storage": {
+    "disk_gb": 100,
+    "max_storage_cost_per_gb_hour": 0.0003,
+    "max_storage_total_cost_per_hour": 0.06,
+    "min_disk_bw": 500
+  },
+  "template": {
+    "hash_id": "",
+    "name": "vLLM_R2_Carnice_V2_27B_NVFP4_TEXT_MTP_RTX5070TI_2GPU_AGENTIC_64K_FP8KV_NO_MTP"
+  }
+}
