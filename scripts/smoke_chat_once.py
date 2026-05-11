@@ -299,6 +299,7 @@ def main() -> int:
     parser.add_argument("--bench-output-tokens", type=int, default=0, help="max generated tokens for bench; <=0 omits max_tokens and uses model default")
     parser.add_argument("--bench-max-requests", type=int, default=0, help="stop bench after this many submitted requests; <=0 runs until bench-seconds")
     parser.add_argument("--no-destroy-on-error", action="store_true", help="leave the instance running when readiness, smoke, or bench fails")
+    parser.add_argument("--launch-only", action="store_true", help="create the instance, print its id/url metadata, and leave it running for manual tests")
     parser.add_argument("--final-log-tail", type=int, default=5000, help="Vast log lines to save before any destroy/leave-running closeout")
     args = parser.parse_args()
 
@@ -334,6 +335,13 @@ def main() -> int:
         if not instance_id:
             continue
         instance_id = int(instance_id)
+        if args.launch_only:
+            info = vast.show_instance(id=instance_id)
+            print("launch_only: leaving instance running", flush=True)
+            print("instance_id=" + str(instance_id), flush=True)
+            print("machine_id=" + str(info.get("machine_id")), flush=True)
+            print("url=" + str(port_url(info) or "-"), flush=True)
+            return 0
         destroy_instance = True
         try:
             start = time.time()
