@@ -6,13 +6,15 @@ Date: 2026-05-10 / 2026-05-11 UTC
 
 No active Vast instances were present after the latest runs.
 
-Latest pushed commits of interest:
+Latest commits of interest:
 
 ```text
 46b56b0 feat(vast): add carnice nvfp4 rtx5090 profile
 fe0d77a chore(vast): allow geo-aware unverified 5090 search
 86f9b08 docs(bench): add rtx5090 carnice smoke
 83a209a docs(handoff): summarize qwen nvfp4 next steps
+eee913b docs(handoff): clarify geo fallback guidance
+83acb36 feat(vast): add unsloth nvfp4 16k profiles
 ```
 
 Main report is up to date:
@@ -130,6 +132,56 @@ Reason for greylisting `51352`: Docker/NVIDIA CDI host failure before provisioni
 failed to inject CDI devices: unresolvable CDI devices .../gpu=2
 ```
 
+### Unsloth Qwen3.6-27B NVFP4 16K profiles
+
+Initial Unsloth profiles were created after reading the model card. Relevant model-card guidance:
+
+```text
+checkpoint calibrated with sequences up to 16K context
+vLLM command: vllm serve unsloth/Qwen3.6-27B-NVFP4 --trust-remote-code --dtype bfloat16 --max-model-len 4096
+increase --max-model-len only after checking available GPU memory
+MTP: model overview says trained with multi-steps, but no vLLM speculative_config recommendation is provided
+```
+
+The initial profiles therefore use 16K context, `dtype: bfloat16`, no forced quantization, no KV-cache override, and no vLLM speculative config. They are intended as safe smoke-test baselines before adding an experimental MTP variant.
+
+PRO 6000 WS:
+
+```text
+model profile: config/models/unsloth-qwen3.6-27b-nvfp4.pro6000ws-16k.json
+launch profile: config/launch-profiles/unsloth-qwen3.6-27b-nvfp4.pro6000ws.on-demand.json
+template_name: vLLM_R2_Unsloth_Qwen3_6_27B_NVFP4_PRO6000WS_16K
+template_hash_id: b32a16ecffef84f8d4dcee55feb04d98
+max_model_len: 16384
+gpu_memory_utilization: 0.9
+max_num_seqs: 2
+kv_cache_dtype: unset
+force_quantization: unset
+speculative_config: unset
+reasoning_parser: qwen3
+language_model_only: true
+```
+
+RTX 5090:
+
+```text
+model profile: config/models/unsloth-qwen3.6-27b-nvfp4.rtx5090-16k.json
+launch profile: config/launch-profiles/unsloth-qwen3.6-27b-nvfp4.rtx5090.on-demand.json
+template_name: vLLM_R2_Unsloth_Qwen3_6_27B_NVFP4_RTX5090_16K
+template_hash_id: 2bcef2bafc5d14262a00359f1147aac3
+max_model_len: 16384
+gpu_memory_utilization: 0.85
+max_num_seqs: 2
+kv_cache_dtype: unset
+force_quantization: unset
+speculative_config: unset
+reasoning_parser: qwen3
+language_model_only: true
+require_verified: false
+search_no_default: true
+greylisted_machine_ids: [8357, 51352]
+```
+
 ### Official Qwen FP8 PRO 6000 WS profile
 
 ```text
@@ -244,19 +296,11 @@ Todo already added compactly to `todo.txt`: implement geo-tiered Vast offer sear
 
 ## Recommended next steps
 
-1. Create a persistent Unsloth NVFP4 model profile and RTX 5090 / PRO 6000 WS launch profiles from the Carnice NVFP4 profile using copy-then-edit.
-2. Read the Unsloth model card for exact vLLM flags before building templates.
-3. For RTX 5090, keep 16K first:
+1. Smoke-test the new Unsloth PRO 6000 WS profile first. It is the lower-risk path because it keeps verified hosts and 96GB VRAM.
+2. Smoke-test the new Unsloth RTX 5090 profile after PRO 6000 WS starts cleanly. Keep `--no-destroy-on-error` for the first 5090 run.
+3. Only after a non-MTP Unsloth baseline works, create an experimental MTP variant. The model card does not provide a vLLM speculative-config value, so do not put MTP in the baseline profile.
 
-```text
-max_model_len: 16384
-gpu_memory_utilization: ~0.85
-max_num_seqs: 2
-MTP: use model-card recommendation if present
-R2 speed test: keep enabled
-```
-
-4. If re-running Carnice RTX 5090, prefer geo tiers in this order:
+4. If re-running Carnice or Unsloth RTX 5090, prefer geo tiers in this order:
 
 ```text
 US -> NA -> western Europe + JP -> broader fallback
