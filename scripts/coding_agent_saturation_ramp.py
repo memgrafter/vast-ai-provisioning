@@ -318,7 +318,7 @@ def main() -> int:
     parser.add_argument("--base-url", required=True, help="Server root, e.g. http://host:port, not /v1")
     parser.add_argument("--model", required=True)
     parser.add_argument("--concurrency", default="36,40,44,46", help="Comma-separated concurrency steps")
-    parser.add_argument("--requests-per-concurrency", type=int, default=3, help="Serial turns per simulated user")
+    parser.add_argument("--requests-per-concurrency", type=int, default=6, help="Serial turns per simulated user/worker")
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--step-gap", type=float, default=10.0, help="Seconds to sleep between concurrency steps")
     parser.add_argument("--pause", action="store_true", help="Pause for Enter between concurrency steps, after --step-gap")
