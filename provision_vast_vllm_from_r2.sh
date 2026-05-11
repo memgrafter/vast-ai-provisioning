@@ -41,6 +41,7 @@ VLLM_TOOL_CALL_PARSER="${VLLM_TOOL_CALL_PARSER:-}"
 VLLM_REASONING_PARSER="${VLLM_REASONING_PARSER:-}"
 VLLM_ENABLE_PREFIX_CACHING="${VLLM_ENABLE_PREFIX_CACHING:-false}"
 VLLM_LANGUAGE_MODEL_ONLY="${VLLM_LANGUAGE_MODEL_ONLY:-false}"
+VLLM_SPECULATIVE_CONFIG_B64="${VLLM_SPECULATIVE_CONFIG_B64:-}"
 VLLM_EXTRA_ARGS="${VLLM_EXTRA_ARGS:-}"
 
 # Use a file for complex vLLM args. This avoids Docker/template/env quoting
@@ -79,6 +80,10 @@ VLLM_EXTRA_ARGS="${VLLM_EXTRA_ARGS:-}"
   fi
   if [ "$VLLM_LANGUAGE_MODEL_ONLY" = "true" ]; then
     printf -- '--language-model-only '
+  fi
+  if [ -n "$VLLM_SPECULATIVE_CONFIG_B64" ]; then
+    speculative_config="$(printf '%s' "$VLLM_SPECULATIVE_CONFIG_B64" | base64 -d)"
+    printf -- '--speculative-config %q ' "$speculative_config"
   fi
   if [ -n "$VLLM_EXTRA_ARGS" ]; then
     printf -- '%s ' "$VLLM_EXTRA_ARGS"

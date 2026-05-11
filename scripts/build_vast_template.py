@@ -8,6 +8,7 @@ remote apply step.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import shlex
 from pathlib import Path
@@ -73,6 +74,9 @@ def env_from_specs(template: dict[str, Any], model: dict[str, Any]) -> dict[str,
             "VLLM_REASONING_PARSER": "" if vllm.get("reasoning_parser") is None else str(vllm.get("reasoning_parser")),
             "VLLM_ENABLE_PREFIX_CACHING": str(vllm.get("enable_prefix_caching", False)).lower(),
             "VLLM_LANGUAGE_MODEL_ONLY": str(vllm.get("language_model_only", False)).lower(),
+            "VLLM_SPECULATIVE_CONFIG_B64": ""
+            if vllm.get("speculative_config") is None
+            else base64.b64encode(json.dumps(vllm["speculative_config"], separators=(",", ":")).encode()).decode(),
             "VLLM_EXTRA_ARGS": " ".join(str(x) for x in vllm.get("extra_args", [])),
         }
     )

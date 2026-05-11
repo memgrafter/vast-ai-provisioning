@@ -1,3 +1,4 @@
+import base64
 import importlib.util
 import json
 import shlex
@@ -97,6 +98,15 @@ class BuildVastTemplateTests(unittest.TestCase):
         payload = build_vast_template.build_template(self.template, model)
         env, _ = self.parse_env(payload["env"])
         self.assertEqual(env["VLLM_MAX_NUM_SEQS"], "512")
+
+    def test_speculative_config_maps_to_safe_base64_env(self):
+        model = json.loads(json.dumps(self.model))
+        model["vllm"]["speculative_config"] = {"method": "qwen3_next_mtp", "num_speculative_tokens": 2}
+        payload = build_vast_template.build_template(self.template, model)
+        env, _ = self.parse_env(payload["env"])
+        decoded = json.loads(base64.b64decode(env["VLLM_SPECULATIVE_CONFIG_B64"]).decode())
+        self.assertEqual(decoded, {"method": "qwen3_next_mtp", "num_speculative_tokens": 2})
+        self.assertNotIn("qwen3_next_mtp", payload["env"])
 
     def test_model_max_model_len_is_required(self):
         model = json.loads(json.dumps(self.model))

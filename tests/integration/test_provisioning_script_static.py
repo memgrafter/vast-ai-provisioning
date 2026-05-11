@@ -32,8 +32,10 @@ class ProvisioningScriptStaticTests(unittest.TestCase):
             "VLLM_TRUST_REMOTE_CODE=",
             "VLLM_FORCE_QUANTIZATION=",
             "VLLM_MAX_NUM_SEQS=",
+            "VLLM_SPECULATIVE_CONFIG_B64=",
             "VLLM_EXTRA_ARGS=",
             "--max-num-seqs",
+            "--speculative-config",
             "--api-key ${VLLM_API_KEY}",
         ]:
             self.assertIn(snippet, self.text)

@@ -19,6 +19,7 @@
 - Add a SQLite history database for launch/offer/outcome decisions:
   - Record every searched offer, selected offer, machine ID, GPU, advertised disk/network/cost, market type, bid cap, launch timestamp, and final outcome.
   - Record measured facts: image cached or not, time to provisioning, R2 speed test MB/s, sync duration, vLLM ready time, API success, outbid/stopped time, and failure reason.
+  - Capture broad rental metadata before/during/after runs, including Vast instance/offer JSON, host/GPU/runtime details, vLLM config/metrics, benchmark inputs/results, logs, and any available hardware telemetry, so we can audit performance and detect bad rentals later.
   - Use the DB for scoring machines over time instead of relying only on static preferred/greylisted arrays.
   - Derive decision quality metrics: success rate, expected useful minutes, effective cost per useful hour, launch-time percentage, and interruption probability by machine/GPU/market.
 

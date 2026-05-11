@@ -2,11 +2,16 @@
 set -euo pipefail
 
 model_profile=""
+stream="false"
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --model-profile)
       model_profile="${2:?missing value for --model-profile}"
       shift 2
+      ;;
+    --stream)
+      stream="true"
+      shift
       ;;
     *)
       echo "ERROR: unknown argument: $1" >&2
@@ -33,6 +38,10 @@ fi
 uv pip install --python .venv/bin/python -U huggingface_hub hf_transfer awscli
 
 source env.modeltransfer
+
+if [ "$stream" = "true" ]; then
+  exec .venv/bin/python scripts/stream_hf_model_to_r2.py --model-profile "$model_profile"
+fi
 
 profile_values="$(.venv/bin/python - "$model_profile" <<'PY'
 import json

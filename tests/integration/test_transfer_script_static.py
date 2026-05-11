@@ -29,6 +29,10 @@ class TransferScriptStaticTests(unittest.TestCase):
         self.assertIn(".venv/bin/aws s3 sync", self.text)
         self.assertNotIn("pip install -U", self.text)
 
+    def test_transfer_supports_stream_mode_without_local_model_staging(self):
+        self.assertIn("--stream", self.text)
+        self.assertIn("scripts/stream_hf_model_to_r2.py", self.text)
+
 
 if __name__ == "__main__":
     unittest.main()
