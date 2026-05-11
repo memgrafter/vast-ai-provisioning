@@ -617,6 +617,64 @@ total_tps: 172.06 tok/s
 
 Interpretation: 2x RTX 5060 Ti can run Carnice NVFP4+MTP with tensor parallel at 32K after removing TurboQuant, but throughput is modest and GPU P2P/custom allreduce is unavailable on this host. TurboQuant should not be used for this Qwen3 hybrid family unless vLLM adds hybrid support. The instance was destroyed after the smoke/bench.
 
+
+## RTX 5070 Ti 2-GPU Carnice NVFP4 fp8-KV smoke
+
+Prepared a 2x RTX 5070 Ti profile using vLLM tensor parallelism, `--kv-cache-dtype fp8`, and 64K context after TurboQuant proved unsupported for the Qwen3 hybrid attention+Mamba architecture.
+
+```text
+gpu profile: config/gpu-profiles/carnice-v2-27b-nvfp4-mtp-rtx5070ti-2gpu.json
+model profile: config/models/carnice-v2-27b-nvfp4-text-mtp.rtx5070ti-2gpu-agentic-64k-fp8kv.json
+launch profile: config/launch-profiles/carnice-v2-27b-nvfp4-text-mtp.rtx5070ti-2gpu.agentic-64k-fp8kv.on-demand.json
+template: vLLM_R2_Carnice_V2_27B_NVFP4_TEXT_MTP_RTX5070TI_2GPU_AGENTIC_64K_FP8KV
+template_hash_id: 3352812354abb822f6fbcd6b9d6547ee
+max_model_len: 65536
+kv_cache_dtype: fp8
+tensor_parallel_size: 2
+speculative_config: {"method":"qwen3_5_mtp","num_speculative_tokens":3}
+```
+
+Launched offer:
+
+```text
+instance_id: 36560806
+machine_id: 28069
+gpu: 2x RTX 5070 Ti 16GB
+geolocation: South Korea, KR
+market: on-demand
+dph_total: $0.2144/hr
+disk_bw: 508 MB/s
+inet_down/up: 600.5 / 491.8 Mbps
+reliability2: 0.9967
+```
+
+Startup succeeded at 64K with fp8 KV; `/v1/models` reported:
+
+```text
+served model: carnice-v2-27b-nvfp4-text-mtp-rtx5070ti-2gpu-agentic-64k-fp8kv
+max_model_len: 65536
+```
+
+Small warm benchmark:
+
+```text
+input goal: 500 words
+max_output_tokens: 128
+requests_ok: 5
+requests_error: 0
+latency_avg: 3.99s
+latency_p50: 2.82s
+latency_p95: 8.70s
+TTFT_avg: 1.02s
+prompt_tokens: 4,270
+generation_tokens: 640
+prompt_tps: 213.90 tok/s
+generation_tps: 32.06 tok/s
+total_tps: 245.96 tok/s
+```
+
+Interpretation: 2x RTX 5070 Ti with fp8 KV is a better budget path than the 2x RTX 5060 Ti no-KV-compression fallback in this small smoke: lower average TTFT and higher generation TPS, while also preserving 64K context. The instance was destroyed after the bench.
+
 ### Unsloth Qwen3.6-27B-NVFP4 on RTX 5090
 
 The Unsloth NVFP4 checkpoint was also tested on RTX 5090 using the same R2/provisioning path. The baseline profile intentionally keeps the model-card vLLM guidance conservative (`dtype=bfloat16`, 16K context, no forced quantization). For speculative tests, temporary MTP variants used `qwen3_next_mtp` with `num_speculative_tokens` set to 2 and then 1.
