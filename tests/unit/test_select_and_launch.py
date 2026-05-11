@@ -55,6 +55,13 @@ class OfferPolicyTests(unittest.TestCase):
     def test_greylisted_machine_fails(self):
         self.assertFailsFor("greylisted_machine", machine_id=8357)
 
+    def test_deverified_offer_fails(self):
+        self.assertFailsFor("deverified", verification="deverified")
+
+    def test_unverified_offer_passes(self):
+        ok, reasons = offer_passes_policy(good_offer(verification="unverified"), self.context)
+        self.assertTrue(ok, reasons)
+
     def test_disallowed_gpu_fails(self):
         self.assertFailsFor("allowed_gpu_names", gpu_name="Tesla P40")
 

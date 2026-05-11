@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Select and optionally launch a Vast instance with explicit cost gates.
 
-Note: verified=true is enforced in the Vast search query only; returned offers may
-report verified as null, so we do not post-filter it client-side.
+Note: verified=true is enforced in the Vast search query when required. Returned
+offers may report verified as null, so the consumer script always rejects only
+explicitly deverified offers client-side.
 """
 from __future__ import annotations
 
@@ -180,7 +181,6 @@ def offer_passes_policy(offer: dict[str, Any], context: dict[str, Any]) -> tuple
     storage = launch["storage"]
     network = launch["network"]
     reliability = launch["reliability"]
-    require_verified = bool(reliability.get("require_verified", False))
 
     greylisted_machines = {int(x) for x in launch.get("selection", {}).get("greylisted_machine_ids", [])}
     try:
@@ -190,6 +190,7 @@ def offer_passes_policy(offer: dict[str, Any], context: dict[str, Any]) -> tuple
 
     checks = [
         (machine_id not in greylisted_machines, "greylisted_machine"),
+        (offer.get("verification") != "deverified", "deverified"),
         (
             (not gpu.get("preferred_gpu_name"))
             or offer.get("gpu_name") == gpu["preferred_gpu_name"],
