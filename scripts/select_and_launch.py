@@ -271,14 +271,21 @@ def search_policy_offers(vast: VastAI, context: dict[str, Any]) -> list[dict[str
     filters.append(f"gpu_total_ram>={min_gpu_ram_gb}")
     if float(gpu.get("min_cuda_max_good") or 0) > 0:
         filters.append(f"cuda_max_good>={gpu['min_cuda_max_good']}")
+    selection = launch.get("selection", {})
+    geo_query = str(selection.get("geo_query", "")).strip()
+    if geo_query:
+        filters.append(geo_query)
     query = " ".join(filters)
     market = "interruptible" if launch.get("market") in {"interruptible", "bid", "spot"} else "on-demand"
-    raw = vast.search_offers(query=query, type=market, order="dph_total", limit=50, storage=storage_gb)
+    no_default = bool(selection.get("search_no_default", False))
+    raw = vast.search_offers(query=query, type=market, order="dph_total", limit=50, storage=storage_gb, no_default=no_default)
     passing = []
     print("Offer policy check")
     print("==================")
     print(f"market: {market}")
     print(f"query: {query}")
+    if no_default:
+        print("search_no_default: true")
     for offer in raw:
         ok, reasons = offer_passes_policy(offer, context)
         status = "PASS" if ok else "FAIL " + ",".join(reasons)

@@ -39,3 +39,5 @@
   - Print listed spot dph, submitted bid dph, spot total at bid, on-demand total, savings %, threshold %, and decision before launch.
 
 - Benchmark cache diagnostics: add per-step /metrics deltas for prompt_total/local_compute/local_cache_hit and compute token_cache_share; add prefix identity assertion; add single-user fixed-bucket probe (e.g. 1 user x 3 turns x 90k) to verify exact prefix caching before multi-user runs.
+
+- [ ] Add geo-tiered Vast offer search for unverified RTX 5090 tests: try US first, then NA (`georegion=true geolocation=NA`), then privacy-friendly western Europe + JP (`geolocation in [GB,IE,FR,DE,NL,BE,CH,AT,DK,SE,NO,FI,ES,PT,IT,JP]`), then broad fallback. Keep `search_no_default: true`, `min_inet_down >= 1000 Mbps`, and the provisioner R2 speed test (`R2_SPEED_TEST_MIN_MBPS=100`) enabled.

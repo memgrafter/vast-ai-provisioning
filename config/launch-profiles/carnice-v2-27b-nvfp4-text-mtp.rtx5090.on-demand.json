@@ -16,14 +16,16 @@
   "purpose": "On-demand RTX 5090 16K coding-agent test for sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP with MTP n=3 from R2",
   "reliability": {
     "min_reliability2": 0.98,
-    "require_verified": true
+    "require_verified": false
   },
   "selection": {
     "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
     "greylisted_machine_ids": [
-      8357
+      8357,
+      51352
     ],
     "preferred_machine_ids": [],
+    "search_no_default": true,
     "sort": "preferred_machine_then_effective_cost_then_reliability"
   },
   "spot": {
