@@ -1002,6 +1002,101 @@ awq_marlin, MTP1:         generation_tps 36.19, TTFT_avg 1.24s, latency_avg 3.54
 
 Interpretation: the slow 2x3090 result was largely a kernel-selection issue, not just PCIe-only tensor parallel communication. With AWQ Marlin and MTP1, the ultra-cheap 2x3090 160K profile becomes a much more plausible budget path, though it remains well below newer/high-end GPUs and still needs a longer-output/context-fill test. The instance was destroyed after the bench.
 
+### RTX 3090 2-GPU AWQ Marlin + MTP2 256K context-fill
+
+Prepared a 256K-context variant using the Qwen-card `num_speculative_tokens=2` setting:
+
+```text
+model profile: config/models/qwen3.6-27b-awq.rtx3090-2gpu-256k-fp8kv-mtp2.json
+launch profile: config/launch-profiles/qwen3.6-27b-awq.rtx3090-2gpu-256k-fp8kv-mtp2.on-demand.json
+template_hash_id: cfd71b81b178c7a9473e127adf390ead
+max_model_len: 262144
+kv_cache_dtype: fp8
+tensor_parallel_size: 2
+force_quantization: awq_marlin
+speculative_config: {"method":"qwen3_next_mtp","num_speculative_tokens":2}
+extra_args: --max-num-batched-tokens 4096
+```
+
+Launched a passing relaxed-policy 2x3090 offer:
+
+```text
+instance_id: 36569197
+machine_id: 95152
+gpu: 2x RTX 3090
+geolocation: Estonia, EE
+dph_total: $0.5667/hr
+bw_nvlink: 0.0
+```
+
+Structured topology records confirmed no NVLink:
+
+```text
+VAST_GPU_NVLINK_JSON event=gpu_nvlink_summary gpu_count=2 has_nvlink=false topology_codes=["NODE"]
+VAST_GPU_NVLINK_JSON event=gpu_nvlink_link source=1 target=0 topology=NODE nvlink=false
+```
+
+Startup proof:
+
+```text
+R2 speed test result: 512000000 bytes in 2s = 256.00 MB/s
+Resolved architecture: Qwen3_5MTP
+SpeculativeConfig(method='mtp', num_spec_tokens=2)
+Using MarlinLinearKernel for AWQMarlinLinearMethod
+max_seq_len=262144
+Available KV cache memory: 10.44 GiB
+GPU KV cache size: 160,000 tokens
+Maximum concurrency for 262,144 tokens per request: 2.28x
+```
+
+A quick tokenizer bisection found a near-limit safe prompt size for `max_tokens=64`:
+
+```text
+192500 prompt_words_goal -> ~261,960 prompt tokens during tokenize probe
+192750 prompt_words_goal -> ~262,304 prompt tokens, too high
+selected prompt_words_goal: 192500
+bench actual prompt tokens: 785,923 / 3 = ~261,974 prompt tokens/request
+approx total with output: ~262,038 tokens/request
+```
+
+Three sequential near-256K requests then completed successfully:
+
+```text
+concurrency: 1
+max_requests: 3
+prompt_words_goal: 192500
+max_output_tokens: 64
+requests_ok: 3
+requests_error: 0
+latency_avg: 318.58s
+latency_p50: 317.79s
+latency_p95: 321.00s
+TTFT_avg: 315.03s
+prompt_tokens: 785,923
+generation_tokens: 192
+prompt_tps: 808.38 tok/s wall-clock
+generation_tps: 0.20 tok/s wall-clock, dominated by prefill time
+total_tps: 808.57 tok/s wall-clock
+```
+
+Server log windows during individual requests showed much higher instantaneous prefill and low single-user decode after the long prefill:
+
+```text
+Avg prompt throughput: ~26,033-26,197 tok/s during prefill windows
+Avg generation throughput: ~4.1-6.4 tok/s after prefill windows
+GPU KV cache usage: ~43.1% during near-256K prefill/decode windows
+```
+
+MTP2 acceptance remained usable but variable:
+
+```text
+Mean acceptance length: 2.44-3.00 / 3.0
+Per-position acceptance examples: 0.778/0.667 to 1.000/1.000
+Avg Draft acceptance rate: 72.2%-100.0%
+```
+
+Interpretation: the 2x RTX 3090 AWQ Marlin profile can start at 256K and complete repeated near-window requests, but latency is dominated by the enormous prefill. This is a viable functional 256K smoke, not a fast interactive path. The instance was destroyed after saving logs.
+
 ### Unsloth Qwen3.6-27B-NVFP4 on RTX 5090
 
 The Unsloth NVFP4 checkpoint was also tested on RTX 5090 using the same R2/provisioning path. The baseline profile intentionally keeps the model-card vLLM guidance conservative (`dtype=bfloat16`, 16K context, no forced quantization). For speculative tests, temporary MTP variants used `qwen3_next_mtp` with `num_speculative_tokens` set to 2 and then 1.

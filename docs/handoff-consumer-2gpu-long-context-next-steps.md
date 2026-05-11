@@ -365,6 +365,69 @@ pcie_bw: 12.7 GB/s
 
 Instance was destroyed after the bench.
 
+### 2x RTX 3090 AWQ Marlin MTP2 256K context-fill
+
+Prepared and tested a 256K-context MTP2 variant:
+
+```text
+model profile: config/models/qwen3.6-27b-awq.rtx3090-2gpu-256k-fp8kv-mtp2.json
+launch profile: config/launch-profiles/qwen3.6-27b-awq.rtx3090-2gpu-256k-fp8kv-mtp2.on-demand.json
+template hash: cfd71b81b178c7a9473e127adf390ead
+max_model_len: 262144
+force_quantization: awq_marlin
+kv_cache_dtype: fp8
+speculative_config: {"method":"qwen3_next_mtp","num_speculative_tokens":2}
+```
+
+Launched host:
+
+```text
+instance_id: 36569197
+machine_id: 95152
+gpu: 2x RTX 3090
+geolocation: Estonia, EE
+dph_total: $0.5667/hr
+has_nvlink: false
+topology: NODE
+```
+
+Startup proof:
+
+```text
+Resolved architecture: Qwen3_5MTP
+SpeculativeConfig(method='mtp', num_spec_tokens=2)
+Using MarlinLinearKernel for AWQMarlinLinearMethod
+max_seq_len=262144
+GPU KV cache size: 160,000 tokens
+Maximum concurrency for 262,144 tokens per request: 2.28x
+```
+
+Tokenizer bisection for `max_tokens=64` selected:
+
+```text
+prompt_words_goal: 192500
+actual bench prompt tokens/request: ~261,974
+total with 64 output tokens: ~262,038
+```
+
+Three sequential near-256K requests completed:
+
+```text
+requests_ok: 3
+requests_error: 0
+latency_avg: 318.58s
+TTFT_avg: 315.03s
+prompt_tps wall-clock: 808.38 tok/s
+generation_tps wall-clock: 0.20 tok/s
+server prefill windows: ~26K tok/s
+server post-prefill generation windows: ~4-6 tok/s
+MTP2 draft acceptance: 72.2%-100.0%
+```
+
+Interpretation: functional 256K smoke passes on 2x3090, but huge prefill dominates latency. Treat this as an ultra-cheap long-context fallback, not an interactive default.
+
+Instance was destroyed after the bench.
+
 ## Practical takeaways
 
 ### Best currently validated 2x budget path
@@ -384,10 +447,10 @@ no MTP for small concurrency-1 request pattern
 Qwen3.6-27B-AWQ
 awq_marlin
 fp8 KV
-MTP n=1 appears beneficial on tiny smoke
-160K target
+MTP n=1 for 160K small smoke; MTP n=2 functional for 256K context-fill
+160K/256K targets
 single-user
-validated startup + small smoke, but only under relaxed reliability policy
+validated startup + smoke, but only under relaxed reliability policy
 ```
 
 ### 5070 Ti headroom note
