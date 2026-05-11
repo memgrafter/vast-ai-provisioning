@@ -12,6 +12,7 @@ Latest pushed commits of interest:
 46b56b0 feat(vast): add carnice nvfp4 rtx5090 profile
 fe0d77a chore(vast): allow geo-aware unverified 5090 search
 86f9b08 docs(bench): add rtx5090 carnice smoke
+83a209a docs(handoff): summarize qwen nvfp4 next steps
 ```
 
 Main report is up to date:
@@ -229,7 +230,7 @@ Conclusion: AWQ MTP was not worth it on PRO 6000 WS. `num_speculative_tokens=2` 
 
 ## Geo search notes
 
-Vast SDK supports `geolocation` filters in query strings. The built-in `georegion=true geolocation=NA` helper did not work cleanly through our current launcher path, so temporary profiles used explicit lists.
+Vast SDK supports `geolocation` filters in query strings. The built-in `georegion=true geolocation=NA` helper did not work cleanly through our current launcher path, so temporary profiles used explicit lists. Prefer explicit country lists such as `geolocation in [CA,US]` unless the SDK/launcher path is fixed for `georegion`.
 
 Useful manual tiers:
 
@@ -239,7 +240,7 @@ NA: geolocation in [CA,US]
 Western Europe + JP: geolocation in [GB,IE,FR,DE,NL,BE,CH,AT,DK,SE,NO,FI,ES,PT,IT,JP]
 ```
 
-Todo already added compactly to `todo.txt`: implement geo-tiered Vast offer search for unverified RTX 5090 tests while keeping `search_no_default`, `min_inet_down`, and R2 MB/s checks.
+Todo already added compactly to `todo.txt`: implement geo-tiered Vast offer search for unverified RTX 5090 tests while keeping `search_no_default`, `min_inet_down`, and R2 MB/s checks; the implementation should prefer explicit country lists until `georegion` is proven reliable in this launcher path.
 
 ## Recommended next steps
 
