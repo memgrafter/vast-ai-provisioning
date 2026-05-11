@@ -1,0 +1,32 @@
+{
+  "name": "carnice-v2-27b-nvfp4-text-mtp-rtx5090-agentic-18k",
+  "hf_model_id": "sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP",
+  "r2_prefix": "sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP",
+  "model_dir": "/workspace/models/sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP",
+  "served_model_name": "carnice-v2-27b-nvfp4-text-mtp-rtx5090-agentic-18k",
+  "quantization": "modelopt",
+  "expected_model_download_tb": 0.02,
+  "vllm": {
+    "dtype": "auto",
+    "max_model_len": 18000,
+    "gpu_memory_utilization": 0.85,
+    "kv_cache_dtype": null,
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "max_num_seqs": 2,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "qwen3_xml",
+    "reasoning_parser": "qwen3",
+    "enable_prefix_caching": false,
+    "language_model_only": true,
+    "speculative_config": {
+      "method": "qwen3_5_mtp",
+      "num_speculative_tokens": 3
+    },
+    "extra_args": [],
+    "force_quantization": "modelopt"
+  },
+  "notes": "Agentic coding profile for RTX 5090. Keeps MTP n=3 and targets an 18K context window based on observed ~20K total KV token capacity on known-good host 58434 at gpu_memory_utilization=0.85."
+}
