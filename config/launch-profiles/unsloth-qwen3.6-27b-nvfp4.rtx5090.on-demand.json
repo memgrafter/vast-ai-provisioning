@@ -23,7 +23,8 @@
     "greylisted_machine_ids": [
       8357,
       51352,
-      57883
+      57883,
+      58555
     ],
     "preferred_machine_ids": [],
     "search_no_default": true,
