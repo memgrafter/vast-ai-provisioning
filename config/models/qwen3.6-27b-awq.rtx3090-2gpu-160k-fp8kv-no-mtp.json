@@ -23,12 +23,12 @@
     "language_model_only": true,
     "speculative_config": null,
     "extra_args": [],
-    "force_quantization": "awq",
+    "force_quantization": "awq_marlin",
     "tensor_parallel_size": 2,
     "kv_cache_dtype": "fp8"
   },
   "provisioning": {
     "r2_speed_test_warn_only": true
   },
-  "notes": "Experimental 2x RTX 3090 24GB profile for Qwen3.6-27B AWQ, single-user 160K context target using tensor_parallel_size=2, fp8 KV cache, and no speculative decoding."
+  "notes": "Experimental 2x RTX 3090 24GB profile for Qwen3.6-27B AWQ, single-user 160K context target using tensor_parallel_size=2, fp8 KV cache, awq_marlin kernels, and no speculative decoding."
 }
