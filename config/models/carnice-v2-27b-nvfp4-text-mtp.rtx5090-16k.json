@@ -1,0 +1,31 @@
+{
+  "name": "carnice-v2-27b-nvfp4-text-mtp-rtx5090-16k",
+  "hf_model_id": "sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP",
+  "r2_prefix": "sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP",
+  "model_dir": "/workspace/models/sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP",
+  "served_model_name": "carnice-v2-27b-nvfp4-text-mtp-rtx5090-16k",
+  "quantization": "modelopt",
+  "expected_model_download_tb": 0.02,
+  "vllm": {
+    "dtype": "auto",
+    "max_model_len": 16384,
+    "gpu_memory_utilization": 0.85,
+    "kv_cache_dtype": null,
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "max_num_seqs": 2,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "qwen3_xml",
+    "reasoning_parser": "qwen3",
+    "enable_prefix_caching": false,
+    "language_model_only": true,
+    "speculative_config": {
+      "method": "qwen3_5_mtp",
+      "num_speculative_tokens": 3
+    },
+    "extra_args": [],
+    "force_quantization": "modelopt"
+  }
+}
