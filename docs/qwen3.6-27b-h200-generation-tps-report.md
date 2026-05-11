@@ -1097,6 +1097,83 @@ Avg Draft acceptance rate: 72.2%-100.0%
 
 Interpretation: the 2x RTX 3090 AWQ Marlin profile can start at 256K and complete repeated near-window requests, but latency is dominated by the enormous prefill. This is a viable functional 256K smoke, not a fast interactive path. The instance was destroyed after saving logs.
 
+### RTX 3090 2-GPU AWQ Marlin 160K MTP0/MTP1/MTP2 context-fill A/B
+
+A matched 160K near-window A/B was run for no speculative decoding, MTP n=1, and MTP n=2. All runs used:
+
+```text
+2x RTX 3090
+Qwen3.6-27B-AWQ
+force_quantization: awq_marlin
+kv_cache_dtype: fp8
+tensor_parallel_size: 2
+max_model_len: 160000
+max_output_tokens: 64
+concurrency: 1
+max_requests: 3
+prompt_words_goal: 116814
+actual prompt tokens/request: ~159,021-159,022
+```
+
+The tokenizer bisection kept a small margin below the 160K window:
+
+```text
+budget with 64 output tokens: 159,936 prompt tokens
+selected prompt_words_goal: 116814
+selected tokenized prompt examples: ~159,007-159,013 tokens
+```
+
+All three runs landed on the same 2x3090 host class:
+
+```text
+machine_id: 70185
+gpu: 2x RTX 3090
+geolocation: Quebec, CA
+bw_nvlink: 0.0
+structured topology: has_nvlink=false, topology=PHB
+pcie_bw: 6.3 GB/s
+```
+
+Results:
+
+```text
+MTP0 / no spec, instance 36574177:
+  requests_ok: 3
+  latency_avg: 177.93s
+  TTFT_avg: 176.01s
+  inference_avg: 176.89s
+  prompt_tps wall-clock: 884.65 tok/s
+  generation_tps wall-clock: 0.36 tok/s
+  server window generation: ~2.1-6.4 tok/s
+  GPU KV cache size: 172,480 tokens
+
+MTP1, instance 36573076:
+  requests_ok: 3
+  latency_avg: 184.61s
+  TTFT_avg: 182.07s
+  inference_avg: 183.18s
+  prompt_tps wall-clock: 852.45 tok/s
+  generation_tps wall-clock: 0.34 tok/s
+  server window generation: ~6.4 tok/s
+  mean acceptance length: 1.97 / 2.0
+  avg draft acceptance: 96.9%
+  GPU KV cache size: 159,984 tokens
+
+MTP2, instance 36575195:
+  requests_ok: 3
+  latency_avg: 184.13s
+  TTFT_avg: 181.99s
+  inference_avg: 183.00s
+  prompt_tps wall-clock: 855.00 tok/s
+  generation_tps wall-clock: 0.34 tok/s
+  server window generation: ~6.3-6.4 tok/s
+  mean acceptance length: 2.78-2.95 / 3.0
+  avg draft acceptance: 89.1%-97.7%
+  GPU KV cache size: 160,000 tokens
+```
+
+Interpretation: at a near-160K prompt and only 64 generated tokens, prefill dominates all variants. MTP1/MTP2 acceptance is good, but neither beat no-MTP on end-to-end latency in this context-fill shape. The no-MTP run had slightly better latency and TTFT, while MTP2 had better acceptance than feared and similar wall-clock to MTP1. For this 2x3090 path, MTP choice should be decided with a longer-output decode-heavy test; context-fill tests mostly measure prefill.
+
 ### Unsloth Qwen3.6-27B-NVFP4 on RTX 5090
 
 The Unsloth NVFP4 checkpoint was also tested on RTX 5090 using the same R2/provisioning path. The baseline profile intentionally keeps the model-card vLLM guidance conservative (`dtype=bfloat16`, 16K context, no forced quantization). For speculative tests, temporary MTP variants used `qwen3_next_mtp` with `num_speculative_tokens` set to 2 and then 1.

@@ -428,6 +428,53 @@ Interpretation: functional 256K smoke passes on 2x3090, but huge prefill dominat
 
 Instance was destroyed after the bench.
 
+### 2x RTX 3090 160K MTP0/MTP1/MTP2 context-fill A/B
+
+A matched 160K near-window A/B was run on the same host class:
+
+```text
+machine_id: 70185
+gpu: 2x RTX 3090
+has_nvlink: false
+topology: PHB
+pcie_bw: 6.3 GB/s
+prompt_words_goal: 116814
+actual prompt tokens/request: ~159,021
+max_output_tokens: 64
+requests/profile: 3
+```
+
+Results:
+
+```text
+MTP0 / no spec, instance 36574177:
+  latency_avg: 177.93s
+  TTFT_avg: 176.01s
+  prompt_tps wall-clock: 884.65 tok/s
+  generation_tps wall-clock: 0.36 tok/s
+  server generation windows: ~2.1-6.4 tok/s
+
+MTP1, instance 36573076:
+  latency_avg: 184.61s
+  TTFT_avg: 182.07s
+  prompt_tps wall-clock: 852.45 tok/s
+  generation_tps wall-clock: 0.34 tok/s
+  mean acceptance length: 1.97 / 2.0
+  avg draft acceptance: 96.9%
+
+MTP2, instance 36575195:
+  latency_avg: 184.13s
+  TTFT_avg: 181.99s
+  prompt_tps wall-clock: 855.00 tok/s
+  generation_tps wall-clock: 0.34 tok/s
+  mean acceptance length: 2.78-2.95 / 3.0
+  avg draft acceptance: 89.1%-97.7%
+```
+
+Interpretation: at 160K with only 64 output tokens, prefill dominates. No-MTP was slightly better end-to-end. MTP1/MTP2 acceptance was good, but not enough to overcome overhead in this context-fill shape. Need a longer-output decode-heavy A/B to choose MTP for actual generation throughput.
+
+All instances were destroyed after the bench.
+
 ## Practical takeaways
 
 ### Best currently validated 2x budget path
