@@ -65,6 +65,9 @@ def env_from_specs(template: dict[str, Any], model: dict[str, Any]) -> dict[str,
             "VLLM_PORT": str(vllm.get("port", 18000)),
             "VLLM_DOWNLOAD_DIR": str(vllm.get("download_dir", "/workspace/models")),
             "VLLM_GPU_MEMORY_UTILIZATION": str(vllm.get("gpu_memory_utilization", 0.9)),
+            "VLLM_TENSOR_PARALLEL_SIZE": ""
+            if vllm.get("tensor_parallel_size") is None
+            else str(vllm.get("tensor_parallel_size")),
             "VLLM_KV_CACHE_DTYPE": "" if vllm.get("kv_cache_dtype") is None else str(vllm.get("kv_cache_dtype")),
             "VLLM_TRUST_REMOTE_CODE": str(vllm.get("trust_remote_code", True)).lower(),
             "VLLM_FORCE_QUANTIZATION": "" if vllm.get("force_quantization") is None else str(vllm.get("force_quantization")),
@@ -81,6 +84,13 @@ def env_from_specs(template: dict[str, Any], model: dict[str, Any]) -> dict[str,
             "VLLM_EXTRA_ARGS": " ".join(str(x) for x in vllm.get("extra_args", [])),
         }
     )
+    provisioning = model.get("provisioning") or {}
+    if "r2_speed_test_warn_only" in provisioning:
+        env["R2_SPEED_TEST_WARN_ONLY"] = str(provisioning["r2_speed_test_warn_only"]).lower()
+    if "r2_speed_test_min_mbps" in provisioning:
+        env["R2_SPEED_TEST_MIN_MBPS"] = str(provisioning["r2_speed_test_min_mbps"])
+    if "r2_speed_test_max_mb" in provisioning:
+        env["R2_SPEED_TEST_MAX_MB"] = str(provisioning["r2_speed_test_max_mb"])
     env.setdefault("VLLM_ARGS", "")
     return env
 

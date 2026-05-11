@@ -77,6 +77,7 @@ class BuildVastTemplateTests(unittest.TestCase):
         self.assertEqual(env["SERVED_MODEL_NAME"], "fixture-served-name")
         self.assertEqual(env["VLLM_MAX_MODEL_LEN"], "4096")
         self.assertEqual(env["VLLM_GPU_MEMORY_UTILIZATION"], "0.82")
+        self.assertEqual(env["VLLM_TENSOR_PARALLEL_SIZE"], "")
         self.assertEqual(env["VLLM_KV_CACHE_DTYPE"], "")
         self.assertEqual(env["VLLM_EXTRA_ARGS"], "--enforce-eager")
         self.assertEqual(env["VLLM_ARGS"], "")
@@ -115,6 +116,20 @@ class BuildVastTemplateTests(unittest.TestCase):
         payload = build_vast_template.build_template(self.template, model)
         env, _ = self.parse_env(payload["env"])
         self.assertEqual(env["VLLM_KV_CACHE_DTYPE"], "fp8")
+
+    def test_tensor_parallel_size_maps_to_dedicated_env(self):
+        model = json.loads(json.dumps(self.model))
+        model["vllm"]["tensor_parallel_size"] = 2
+        payload = build_vast_template.build_template(self.template, model)
+        env, _ = self.parse_env(payload["env"])
+        self.assertEqual(env["VLLM_TENSOR_PARALLEL_SIZE"], "2")
+
+    def test_provisioning_speed_warn_only_maps_to_env(self):
+        model = json.loads(json.dumps(self.model))
+        model["provisioning"] = {"r2_speed_test_warn_only": True}
+        payload = build_vast_template.build_template(self.template, model)
+        env, _ = self.parse_env(payload["env"])
+        self.assertEqual(env["R2_SPEED_TEST_WARN_ONLY"], "true")
 
     def test_model_max_model_len_is_required(self):
         model = json.loads(json.dumps(self.model))
