@@ -98,6 +98,12 @@ class BuildVastTemplateTests(unittest.TestCase):
         env, _ = self.parse_env(payload["env"])
         self.assertEqual(env["VLLM_MAX_NUM_SEQS"], "512")
 
+    def test_model_max_model_len_is_required(self):
+        model = json.loads(json.dumps(self.model))
+        del model["vllm"]["max_model_len"]
+        with self.assertRaisesRegex(ValueError, "max_model_len is required"):
+            build_vast_template.build_template(self.template, model)
+
     def test_rejects_secret_env_names(self):
         self.template["env_map"]["AWS_ACCESS_KEY_ID"] = "not-a-real-value"
         with self.assertRaises(ValueError):

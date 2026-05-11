@@ -49,6 +49,9 @@ def env_from_specs(template: dict[str, Any], model: dict[str, Any]) -> dict[str,
     env = {str(k): str(v) for k, v in (template.get("env_map") or {}).items()}
     vllm = model.get("vllm") or {}
 
+    if "max_model_len" not in vllm:
+        raise ValueError("model vllm.max_model_len is required; do not rely on an implicit context-length default")
+
     env.update(
         {
             "R2_PREFIX": str(model["r2_prefix"]),
@@ -56,7 +59,7 @@ def env_from_specs(template: dict[str, Any], model: dict[str, Any]) -> dict[str,
             "VLLM_MODEL": str(model["model_dir"]),
             "SERVED_MODEL_NAME": str(model["served_model_name"]),
             "VLLM_DTYPE": str(vllm.get("dtype", "half")),
-            "VLLM_MAX_MODEL_LEN": str(vllm.get("max_model_len", 8192)),
+            "VLLM_MAX_MODEL_LEN": str(vllm["max_model_len"]),
             "VLLM_HOST": str(vllm.get("host", "127.0.0.1")),
             "VLLM_PORT": str(vllm.get("port", 18000)),
             "VLLM_DOWNLOAD_DIR": str(vllm.get("download_dir", "/workspace/models")),

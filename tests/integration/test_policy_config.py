@@ -17,7 +17,7 @@ class ProfileConfigTests(unittest.TestCase):
     def test_current_model_contract_lives_in_model_profile(self):
         self.assertEqual(self.model["hf_model_id"], "cyankiwi/Qwen3.5-9B-AWQ-4bit")
         self.assertEqual(self.model["served_model_name"], "qwen3.5-9b-awq")
-        self.assertEqual(self.model["vllm"]["max_model_len"], 8192)
+        self.assertEqual(self.model["vllm"]["max_model_len"], 128000)
         self.assertEqual(self.model["quantization"], "compressed-tensors")
         self.assertEqual(self.model["vllm"]["force_quantization"], None)
 
