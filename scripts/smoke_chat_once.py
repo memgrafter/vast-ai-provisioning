@@ -150,7 +150,16 @@ def metrics_delta(before: Metrics, after: Metrics, elapsed_s: float) -> dict[str
     }
 
 
-def run_quick_bench(base_url: str, api_key: str, model: str, seconds: float, concurrency: int, input_tokens: int, output_tokens: int) -> int:
+def run_quick_bench(
+    base_url: str,
+    api_key: str,
+    model: str,
+    seconds: float,
+    concurrency: int,
+    input_tokens: int,
+    output_tokens: int,
+    max_requests: int = 0,
+) -> int:
     """Run a short external coding-shaped chat load test and print vLLM metrics delta."""
     chat_url = f"{base_url}/v1/chat/completions"
     metrics_url = f"{base_url}/metrics"
@@ -190,11 +199,13 @@ def run_quick_bench(base_url: str, api_key: str, model: str, seconds: float, con
             error_text[:1000],
         )
 
+    submitted = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as pool:
         futures: set[concurrent.futures.Future[tuple[int, float, int, int, int, str]]] = set()
-        while time.monotonic() < deadline or futures:
-            while time.monotonic() < deadline and len(futures) < concurrency:
+        while (time.monotonic() < deadline and (max_requests <= 0 or submitted < max_requests)) or futures:
+            while time.monotonic() < deadline and len(futures) < concurrency and (max_requests <= 0 or submitted < max_requests):
                 futures.add(pool.submit(one_request))
+                submitted += 1
             if not futures:
                 break
             done, futures = concurrent.futures.wait(futures, timeout=0.2, return_when=concurrent.futures.FIRST_COMPLETED)
@@ -221,6 +232,7 @@ def run_quick_bench(base_url: str, api_key: str, model: str, seconds: float, con
     print(f"duration_s:        {elapsed:.2f}")
     print(f"target_seconds:    {seconds:.2f}")
     print(f"concurrency:       {concurrency}")
+    print(f"max_requests:      {'unlimited' if max_requests <= 0 else max_requests}")
     print(f"prompt_words_goal: {input_tokens}")
     print(f"max_output_tokens: {'model default' if output_tokens <= 0 else output_tokens}")
     print(f"requests_ok:       {ok}")
@@ -285,6 +297,7 @@ def main() -> int:
     parser.add_argument("--bench-concurrency", type=int, default=48, help="coding bench concurrency; sized to load H100-class GPUs without cache-prefix testing")
     parser.add_argument("--bench-input-tokens", type=int, default=6000, help="approximate prompt words for coding bench")
     parser.add_argument("--bench-output-tokens", type=int, default=0, help="max generated tokens for bench; <=0 omits max_tokens and uses model default")
+    parser.add_argument("--bench-max-requests", type=int, default=0, help="stop bench after this many submitted requests; <=0 runs until bench-seconds")
     parser.add_argument("--no-destroy-on-error", action="store_true", help="leave the instance running when readiness, smoke, or bench fails")
     parser.add_argument("--final-log-tail", type=int, default=5000, help="Vast log lines to save before any destroy/leave-running closeout")
     args = parser.parse_args()
@@ -372,6 +385,7 @@ def main() -> int:
                                 args.bench_concurrency,
                                 args.bench_input_tokens,
                                 args.bench_output_tokens,
+                                args.bench_max_requests,
                             )
                             if bench_code != 0 and args.no_destroy_on_error:
                                 destroy_instance = False

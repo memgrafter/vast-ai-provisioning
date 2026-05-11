@@ -1,0 +1,40 @@
+{
+  "name": "qwen3.6-27b-awq-rtx3090-2gpu-256k-fp8kv-mtp2",
+  "hf_model_id": "QuantTrio/Qwen3.6-27B-AWQ",
+  "r2_prefix": "QuantTrio/Qwen3.6-27B-AWQ",
+  "model_dir": "/workspace/models/QuantTrio/Qwen3.6-27B-AWQ",
+  "served_model_name": "qwen3.6-27b-awq-rtx3090-2gpu-256k-fp8kv-mtp2",
+  "quantization": "awq",
+  "expected_model_download_tb": 0.025,
+  "vllm": {
+    "dtype": "half",
+    "max_model_len": 262144,
+    "gpu_memory_utilization": 0.93,
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "max_num_seqs": 1,
+    "max_new_tokens": 2048,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "qwen3_coder",
+    "reasoning_parser": "qwen3",
+    "enable_prefix_caching": true,
+    "language_model_only": true,
+    "speculative_config": {
+      "method": "qwen3_next_mtp",
+      "num_speculative_tokens": 2
+    },
+    "extra_args": [
+      "--max-num-batched-tokens",
+      "4096"
+    ],
+    "force_quantization": "awq_marlin",
+    "tensor_parallel_size": 2,
+    "kv_cache_dtype": "fp8"
+  },
+  "provisioning": {
+    "r2_speed_test_warn_only": true
+  },
+  "notes": "Experimental 2x RTX 3090 24GB profile for Qwen3.6-27B AWQ, 256K context target using TP=2, fp8 KV cache, awq_marlin kernels, and Qwen3 Next MTP n=2."
+}
