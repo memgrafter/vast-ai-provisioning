@@ -42,8 +42,12 @@
 
 - [ ] Add geo-tiered Vast offer search for unverified RTX 5090 tests: try US first, then NA (`georegion=true geolocation=NA`), then privacy-friendly western Europe + JP (`geolocation in [GB,IE,FR,DE,NL,BE,CH,AT,DK,SE,NO,FI,ES,PT,IT,JP]`), then broad fallback. Keep `search_no_default: true`, `min_inet_down >= 1000 Mbps`, and the provisioner R2 speed test (`R2_SPEED_TEST_MIN_MBPS=100`) enabled.
 
-- [ ] Investigate TurboQuant only if a CUDA/vLLM-compatible checkpoint appears:
-  - MLX TurboQuant repos are Apple-Silicon-oriented and are not a drop-in fit for Vast CUDA/vLLM.
-  - For any candidate repo, verify vLLM-compatible `config.json`, tokenizer files, safetensors, and supported quantization config before streaming to R2.
-  - If compatible, copy an NVFP4 profile, set `hf_model_id`/`r2_prefix`/`model_dir`/quantization fields, stream to R2, build a private Vast template, then smoke-test like Unsloth.
-  - Treat GGUF/EXL3/MLX variants as a separate serving-stack project, not part of the current vLLM template path.
+- [ ] Run RTX 5090 profiles hotter by default: update all 5090 model profiles/templates to `gpu_memory_utilization=0.93` where appropriate. Treat 0.93 as the operating target for headless/datacenter-style 5090 hosts; if startup, CUDA graph, or runtime stability issues appear, back off per-profile and document the failure.
+
+- [ ] Add a TurboQuant KV-cache profile path for long-context RTX 5090 agentic coding:
+  - TurboQuant is a vLLM KV-cache quantization/compression path selected through `--kv-cache-dtype`, not a model-weight quantization/re-export path.
+  - Start with Carnice NVFP4 MTP n=3 on RTX 5090, `gpu_memory_utilization=0.93`, `max_num_seqs=1`, and `kv_cache_dtype=turboquant_k8v4`.
+  - First target `max_model_len=49152`; check startup logs for `GPU KV cache size`, MTP activation, and any TurboQuant/attention errors.
+  - If stable, try `turboquant_4bit_nc` around 65536 context. Only try more aggressive presets after quality/acceptance checks.
+  - Keep non-TurboQuant 16K/18K profiles available as rollback baselines.
+  - Do not stream/re-export models for TurboQuant; it should be a profile/template setting only.
