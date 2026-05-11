@@ -317,7 +317,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Coding-agent-shaped saturation ramp")
     parser.add_argument("--base-url", required=True, help="Server root, e.g. http://host:port, not /v1")
     parser.add_argument("--model", required=True)
-    parser.add_argument("--concurrency", default="16,32,48,64", help="Comma-separated concurrency steps")
+    parser.add_argument("--concurrency", default="36,40,44,46", help="Comma-separated concurrency steps")
     parser.add_argument("--requests-per-concurrency", type=int, default=3, help="Serial turns per simulated user")
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--step-gap", type=float, default=10.0, help="Seconds to sleep between concurrency steps")
