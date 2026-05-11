@@ -20,13 +20,13 @@
   },
   "selection": {
     "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
+    "geo_query": "geolocation not in [CN]",
     "greylisted_machine_ids": [],
     "preferred_machine_ids": [
       42967
     ],
     "search_no_default": true,
-    "sort": "preferred_machine_then_effective_cost_then_reliability",
-    "geo_query": "geolocation not in [CN]"
+    "sort": "preferred_machine_then_effective_cost_then_reliability"
   },
   "spot": {
     "enabled_after_smoke_test": false,
@@ -39,7 +39,7 @@
     "min_disk_bw": 500
   },
   "template": {
-    "hash_id": "",
+    "hash_id": "7ef02c850d306d43ccdad8a38918889f",
     "name": "vLLM_R2_Qwen3_6_27B_AWQ_RTX3090_2GPU_160K_FP8KV_NO_MTP"
   }
 }
