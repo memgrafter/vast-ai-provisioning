@@ -42,7 +42,7 @@
 
 - [ ] Add geo-tiered Vast offer search for unverified RTX 5090 tests: try US first, then NA (`georegion=true geolocation=NA`), then privacy-friendly western Europe + JP (`geolocation in [GB,IE,FR,DE,NL,BE,CH,AT,DK,SE,NO,FI,ES,PT,IT,JP]`), then broad fallback. Keep `search_no_default: true`, `min_inet_down >= 1000 Mbps`, and the provisioner R2 speed test (`R2_SPEED_TEST_MIN_MBPS=100`) enabled.
 
-- [ ] Run RTX 5090 profiles hotter by default: update all 5090 model profiles/templates to `gpu_memory_utilization=0.93` where appropriate. Treat 0.93 as the operating target for headless/datacenter-style 5090 hosts; if startup, CUDA graph, or runtime stability issues appear, back off per-profile and document the failure.
+- [ ] Run all Vast vLLM profiles hotter by default: update all model profiles/templates to `gpu_memory_utilization=0.93` where appropriate, not just RTX 5090. Treat 0.93 as the operating target across headless/datacenter-style hosts; if startup, CUDA graph, OOM, or runtime stability issues appear, back off per-profile and document the failure.
 
 - [ ] Add a TurboQuant KV-cache profile path for long-context RTX 5090 agentic coding:
   - TurboQuant is a vLLM KV-cache quantization/compression path selected through `--kv-cache-dtype`, not a model-weight quantization/re-export path.
