@@ -23,7 +23,7 @@
     "language_model_only": true,
     "speculative_config": {
       "method": "qwen3_next_mtp",
-      "num_speculative_tokens": 1
+      "num_speculative_tokens": 2
     },
     "extra_args": [],
     "force_quantization": null
