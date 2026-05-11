@@ -1,0 +1,26 @@
+{
+  "name": "unsloth-qwen3.6-27b-nvfp4-pro6000ws-16k",
+  "hf_model_id": "unsloth/Qwen3.6-27B-NVFP4",
+  "r2_prefix": "unsloth/Qwen3.6-27B-NVFP4",
+  "model_dir": "/workspace/models/unsloth/Qwen3.6-27B-NVFP4",
+  "served_model_name": "unsloth-qwen3.6-27b-nvfp4-pro6000ws-16k",
+  "quantization": "compressed-tensors",
+  "expected_model_download_tb": 0.026,
+  "notes": "Unsloth model card recommends vLLM with --dtype bfloat16 and cautious max-model-len increases; this initial profile uses 16K because the NVFP4 checkpoint was calibrated up to 16K. No vLLM speculative_config is set because the Unsloth card does not provide a vLLM MTP recommendation.",
+  "vllm": {
+    "dtype": "bfloat16",
+    "max_model_len": 16384,
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "max_num_seqs": 2,
+    "kv_cache_dtype": null,
+    "language_model_only": true,
+    "reasoning_parser": "qwen3",
+    "speculative_config": null,
+    "extra_args": [],
+    "force_quantization": null,
+    "gpu_memory_utilization": 0.9
+  }
+}

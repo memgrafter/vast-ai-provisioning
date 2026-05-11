@@ -1,0 +1,45 @@
+{
+  "gpu_profile": "config/gpu-profiles/carnice-v2-27b-nvfp4-mtp-rtx5090-1gpu.json",
+  "market": "on-demand",
+  "model_profile": "config/models/unsloth-qwen3.6-27b-nvfp4.rtx5090-16k.json",
+  "name": "unsloth-qwen3.6-27b-nvfp4.rtx5090.on-demand",
+  "network": {
+    "max_internet_down_cost_per_tb": 8.0,
+    "max_internet_up_cost_per_tb": 10.0,
+    "min_direct_port_count": 1,
+    "min_inet_down": 1000
+  },
+  "pricing": {
+    "max_dph_total": 1.0,
+    "target_first_test_minutes": 30
+  },
+  "purpose": "On-demand RTX 5090 16K coding-agent test for unsloth/Qwen3.6-27B-NVFP4 from R2",
+  "reliability": {
+    "min_reliability2": 0.98,
+    "require_verified": false
+  },
+  "selection": {
+    "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
+    "greylisted_machine_ids": [
+      8357,
+      51352
+    ],
+    "preferred_machine_ids": [],
+    "search_no_default": true,
+    "sort": "preferred_machine_then_effective_cost_then_reliability"
+  },
+  "spot": {
+    "enabled_after_smoke_test": false,
+    "max_bid_dph": 0
+  },
+  "storage": {
+    "disk_gb": 100,
+    "max_storage_cost_per_gb_hour": 0.0003,
+    "max_storage_total_cost_per_hour": 0.03,
+    "min_disk_bw": 500
+  },
+  "template": {
+    "hash_id": "2bcef2bafc5d14262a00359f1147aac3",
+    "name": "vLLM_R2_Unsloth_Qwen3_6_27B_NVFP4_RTX5090_16K"
+  }
+}

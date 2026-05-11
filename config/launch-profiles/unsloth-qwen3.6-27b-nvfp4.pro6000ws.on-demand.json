@@ -1,0 +1,45 @@
+{
+  "gpu_profile": "config/gpu-profiles/qwen-27b-awq-96gb-rtx-pro-6000-ws.json",
+  "market": "on-demand",
+  "model_profile": "config/models/unsloth-qwen3.6-27b-nvfp4.pro6000ws-16k.json",
+  "name": "unsloth-qwen3.6-27b-nvfp4.pro6000ws.on-demand",
+  "network": {
+    "max_internet_down_cost_per_tb": 8.0,
+    "max_internet_up_cost_per_tb": 10.0,
+    "min_direct_port_count": 1,
+    "min_inet_down": 1000
+  },
+  "pricing": {
+    "max_dph_total": 1.25,
+    "target_first_test_minutes": 60
+  },
+  "purpose": "On-demand RTX PRO 6000 WS 16K coding-agent test for unsloth/Qwen3.6-27B-NVFP4 from R2",
+  "reliability": {
+    "min_reliability2": 0.98,
+    "require_verified": true
+  },
+  "selection": {
+    "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
+    "greylisted_machine_ids": [
+      8357
+    ],
+    "preferred_machine_ids": [
+      51218
+    ],
+    "sort": "preferred_machine_then_effective_cost_then_reliability"
+  },
+  "spot": {
+    "enabled_after_smoke_test": false,
+    "max_bid_dph": 0
+  },
+  "storage": {
+    "disk_gb": 100,
+    "max_storage_cost_per_gb_hour": 0.0003,
+    "max_storage_total_cost_per_hour": 0.03,
+    "min_disk_bw": 500
+  },
+  "template": {
+    "hash_id": "b32a16ecffef84f8d4dcee55feb04d98",
+    "name": "vLLM_R2_Unsloth_Qwen3_6_27B_NVFP4_PRO6000WS_16K"
+  }
+}
