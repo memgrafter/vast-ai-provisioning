@@ -27,7 +27,9 @@
       58555,
       51471
     ],
-    "preferred_machine_ids": [],
+    "preferred_machine_ids": [
+      58434
+    ],
     "search_no_default": true,
     "sort": "preferred_machine_then_effective_cost_then_reliability"
   },
