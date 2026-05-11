@@ -14,6 +14,7 @@
   - Launch short-lived interruptible probes to classify machines by Docker cache/startup speed, R2 speed, provisioning success, vLLM startup, and outbid behavior.
   - Investigate whether Vast search can include currently unavailable/rented machines. If "unavailable" simply means currently rented, we may be able to map the full machine universe instead of only currently rentable machines.
   - Use this book to prefer known-good machines and avoid wasting time on unknown/slow machines.
+  - Move preferred machine IDs out of launch profiles into a dedicated JSON config organized by GPU name and GPU count, so known-good preferences can be reused across generated/compiled launch templates.
 
 - Add a SQLite history database for launch/offer/outcome decisions:
   - Record every searched offer, selected offer, machine ID, GPU, advertised disk/network/cost, market type, bid cap, launch timestamp, and final outcome.
