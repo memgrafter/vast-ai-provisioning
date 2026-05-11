@@ -518,6 +518,105 @@ Avg draft acceptance: ~75.3-86.9%
 
 Interpretation: the 5090 can run the 16K Carnice NVFP4+MTP profile, but this first unverified/deverified host was materially slower than RTX PRO 6000 WS for the same family of workload. The high average TTFT was driven by one outlier; three of four requests had TTFT <= 2.5s.
 
+
+## RTX 5060 Ti 2-GPU Carnice NVFP4 smoke
+
+Prepared an experimental 2x RTX 5060 Ti profile for the same Carnice NVFP4 MTP path, using vLLM tensor parallelism across two 16GB GPUs:
+
+```text
+gpu profile: config/gpu-profiles/carnice-v2-27b-nvfp4-mtp-rtx5060ti-2gpu.json
+model profile: config/models/carnice-v2-27b-nvfp4-text-mtp.rtx5060ti-2gpu-agentic-64k-turboquant-k8v4.json
+launch profile: config/launch-profiles/carnice-v2-27b-nvfp4-text-mtp.rtx5060ti-2gpu.agentic-64k-turboquant-k8v4.on-demand.json
+template: vLLM_R2_Carnice_V2_27B_NVFP4_TEXT_MTP_RTX5060TI_2GPU_AGENTIC_64K_TQ_K8V4
+template_hash_id: 4ccabdd8a6e876fd2238127bf1cfd31e
+initial requested max_model_len: 65536
+initial requested kv_cache_dtype: turboquant_k8v4
+tensor_parallel_size: 2
+speculative_config: {"method":"qwen3_5_mtp","num_speculative_tokens":3}
+```
+
+Launched offer:
+
+```text
+instance_id: 36556709
+machine_id: 102239
+gpu: 2x RTX 5060 Ti 16GB
+geolocation: Thailand, TH
+market: on-demand
+dph_total: $0.2811/hr
+disk_bw: 5319 MB/s
+inet_down/up: 766.8 / 519.6 Mbps
+reliability2: 0.9518
+```
+
+Provisioning notes:
+
+```text
+R2 speed test: 512,000,000 bytes in 6s = 85.33 MB/s
+R2_SPEED_TEST_WARN_ONLY=true allowed provisioning to continue below the 100 MB/s guard
+model bytes present locally: 19,657,808,063 bytes across 11 files
+```
+
+The first vLLM startup failed because TurboQuant KV-cache compression is not supported for Qwen3 hybrid attention+Mamba models:
+
+```text
+NotImplementedError: TurboQuant KV cache is not supported for hybrid (attention + Mamba) models. Boundary layer protection requires uniform attention layers.
+```
+
+The live instance was manually patched for a fallback smoke by removing `--kv-cache-dtype turboquant_k8v4` and lowering context to 32K:
+
+```text
+max_model_len: 32768
+kv_cache_dtype: unset
+tensor_parallel_size: 2
+force_quantization: modelopt
+speculative_config: qwen3_5_mtp, num_speculative_tokens=3
+```
+
+The patched server started successfully with tensor parallelism and MTP:
+
+```text
+world_size=2 rank=0/1 backend=nccl
+Custom allreduce disabled because GPU P2P capability or P2P test failed
+Resolved architecture: Qwen3_5MTP
+Loading drafter model...
+GPU KV cache size: 26,400 tokens
+Maximum concurrency for 32,768 tokens per request: 2.55x
+Starting vLLM server on http://127.0.0.1:18000
+```
+
+Small benchmark, long-ish prompt, likely including remaining warmup overhead:
+
+```text
+input goal: 2000 words
+max_output_tokens: 512
+requests_ok: 1
+latency: 65.37s
+TTFT: 55.04s
+prompt_tokens: 2,891
+generation_tokens: 512
+prompt_tps: 44.22 tok/s
+generation_tps: 7.83 tok/s
+total_tps: 52.06 tok/s
+```
+
+Warmer small benchmark:
+
+```text
+input goal: 500 words
+max_output_tokens: 128
+requests_ok: 3
+latency_avg: 5.71s
+TTFT_avg: 2.69s
+prompt_tokens: 2,566
+generation_tokens: 384
+prompt_tps: 149.66 tok/s
+generation_tps: 22.40 tok/s
+total_tps: 172.06 tok/s
+```
+
+Interpretation: 2x RTX 5060 Ti can run Carnice NVFP4+MTP with tensor parallel at 32K after removing TurboQuant, but throughput is modest and GPU P2P/custom allreduce is unavailable on this host. TurboQuant should not be used for this Qwen3 hybrid family unless vLLM adds hybrid support. The instance was destroyed after the smoke/bench.
+
 ### Unsloth Qwen3.6-27B-NVFP4 on RTX 5090
 
 The Unsloth NVFP4 checkpoint was also tested on RTX 5090 using the same R2/provisioning path. The baseline profile intentionally keeps the model-card vLLM guidance conservative (`dtype=bfloat16`, 16K context, no forced quantization). For speculative tests, temporary MTP variants used `qwen3_next_mtp` with `num_speculative_tokens` set to 2 and then 1.
