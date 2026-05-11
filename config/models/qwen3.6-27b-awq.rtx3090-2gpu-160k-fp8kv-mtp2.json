@@ -27,7 +27,7 @@
     },
     "extra_args": [
       "--max-num-batched-tokens",
-      "4096"
+      "8192"
     ],
     "force_quantization": "awq_marlin",
     "tensor_parallel_size": 2,
@@ -36,5 +36,5 @@
   "provisioning": {
     "r2_speed_test_warn_only": true
   },
-  "notes": "Experimental 2x RTX 3090 24GB profile for Qwen3.6-27B AWQ, 160K context target using TP=2, fp8 KV cache, awq_marlin kernels, Qwen3 Next MTP n=2, and max_num_seqs=2 for two active agentic workers."
+  "notes": "Experimental 2x RTX 3090 24GB profile for Qwen3.6-27B AWQ, 160K context target using TP=2, fp8 KV cache, awq_marlin kernels, Qwen3 Next MTP n=2, max_num_seqs=2, and max_num_batched_tokens=8192 for two active agentic workers."
 }
