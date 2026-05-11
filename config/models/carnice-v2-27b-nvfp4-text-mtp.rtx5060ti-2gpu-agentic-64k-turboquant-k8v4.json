@@ -1,0 +1,36 @@
+{
+  "name": "carnice-v2-27b-nvfp4-text-mtp-rtx5060ti-2gpu-agentic-64k-turboquant-k8v4",
+  "hf_model_id": "sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP",
+  "r2_prefix": "sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP",
+  "model_dir": "/workspace/models/sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP",
+  "served_model_name": "carnice-v2-27b-nvfp4-text-mtp-rtx5060ti-2gpu-agentic-64k-turboquant-k8v4",
+  "quantization": "modelopt",
+  "expected_model_download_tb": 0.02,
+  "vllm": {
+    "dtype": "auto",
+    "max_model_len": 65536,
+    "gpu_memory_utilization": 0.93,
+    "kv_cache_dtype": "turboquant_k8v4",
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "max_num_seqs": 1,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "qwen3_xml",
+    "reasoning_parser": "qwen3",
+    "enable_prefix_caching": false,
+    "language_model_only": true,
+    "speculative_config": {
+      "method": "qwen3_5_mtp",
+      "num_speculative_tokens": 3
+    },
+    "extra_args": [],
+    "force_quantization": "modelopt",
+    "tensor_parallel_size": 2
+  },
+  "notes": "Experimental 2x RTX 5060 Ti 16GB profile for the same Carnice NVFP4 MTP n=3 64K TurboQuant k8v4 path. Uses tensor_parallel_size=2 and R2 speed-test warn-only so slow-but-usable hosts still log measured throughput and continue.",
+  "provisioning": {
+    "r2_speed_test_warn_only": true
+  }
+}
