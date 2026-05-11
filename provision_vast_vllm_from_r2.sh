@@ -29,14 +29,15 @@ mkdir -p "$MODEL_DIR" ~/.aws
 
 emit_nvlink_status() {
   python3 - <<'PY' || true
-import base64
 import csv
 import datetime as _dt
 import json
 import shutil
 import subprocess
+import uuid
 
 PREFIX = "VAST_GPU_NVLINK_JSON "
+SAMPLE_ID = str(uuid.uuid4())
 
 def now() -> str:
     return _dt.datetime.now(_dt.timezone.utc).isoformat()
@@ -46,39 +47,35 @@ def run_cmd(args):
     try:
         proc = subprocess.run(args, text=True, capture_output=True, timeout=20, check=False)
         return {
-            "args": args,
             "returncode": proc.returncode,
             "stdout": proc.stdout,
             "stderr": proc.stderr,
         }
     except Exception as exc:  # pragma: no cover - runs on remote host
         return {
-            "args": args,
             "returncode": None,
             "stdout": "",
             "stderr": f"{type(exc).__name__}: {exc}",
         }
 
 
-def b64(text: str) -> str:
-    return base64.b64encode(text.encode("utf-8", "replace")).decode("ascii")
-
-
 def emit(payload):
-    payload.setdefault("schema_version", 1)
+    payload.setdefault("schema_version", 2)
+    payload.setdefault("sample_id", SAMPLE_ID)
     payload.setdefault("ts", now())
+    # Keep each record short so Vast log transport does not truncate it.
     print(PREFIX + json.dumps(payload, sort_keys=True, separators=(",", ":")), flush=True)
 
 
 nvidia_smi = shutil.which("nvidia-smi")
 if not nvidia_smi:
     emit({
-        "event": "gpu_nvlink_topology",
+        "event": "gpu_nvlink_summary",
         "nvidia_smi_present": False,
         "gpu_count": 0,
-        "gpus": [],
-        "links": [],
-        "raw": {},
+        "has_nvlink": False,
+        "topology_codes": [],
+        "note": "nvidia-smi not found",
     })
     raise SystemExit(0)
 
@@ -106,7 +103,6 @@ if gpu_query["returncode"] == 0:
             "pci_bus_id": row[3].strip(),
         })
 
-gpu_names = {gpu["index"]: f"GPU{gpu['index']}" for gpu in gpus}
 links = []
 if topo["returncode"] == 0:
     lines = [line.rstrip() for line in topo["stdout"].splitlines() if line.strip()]
@@ -116,7 +112,6 @@ if topo["returncode"] == 0:
         if not parts:
             continue
         if parts[0].startswith("GPU") and not header:
-            # First matrix line can be header: GPU0 GPU1 CPU Affinity ...
             header = [p for p in parts if p.startswith("GPU")]
             continue
         row_label = parts[0]
@@ -139,29 +134,41 @@ if topo["returncode"] == 0:
             links.append({
                 "source": src,
                 "target": dst,
-                "source_label": gpu_names.get(src, row_label),
-                "target_label": gpu_names.get(dst, dst_label),
                 "topology": code,
                 "nvlink": code.startswith("NV"),
             })
 
+has_nvlink = any(link["nvlink"] for link in links)
+topology_codes = sorted({link["topology"] for link in links})
 emit({
-    "event": "gpu_nvlink_topology",
+    "event": "gpu_nvlink_summary",
     "nvidia_smi_present": True,
     "gpu_count": len(gpus),
-    "gpus": gpus,
-    "links": links,
-    "has_nvlink": any(link.get("nvlink") for link in links),
-    "commands": {
-        "gpu_query": {"returncode": gpu_query["returncode"], "stderr_b64": b64(gpu_query["stderr"])},
-        "topo": {"returncode": topo["returncode"], "stderr_b64": b64(topo["stderr"])},
-        "nvlink": {"returncode": nvlink["returncode"], "stderr_b64": b64(nvlink["stderr"])},
-    },
-    "raw": {
-        "topo_m_b64": b64(topo["stdout"]),
-        "nvlink_s_b64": b64(nvlink["stdout"]),
-    },
+    "link_count": len(links),
+    "has_nvlink": has_nvlink,
+    "topology_codes": topology_codes,
+    "gpu_query_rc": gpu_query["returncode"],
+    "topo_rc": topo["returncode"],
+    "nvlink_rc": nvlink["returncode"],
 })
+
+for gpu in gpus:
+    emit({
+        "event": "gpu_nvlink_gpu",
+        "gpu_index": gpu["index"],
+        "gpu_name": gpu["name"],
+        "gpu_uuid": gpu["uuid"],
+        "pci_bus_id": gpu["pci_bus_id"],
+    })
+
+for link in links:
+    emit({
+        "event": "gpu_nvlink_link",
+        "source": link["source"],
+        "target": link["target"],
+        "topology": link["topology"],
+        "nvlink": link["nvlink"],
+    })
 PY
 }
 

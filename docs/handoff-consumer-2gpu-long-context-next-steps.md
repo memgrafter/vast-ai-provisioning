@@ -301,6 +301,70 @@ MTP1:   generation_tps 11.77, TTFT_avg 1.86s, latency_avg 10.87s
 
 Instance was destroyed after the bench.
 
+### 2x RTX 3090 AWQ Marlin correction and rerun
+
+The 2x3090 AWQ profiles were corrected to force `awq_marlin` instead of `awq`:
+
+```text
+commit: 868282e fix(vast): use awq marlin for rtx3090 awq profiles
+no-MTP template hash: a999f39227dda433fa51a03cdfd41b62
+MTP1 template hash: dc06729e41a32b77a02ce1f9962eae29
+```
+
+Reran MTP1 on the same relaxed-policy host:
+
+```text
+instance_id: 36567774
+machine_id: 104433
+gpu: 2x RTX 3090
+force_quantization: awq_marlin
+max_model_len: 160000
+```
+
+Startup proof:
+
+```text
+Using MarlinLinearKernel for AWQMarlinLinearMethod
+Resolved architecture: Qwen3_5MTP
+SpeculativeConfig(method='mtp', num_spec_tokens=1)
+world_size=2
+TP rank 0 / TP rank 1
+GPU KV cache size: 159,984 tokens
+Maximum concurrency for 160,000 tokens per request: 3.66x
+```
+
+Small smoke result:
+
+```text
+requests_ok: 6
+requests_error: 0
+latency_avg: 3.54s
+TTFT_avg: 1.24s
+prompt_tps: 241.71 tok/s
+generation_tps: 36.19 tok/s
+total_tps: 277.90 tok/s
+Avg Draft acceptance rate: 100.0%
+```
+
+Progression on same host class:
+
+```text
+forced awq, no MTP: 7.86 gen tok/s
+forced awq, MTP1:   11.77 gen tok/s
+awq_marlin, MTP1:   36.19 gen tok/s
+```
+
+The host remained PCIe-only:
+
+```text
+has_nvlink: false
+bw_nvlink: 0.0
+pci_gen: 3.0
+pcie_bw: 12.7 GB/s
+```
+
+Instance was destroyed after the bench.
+
 ## Practical takeaways
 
 ### Best currently validated 2x budget path
@@ -318,6 +382,7 @@ no MTP for small concurrency-1 request pattern
 ```text
 2x RTX 3090
 Qwen3.6-27B-AWQ
+awq_marlin
 fp8 KV
 MTP n=1 appears beneficial on tiny smoke
 160K target

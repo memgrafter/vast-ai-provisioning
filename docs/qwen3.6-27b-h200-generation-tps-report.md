@@ -917,6 +917,91 @@ MTP1 lift: ~49.7% generation TPS on this tiny smoke; TTFT was slightly worse.
 
 Interpretation: unlike the 2x RTX 5070 Ti Carnice test where MTP overhead hurt, the 2x RTX 3090 AWQ path benefited from native MTP n=1 on this tiny 128-token smoke and still launched with `max_model_len=160000`. The result should be confirmed with longer outputs and a larger context-fill workload before treating it as a stable default. The instance was destroyed after the bench.
 
+### RTX 3090 2-GPU AWQ Marlin + MTP1 rerun
+
+After the initial 2x3090 runs, the profiles were corrected from forced `awq` to `awq_marlin` because vLLM had warned that Marlin was available but disabled by the forced quantization setting.
+
+```text
+commit: 868282e fix(vast): use awq marlin for rtx3090 awq profiles
+model profile: config/models/qwen3.6-27b-awq.rtx3090-2gpu-160k-fp8kv-mtp1.json
+template_hash_id: dc06729e41a32b77a02ce1f9962eae29
+force_quantization: awq_marlin
+```
+
+Rerun on the same relaxed-policy 2x3090 host:
+
+```text
+instance_id: 36567774
+machine_id: 104433
+gpu: 2x RTX 3090 24GB
+max_model_len: 160000
+kv_cache_dtype: fp8
+tensor_parallel_size: 2
+speculative_config: {"method":"qwen3_next_mtp","num_speculative_tokens":1}
+```
+
+Startup proof:
+
+```text
+quantization: awq_marlin
+The model is convertible to awq_marlin during runtime. Using awq_marlin kernel.
+Using MarlinLinearKernel for AWQMarlinLinearMethod
+Resolved architecture: Qwen3_5MTP
+speculative_config=SpeculativeConfig(method='mtp', model='/workspace/models/QuantTrio/Qwen3.6-27B-AWQ', num_spec_tokens=1)
+world_size=2
+TP rank 0 / TP rank 1
+Available KV cache memory: 10.44 GiB
+GPU KV cache size: 159,984 tokens
+Maximum concurrency for 160,000 tokens per request: 3.66x
+```
+
+The first structured NVLink log emitted by the provisioner was present but too long for Vast's log line transport and was truncated. The provisioner was later changed to emit one short summary/GPU/link JSON record per line. The available fields and Vast offer data still confirmed this host was PCIe-only:
+
+```text
+has_nvlink: false
+bw_nvlink: 0.0
+pci_gen: 3.0
+pcie_bw: 12.7 GB/s
+```
+
+Small smoke benchmark:
+
+```text
+input goal: 500 words
+max_output_tokens: 128
+requests_ok: 6
+requests_error: 0
+latency_avg: 3.54s
+latency_p50: 3.01s
+latency_p95: 6.10s
+TTFT_avg: 1.24s
+prompt_tokens: 5,130
+generation_tokens: 768
+prompt_tps: 241.71 tok/s
+generation_tps: 36.19 tok/s
+total_tps: 277.90 tok/s
+```
+
+Speculative decoding metrics:
+
+```text
+Mean acceptance length: 2.00
+Per-position acceptance rate: 1.000
+Avg Draft acceptance rate: 100.0%
+Accepted: 226 tokens
+Drafted: 226 tokens
+```
+
+A/B progression on the same host class:
+
+```text
+forced awq, no MTP:       generation_tps 7.86,  TTFT_avg 1.61s, latency_avg 16.28s
+forced awq, MTP1:         generation_tps 11.77, TTFT_avg 1.86s, latency_avg 10.87s
+awq_marlin, MTP1:         generation_tps 36.19, TTFT_avg 1.24s, latency_avg 3.54s
+```
+
+Interpretation: the slow 2x3090 result was largely a kernel-selection issue, not just PCIe-only tensor parallel communication. With AWQ Marlin and MTP1, the ultra-cheap 2x3090 160K profile becomes a much more plausible budget path, though it remains well below newer/high-end GPUs and still needs a longer-output/context-fill test. The instance was destroyed after the bench.
+
 ### Unsloth Qwen3.6-27B-NVFP4 on RTX 5090
 
 The Unsloth NVFP4 checkpoint was also tested on RTX 5090 using the same R2/provisioning path. The baseline profile intentionally keeps the model-card vLLM guidance conservative (`dtype=bfloat16`, 16K context, no forced quantization). For speculative tests, temporary MTP variants used `qwen3_next_mtp` with `num_speculative_tokens` set to 2 and then 1.
