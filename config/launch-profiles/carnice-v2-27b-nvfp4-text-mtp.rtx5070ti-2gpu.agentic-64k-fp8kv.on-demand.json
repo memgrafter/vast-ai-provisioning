@@ -20,13 +20,13 @@
   },
   "selection": {
     "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
+    "geo_query": "geolocation not in [CN]",
     "greylisted_machine_ids": [],
     "preferred_machine_ids": [
       28069
     ],
     "search_no_default": true,
-    "sort": "preferred_machine_then_effective_cost_then_reliability",
-    "geo_query": "geolocation not in [CN]"
+    "sort": "preferred_machine_then_effective_cost_then_reliability"
   },
   "spot": {
     "enabled_after_smoke_test": false,
@@ -39,7 +39,7 @@
     "min_disk_bw": 500
   },
   "template": {
-    "hash_id": "",
+    "hash_id": "3352812354abb822f6fbcd6b9d6547ee",
     "name": "vLLM_R2_Carnice_V2_27B_NVFP4_TEXT_MTP_RTX5070TI_2GPU_AGENTIC_64K_FP8KV"
   }
 }
