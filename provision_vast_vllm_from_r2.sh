@@ -32,6 +32,7 @@ VLLM_HOST="${VLLM_HOST:-127.0.0.1}"
 VLLM_PORT="${VLLM_PORT:-18000}"
 VLLM_DOWNLOAD_DIR="${VLLM_DOWNLOAD_DIR:-/workspace/models}"
 VLLM_GPU_MEMORY_UTILIZATION="${VLLM_GPU_MEMORY_UTILIZATION:-0.90}"
+VLLM_KV_CACHE_DTYPE="${VLLM_KV_CACHE_DTYPE:-}"
 VLLM_TRUST_REMOTE_CODE="${VLLM_TRUST_REMOTE_CODE:-true}"
 VLLM_FORCE_QUANTIZATION="${VLLM_FORCE_QUANTIZATION:-}"
 VLLM_MAX_NUM_SEQS="${VLLM_MAX_NUM_SEQS:-}"
@@ -54,6 +55,9 @@ VLLM_EXTRA_ARGS="${VLLM_EXTRA_ARGS:-}"
   printf -- '--port %q ' "$VLLM_PORT"
   printf -- '--download-dir %q ' "$VLLM_DOWNLOAD_DIR"
   printf -- '--gpu-memory-utilization %q ' "$VLLM_GPU_MEMORY_UTILIZATION"
+  if [ -n "$VLLM_KV_CACHE_DTYPE" ]; then
+    printf -- '--kv-cache-dtype %q ' "$VLLM_KV_CACHE_DTYPE"
+  fi
   if [ "$VLLM_TRUST_REMOTE_CODE" = "true" ]; then
     printf -- '--trust-remote-code '
   fi

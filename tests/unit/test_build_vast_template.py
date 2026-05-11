@@ -77,6 +77,7 @@ class BuildVastTemplateTests(unittest.TestCase):
         self.assertEqual(env["SERVED_MODEL_NAME"], "fixture-served-name")
         self.assertEqual(env["VLLM_MAX_MODEL_LEN"], "4096")
         self.assertEqual(env["VLLM_GPU_MEMORY_UTILIZATION"], "0.82")
+        self.assertEqual(env["VLLM_KV_CACHE_DTYPE"], "")
         self.assertEqual(env["VLLM_EXTRA_ARGS"], "--enforce-eager")
         self.assertEqual(env["VLLM_ARGS"], "")
         self.assertEqual(env["AUTH_EXCLUDE"], "8000")
@@ -107,6 +108,13 @@ class BuildVastTemplateTests(unittest.TestCase):
         decoded = json.loads(base64.b64decode(env["VLLM_SPECULATIVE_CONFIG_B64"]).decode())
         self.assertEqual(decoded, {"method": "qwen3_next_mtp", "num_speculative_tokens": 2})
         self.assertNotIn("qwen3_next_mtp", payload["env"])
+
+    def test_kv_cache_dtype_maps_to_dedicated_env(self):
+        model = json.loads(json.dumps(self.model))
+        model["vllm"]["kv_cache_dtype"] = "fp8"
+        payload = build_vast_template.build_template(self.template, model)
+        env, _ = self.parse_env(payload["env"])
+        self.assertEqual(env["VLLM_KV_CACHE_DTYPE"], "fp8")
 
     def test_model_max_model_len_is_required(self):
         model = json.loads(json.dumps(self.model))

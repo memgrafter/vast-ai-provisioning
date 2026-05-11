@@ -1,8 +1,8 @@
 {
   "gpu_profile": "config/gpu-profiles/qwen-27b-awq-96gb-rtx-pro-6000-ws.json",
-  "market": "interruptible",
-  "model_profile": "config/models/qwen3.6-27b-awq.coding-budget-160k.json",
-  "name": "qwen3.6-27b-awq.coding-budget-160k.interruptible",
+  "market": "on-demand",
+  "model_profile": "config/models/carnice-v2-27b-nvfp4-text-mtp.json",
+  "name": "carnice-v2-27b-nvfp4-text-mtp.pro6000ws.on-demand",
   "network": {
     "max_internet_down_cost_per_tb": 8.0,
     "max_internet_up_cost_per_tb": 10.0,
@@ -10,10 +10,10 @@
     "min_inet_down": 1000
   },
   "pricing": {
-    "max_dph_total": 2.0,
+    "max_dph_total": 1.25,
     "target_first_test_minutes": 60
   },
-  "purpose": "Coding-agent budget test for QuantTrio/Qwen3.6-27B-AWQ with 160k context from R2",
+  "purpose": "On-demand coding-agent test for sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP from R2",
   "reliability": {
     "min_reliability2": 0.98,
     "require_verified": true
@@ -30,7 +30,7 @@
   },
   "spot": {
     "enabled_after_smoke_test": false,
-    "max_bid_dph": 0.9
+    "max_bid_dph": 0
   },
   "storage": {
     "disk_gb": 100,
@@ -39,7 +39,7 @@
     "min_disk_bw": 500
   },
   "template": {
-    "hash_id": "0ccda894f8680871f352551c6219c40b",
-    "name": "vLLM_R2_Qwen3_6_27B_AWQ_Coding_160K"
+    "hash_id": "fa7b676dcc8b410adca262efec8c86d4",
+    "name": "vLLM_R2_Carnice_V2_27B_NVFP4_TEXT_MTP"
   }
 }
