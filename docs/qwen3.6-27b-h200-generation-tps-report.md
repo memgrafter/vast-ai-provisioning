@@ -426,7 +426,8 @@ Vast search notes:
 ```text
 require_verified: false
 search_no_default: true
-greylisted_machine_ids includes 51352
+preferred_machine_ids includes 58434
+greylisted_machine_ids includes 51352, 57883, 58555, 51471
 min_inet_down: 1000 Mbps
 provisioner R2 speed test: kept enabled at 100 MB/s minimum
 ```
@@ -516,6 +517,141 @@ Avg draft acceptance: ~75.3-86.9%
 ```
 
 Interpretation: the 5090 can run the 16K Carnice NVFP4+MTP profile, but this first unverified/deverified host was materially slower than RTX PRO 6000 WS for the same family of workload. The high average TTFT was driven by one outlier; three of four requests had TTFT <= 2.5s.
+
+### Unsloth Qwen3.6-27B-NVFP4 on RTX 5090
+
+The Unsloth NVFP4 checkpoint was also tested on RTX 5090 using the same R2/provisioning path. The baseline profile intentionally keeps the model-card vLLM guidance conservative (`dtype=bfloat16`, 16K context, no forced quantization). For speculative tests, temporary MTP variants used `qwen3_next_mtp` with `num_speculative_tokens` set to 2 and then 1.
+
+A first 16K MTP2 attempt at `gpu_memory_utilization=0.85` failed during vLLM startup because the KV cache was too small:
+
+```text
+max seq len 16384 needs 1.56 GiB KV cache
+available KV cache memory: 0.37 GiB
+```
+
+Raising `gpu_memory_utilization` to `0.95` allowed the 16K profile to start on RTX 5090:
+
+```text
+Available KV cache memory: ~3.49-3.50 GiB
+GPU KV cache size: 12,800 tokens
+```
+
+#### Unsloth NVFP4, MTP n=2
+
+```text
+instance_id: 36519682
+machine_id: 58434
+gpu: RTX 5090
+geolocation: France, FR
+max_model_len: 16384
+gpu_memory_utilization: 0.95
+speculative_config: {"method":"qwen3_next_mtp","num_speculative_tokens":2}
+bench_seconds: 90
+concurrency: 1
+requests_ok: 1
+requests_error: 0
+avg prompt/request: ~6,292 tokens
+avg generation/request: 2,048 tokens
+R2 speed test: 512 MB/s
+```
+
+Throughput:
+
+```text
+prompt_tps:       59.94 tok/s
+generation_tps:  19.51 tok/s
+total_tps:       79.45 tok/s
+```
+
+Latency:
+
+```text
+avg TTFT:        36.28s
+avg queue:       ~0.00s
+avg inference:  104.41s
+latency_avg:    104.96s
+```
+
+MTP was active, but no draft tokens were accepted:
+
+```text
+speculative_config=SpeculativeConfig(method='mtp', model='/workspace/models/unsloth/Qwen3.6-27B-NVFP4', num_spec_tokens=2)
+Resolved architecture: Qwen3_5MTP
+Loading drafter model...
+Mean acceptance length: 1.00
+Per-position acceptance: 0.000, 0.000
+Avg Draft acceptance rate: 0.0%
+```
+
+#### Unsloth NVFP4, MTP n=1
+
+```text
+instance_id: 36520226
+machine_id: 58434
+gpu: RTX 5090
+geolocation: France, FR
+max_model_len: 16384
+gpu_memory_utilization: 0.95
+speculative_config: {"method":"qwen3_next_mtp","num_speculative_tokens":1}
+bench_seconds: 90
+concurrency: 1
+requests_ok: 2
+requests_error: 0
+avg prompt/request: ~6,293.5 tokens
+avg generation/request: 2,048 tokens
+R2 speed test: 256 MB/s
+```
+
+Throughput:
+
+```text
+prompt_tps:       96.63 tok/s
+generation_tps:  31.44 tok/s
+total_tps:       128.07 tok/s
+```
+
+Latency:
+
+```text
+avg TTFT:        1.33s
+avg queue:       ~0.00s
+avg inference:  64.62s
+latency_avg:    65.12s
+latency_p50:    64.39s
+latency_p95:    65.86s
+```
+
+MTP was active, but again no draft tokens were accepted:
+
+```text
+speculative_config=SpeculativeConfig(method='mtp', model='/workspace/models/unsloth/Qwen3.6-27B-NVFP4', num_spec_tokens=1)
+Resolved architecture: Qwen3_5MTP
+Loading drafter model...
+Mean acceptance length: 1.00
+Per-position acceptance: 0.000
+Avg Draft acceptance rate: 0.0%
+```
+
+#### RTX 5090 quant/speculative comparison
+
+```text
+Carnice NVFP4 MTP n=3:  generation_tps 61.89, active ~63.34 tok/s/stream, acceptance ~75.3-86.9%
+Unsloth NVFP4 MTP n=1: generation_tps 31.44, active ~31.70 tok/s/stream, acceptance 0.0%
+Unsloth NVFP4 MTP n=2: generation_tps 19.51, active ~19.62 tok/s/stream, acceptance 0.0%
+```
+
+Answer: yes, the RTX 5090 worked well enough with the other quantized speculative path: Carnice NVFP4 + MTP n=3. It was roughly `2.0x` the Unsloth MTP n=1 generation throughput and `3.2x` the Unsloth MTP n=2 throughput in these single-stream smoke runs, with strong draft-token acceptance instead of zero acceptance. The Unsloth MTP variants start at 16K only with high GPU memory utilization and do not appear useful with `qwen3_next_mtp` on this setup.
+
+Bad/unstable RTX 5090 hosts encountered while reaching these results:
+
+```text
+51352: Docker/NVIDIA CDI injection failure
+57883: Docker/NVIDIA CDI injection failure
+58555: stuck/failed before usable startup, CN geolocation
+51471: deverified host failure
+```
+
+Machine `58434` is the known-good RTX 5090 host for both Carnice and Unsloth smoke tests and is now preferred in the RTX 5090 launch profiles when rentable.
 
 ## HF model-card guidance used
 
