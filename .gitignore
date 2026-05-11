@@ -22,6 +22,11 @@ config/private/
 instances/
 offers/
 
+# Local run logs and scratch outputs
+tmp/
+watch_*
+vllm_log*.md
+
 # Python/cache noise
 __pycache__/
 *.pyc
