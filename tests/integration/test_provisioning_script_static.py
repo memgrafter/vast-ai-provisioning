@@ -53,8 +53,11 @@ class ProvisioningScriptStaticTests(unittest.TestCase):
     def test_uses_rclone_optimized_download_path(self):
         self.assertIn("R2_TRANSFER_TOOL=\"${R2_TRANSFER_TOOL:-rclone}\"", self.text)
         self.assertIn("rclone copy", self.text)
+        self.assertIn("RCLONE_STATS_INTERVAL=", self.text)
         self.assertIn("--transfers", self.text)
         self.assertIn("--multi-thread-streams", self.text)
+        self.assertIn("--stats-one-line", self.text)
+        self.assertIn("--stats-log-level NOTICE", self.text)
 
     def test_speed_test_prefers_static_object_and_logs_range_failures(self):
         self.assertIn("R2_SPEED_TEST_KEY=\"${R2_SPEED_TEST_KEY:-_vast/r2-speed-test.bin}\"", self.text)

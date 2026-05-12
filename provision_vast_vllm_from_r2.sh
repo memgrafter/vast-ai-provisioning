@@ -24,6 +24,7 @@ R2_TRANSFER_TOOL="${R2_TRANSFER_TOOL:-rclone}"
 RCLONE_TRANSFERS="${RCLONE_TRANSFERS:-16}"
 RCLONE_CHECKERS="${RCLONE_CHECKERS:-32}"
 RCLONE_MULTI_THREAD_STREAMS="${RCLONE_MULTI_THREAD_STREAMS:-8}"
+RCLONE_STATS_INTERVAL="${RCLONE_STATS_INTERVAL:-10s}"
 
 mkdir -p "$MODEL_DIR" ~/.aws
 
@@ -407,15 +408,20 @@ else
   echo "Syncing s3://$R2_BUCKET/$R2_PREFIX -> $MODEL_DIR"
   echo "Sync started at: $(date -Is)"
   # Intentionally do not use --only-show-errors here. Vast UI logs need transfer
-  # activity so we can tell R2 sync is progressing before vLLM starts.
+  # activity so we can tell R2 sync is progressing before vLLM starts. Emit both
+  # rclone's own transfer counters and our completed-file fallback; the fallback
+  # can appear flat while rclone is still downloading a large temporary shard.
   if [ "$R2_TRANSFER_TOOL" = "rclone" ]; then
+    echo "R2 rclone stats interval: $RCLONE_STATS_INTERVAL"
     rclone copy "r2:$R2_BUCKET/$R2_PREFIX" "$MODEL_DIR" \
       --config "$rclone_config" \
       --transfers "$RCLONE_TRANSFERS" \
       --checkers "$RCLONE_CHECKERS" \
       --multi-thread-cutoff 1M \
       --multi-thread-streams "$RCLONE_MULTI_THREAD_STREAMS" \
-      --stats 30s &
+      --stats "$RCLONE_STATS_INTERVAL" \
+      --stats-one-line \
+      --stats-log-level NOTICE &
     rclone_pid="$!"
     (
       while kill -0 "$rclone_pid" 2>/dev/null; do
