@@ -14,8 +14,9 @@
     "host": "127.0.0.1",
     "port": 18000,
     "download_dir": "/workspace/models",
-    "max_num_seqs": 1,
-    "max_new_tokens": 8192,
+    "max_num_seqs": 3,
+    "max_num_batched_tokens": 16384,
+    "max_new_tokens": 20000,
     "enable_auto_tool_choice": true,
     "tool_call_parser": "qwen3_coder",
     "reasoning_parser": "qwen3",
@@ -33,5 +34,5 @@
   "provisioning": {
     "r2_speed_test_warn_only": true
   },
-  "notes": "Experimental 2x RTX 3090 24GB profile for Qwen3.6-27B AWQ, single-user 160K context target using TP=2, fp8 KV cache, awq_marlin kernels, and Qwen3 Next MTP n=1."
+  "notes": "Experimental 2x RTX 3090 24GB profile for Qwen3.6-27B AWQ, 160K context target using TP=2, fp8 KV cache, awq_marlin kernels, Qwen3 Next MTP n=1, max_num_seqs=3, max_num_batched_tokens=16384, and max_new_tokens=20000 for agentic workers."
 }
