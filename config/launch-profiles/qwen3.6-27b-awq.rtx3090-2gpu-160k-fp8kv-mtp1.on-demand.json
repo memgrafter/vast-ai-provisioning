@@ -42,7 +42,7 @@
     "min_disk_bw": 500
   },
   "template": {
-    "hash_id": "f065a00f201eee22d5623545dcd393be",
+    "hash_id": "aff525f798fc6db1ec26c6b37ead752f",
     "name": "vLLM_R2_Qwen3_6_27B_AWQ_RTX3090_2GPU_160K_FP8KV_MTP1"
   }
 }

@@ -9,7 +9,7 @@
   "vllm": {
     "dtype": "half",
     "max_model_len": 160000,
-    "gpu_memory_utilization": 0.90,
+    "gpu_memory_utilization": 0.88,
     "trust_remote_code": true,
     "host": "127.0.0.1",
     "port": 18000,
@@ -34,5 +34,5 @@
   "provisioning": {
     "r2_speed_test_warn_only": true
   },
-  "notes": "Experimental 2x RTX 3090 24GB profile for Qwen3.6-27B AWQ, 160K context target using TP=2, fp8 KV cache, awq_marlin kernels, Qwen3 Next MTP n=1, gpu_memory_utilization=0.90, max_num_seqs=3, max_num_batched_tokens=16384, and max_new_tokens=20000 for agentic workers."
+  "notes": "Experimental 2x RTX 3090 24GB profile for Qwen3.6-27B AWQ, 160K context target using TP=2, fp8 KV cache, awq_marlin kernels, Qwen3 Next MTP n=1, gpu_memory_utilization=0.88, max_num_seqs=3, max_num_batched_tokens=16384, and max_new_tokens=20000 for agentic workers."
 }
