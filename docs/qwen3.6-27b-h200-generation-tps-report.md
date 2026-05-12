@@ -1216,6 +1216,94 @@ output: ~1000 tokens
 
 In that shape, prefix caching avoids most of the long prefill and decode dominates. MTP is much more likely to pay off there, especially given the observed acceptance. For this 2x3090 path, MTP choice should be decided with a cached-prefix, longer-output decode-heavy A/B, not only a fresh 160K context-fill test.
 
+### RTX 3090 2-GPU AWQ Marlin MTP2 2-worker agentic concurrency
+
+The MTP2 160K profile was updated for real two-worker agentic use after the initial two-curl test serialized as `running=1 waiting=1` despite `max_num_seqs=2`. The root cause was that `--max-num-batched-tokens 8192` had been passed through `VLLM_EXTRA_ARGS`, which was vulnerable to Vast env quoting and appeared in instance metadata as a malformed key. A first-class profile/template/provisioner field was added instead:
+
+```text
+VLLM_MAX_NUM_BATCHED_TOKENS=8192
+VLLM_MAX_NUM_SEQS=2
+VLLM_MAX_NEW_TOKENS=20000
+```
+
+Related commits:
+
+```text
+017d290 feat(vast): allow two active rtx3090 mtp2 sequences
+99cd628 feat(vllm): add first class batched token profile arg
+f4f8dc2 feat(provision): show rclone transfer progress
+```
+
+After recycle/reload on the same validated 2x3090 host, the profile reached true concurrency:
+
+```text
+instance_id: 36580433
+machine_id: 42967
+gpu: 2x RTX 3090
+max_num_seqs: 2
+max_num_batched_tokens: 8192
+max_new_tokens default: 20000
+prompt tokens/request: 2012
+client requests: 2 concurrent curl requests
+response cap in request: omitted, using server default
+```
+
+Scheduler result:
+
+```text
+max_running: 2
+max_waiting: 0
+peak KV usage: 7.1%
+queue_count: 2
+queue_time_sum: 0.000s
+```
+
+Transition proof:
+
+```text
+sample 1: running=1 waiting=0
+sample 2: running=2 waiting=0   # both requests active
+sample 15: running=1 waiting=0  # first request finished, second still active
+sample 16: running=0 waiting=0
+```
+
+Request results:
+
+```text
+worker1:
+  latency: 79.67s
+  prompt_tokens: 2012
+  completion_tokens: 4538
+  total_tokens: 6550
+  finish_reason: stop
+  per-request generation: ~56.96 tok/s
+
+worker2:
+  latency: 88.48s
+  prompt_tokens: 2012
+  completion_tokens: 5182
+  total_tokens: 7194
+  finish_reason: stop
+  per-request generation: ~58.57 tok/s
+
+combined:
+  prompt_tokens: 4024
+  completion_tokens: 9720
+  wall_time: ~88.48s
+  aggregate generation: ~109.9 tok/s
+```
+
+Speculative decoding and cache metrics:
+
+```text
+MTP2 accepted draft tokens: 5742
+MTP2 draft tokens: 7958
+MTP2 acceptance: 72.2%
+prefix cache hits: 0 / 4024
+```
+
+Interpretation: the 2x3090 AWQ Marlin MTP2 profile can run two concurrent agentic workers at ~2K input and long unrestricted outputs, reaching ~110 aggregate generated tok/s. The current profile is deliberately capped at `max_num_seqs=2`; more parallelism requires another profile change and should be tested separately.
+
 ### Unsloth Qwen3.6-27B-NVFP4 on RTX 5090
 
 The Unsloth NVFP4 checkpoint was also tested on RTX 5090 using the same R2/provisioning path. The baseline profile intentionally keeps the model-card vLLM guidance conservative (`dtype=bfloat16`, 16K context, no forced quantization). For speculative tests, temporary MTP variants used `qwen3_next_mtp` with `num_speculative_tokens` set to 2 and then 1.

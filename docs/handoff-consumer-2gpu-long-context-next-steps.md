@@ -504,7 +504,43 @@ output: ~1000 tokens
 
 In that shape, prefix caching avoids most long-prefill cost and decode dominates, so MTP1/MTP2 may pay off. Need a cached-prefix, longer-output decode-heavy A/B to choose MTP for actual generation throughput.
 
-All instances were destroyed after the bench.
+### 2x RTX 3090 MTP2 two-worker agentic concurrency
+
+The MTP2 160K profile was updated with first-class scheduler/env fields after `VLLM_EXTRA_ARGS` quoting prevented `--max-num-batched-tokens` from taking effect:
+
+```text
+VLLM_MAX_NUM_SEQS=2
+VLLM_MAX_NUM_BATCHED_TOKENS=8192
+VLLM_MAX_NEW_TOKENS=20000
+```
+
+Validated on the same host class:
+
+```text
+instance_id: 36580433
+machine_id: 42967
+gpu: 2x RTX 3090
+prompt tokens/request: 2012
+workers: 2 concurrent curl requests
+request max_tokens: omitted
+```
+
+Scheduler and throughput:
+
+```text
+max_running: 2
+max_waiting: 0
+peak KV usage: 7.1%
+queue_time_sum: 0.000s
+worker1: 4538 completion tokens in 79.67s, ~56.96 tok/s
+worker2: 5182 completion tokens in 88.48s, ~58.57 tok/s
+combined: 9720 completion tokens in ~88.48s, ~109.9 tok/s aggregate
+MTP2 acceptance: 5742 / 7958 = 72.2%
+```
+
+Interpretation: two active ~2K-input agentic workers now work. The current profile is capped at two active sequences; higher parallelism requires another profile/template update and validation.
+
+All benchmark instances except the intentionally retained agentic instance were destroyed after tests.
 
 ## Practical takeaways
 
