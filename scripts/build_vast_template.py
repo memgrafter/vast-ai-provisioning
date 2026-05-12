@@ -72,6 +72,9 @@ def env_from_specs(template: dict[str, Any], model: dict[str, Any]) -> dict[str,
             "VLLM_TRUST_REMOTE_CODE": str(vllm.get("trust_remote_code", True)).lower(),
             "VLLM_FORCE_QUANTIZATION": "" if vllm.get("force_quantization") is None else str(vllm.get("force_quantization")),
             "VLLM_MAX_NUM_SEQS": "" if vllm.get("max_num_seqs") is None else str(vllm.get("max_num_seqs")),
+            "VLLM_MAX_NUM_BATCHED_TOKENS": ""
+            if vllm.get("max_num_batched_tokens") is None
+            else str(vllm.get("max_num_batched_tokens")),
             "VLLM_MAX_NEW_TOKENS": "" if vllm.get("max_new_tokens") is None else str(vllm.get("max_new_tokens")),
             "VLLM_ENABLE_AUTO_TOOL_CHOICE": str(vllm.get("enable_auto_tool_choice", False)).lower(),
             "VLLM_TOOL_CALL_PARSER": "" if vllm.get("tool_call_parser") is None else str(vllm.get("tool_call_parser")),
