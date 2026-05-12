@@ -540,6 +540,68 @@ MTP2 acceptance: 5742 / 7958 = 72.2%
 
 Interpretation: two active ~2K-input agentic workers now work. The current profile is capped at two active sequences; higher parallelism requires another profile/template update and validation.
 
+Follow-up concurrency tests used apple-to-apple scheduler/output settings:
+
+```text
+max_num_seqs: 3
+max_num_batched_tokens: 16384
+max_new_tokens default: 20000
+prompt tokens/request: ~2012
+```
+
+Three-worker 1/6-length test (`max_tokens=800`):
+
+```text
+MTP2:
+  max_running: 2
+  max_waiting: 1
+  queue_time_sum: 13.78s
+  completion tokens: 2400
+  wall time: 27.44s
+  aggregate TPS: ~87.5 tok/s
+  acceptance: 80.9%
+
+MTP1:
+  max_running: 3
+  max_waiting: 0
+  queue_time_sum: 0.00s
+  completion tokens: 2400
+  wall time: 27.07s
+  aggregate TPS: ~88.7 tok/s
+  acceptance: 86.3%
+```
+
+Two-worker full-output test:
+
+```text
+MTP2:
+  max_running: 2
+  max_waiting: 0
+  completion tokens: 9720
+  wall time: 88.48s
+  aggregate TPS: 109.9 tok/s
+  per-worker TPS: 57.0 / 58.6
+  acceptance: 72.2%
+  peak KV: 7.1%
+
+MTP1:
+  max_running: 2
+  max_waiting: 0
+  completion tokens: 9038
+  wall time: 88.44s
+  aggregate TPS: 102.2 tok/s
+  per-worker TPS: 55.5 / 57.5
+  acceptance: 82.6%
+  peak KV: 5.2%
+```
+
+Interpretation:
+
+```text
+MTP2: best 2-worker throughput, ~7-8% faster aggregate than MTP1.
+MTP1: better 3-worker fairness; reaches running=3 waiting=0 where MTP2 queues the third.
+```
+
 All benchmark instances except the intentionally retained agentic instance were destroyed after tests.
 
 ## Practical takeaways

@@ -1304,6 +1304,65 @@ prefix cache hits: 0 / 4024
 
 Interpretation: the 2x3090 AWQ Marlin MTP2 profile can run two concurrent agentic workers at ~2K input and long unrestricted outputs, reaching ~110 aggregate generated tok/s. The current profile is deliberately capped at `max_num_seqs=2`; more parallelism requires another profile change and should be tested separately.
 
+Follow-up scheduler tests compared MTP2 and MTP1 under apple-to-apple scheduler/token settings:
+
+```text
+max_num_seqs: 3
+max_num_batched_tokens: 16384
+max_new_tokens default: 20000
+prompt tokens/request: ~2012
+```
+
+Three-worker 1/6-length test (`max_tokens=800`):
+
+```text
+MTP2:
+  max_running: 2
+  max_waiting: 1
+  queue_time_sum: 13.78s
+  peak KV: 5.3%
+  completion tokens: 2400
+  wall time: 27.44s
+  aggregate TPS: ~87.5 tok/s
+  acceptance: 80.9%
+
+MTP1:
+  max_running: 3
+  max_waiting: 0
+  queue_time_sum: 0.00s
+  peak KV: 6.2%
+  completion tokens: 2400
+  wall time: 27.07s
+  aggregate TPS: ~88.7 tok/s
+  acceptance: 86.3%
+```
+
+Two-worker full-output test, same ~2K prompt shape:
+
+```text
+MTP2:
+  max_running: 2
+  max_waiting: 0
+  completion tokens: 9720
+  wall time: 88.48s
+  aggregate TPS: 109.9 tok/s
+  per-worker TPS: 57.0 / 58.6
+  acceptance: 72.2%
+  peak KV: 7.1%
+
+MTP1:
+  max_running: 2
+  max_waiting: 0
+  completion tokens: 9038
+  wall time: 88.44s
+  aggregate TPS: 102.2 tok/s
+  per-worker TPS: 55.5 / 57.5
+  acceptance: 82.6%
+  peak KV: 5.2%
+```
+
+Interpretation: MTP2 remains the faster choice for two active workers, by about 7-8% aggregate TPS in this workload. MTP1 has higher acceptance, lower KV use, and better fairness for three submitted workers because it reaches `running=3 waiting=0`; MTP2 still queues the third worker even with `max_num_seqs=3` and `max_num_batched_tokens=16384`.
+
 ### Unsloth Qwen3.6-27B-NVFP4 on RTX 5090
 
 The Unsloth NVFP4 checkpoint was also tested on RTX 5090 using the same R2/provisioning path. The baseline profile intentionally keeps the model-card vLLM guidance conservative (`dtype=bfloat16`, 16K context, no forced quantization). For speculative tests, temporary MTP variants used `qwen3_next_mtp` with `num_speculative_tokens` set to 2 and then 1.
