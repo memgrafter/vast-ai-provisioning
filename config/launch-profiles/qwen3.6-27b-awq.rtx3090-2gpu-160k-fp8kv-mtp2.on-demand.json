@@ -7,7 +7,7 @@
     "max_internet_down_cost_per_tb": 8.0,
     "max_internet_up_cost_per_tb": 10.0,
     "min_direct_port_count": 1,
-    "min_inet_down": 800
+    "min_inet_down": 700
   },
   "pricing": {
     "max_dph_total": 0.75,
