@@ -22,6 +22,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts import launch_ledger
 from vastai import VastAI
 
 
@@ -57,13 +60,14 @@ def get_logs(vast: VastAI, instance_id: int, tail: int) -> str:
     return str(vast.logs(instance_id=instance_id, tail=str(tail)))
 
 
-def save_snapshot(instance_id: int, info: dict[str, Any], logs: str) -> None:
+def save_snapshot(instance_id: int, info: dict[str, Any], logs: str) -> tuple[Path, Path]:
     out = Path("instances")
     out.mkdir(exist_ok=True)
-    out.joinpath(f"{instance_id}.monitor.current.json").write_text(
-        json.dumps(info, indent=2, sort_keys=True, default=str) + "\n"
-    )
-    out.joinpath(f"{instance_id}.monitor.logs.txt").write_text(logs + "\n")
+    monitor_json_path = out / f"{instance_id}.monitor.current.json"
+    logs_path = out / f"{instance_id}.monitor.logs.txt"
+    monitor_json_path.write_text(json.dumps(info, indent=2, sort_keys=True, default=str) + "\n")
+    logs_path.write_text(logs + "\n")
+    return monitor_json_path, logs_path
 
 
 def analyze_logs(logs: str, image: str) -> Signals:
@@ -209,7 +213,7 @@ def main() -> int:
         try:
             info = get_instance(vast, args.instance_id)
             logs = get_logs(vast, args.instance_id, args.tail)
-            save_snapshot(args.instance_id, info, logs)
+            monitor_json_path, logs_path = save_snapshot(args.instance_id, info, logs)
             current_signals = analyze_logs(logs, args.image)
             signals = Signals(**{
                 field: (cumulative.errors + current_signals.errors if field == "errors" else bool(getattr(cumulative, field) or getattr(current_signals, field)))
@@ -224,6 +228,21 @@ def main() -> int:
                 args.image_deadline,
                 args.provisioning_deadline,
             )
+            try:
+                launch_ledger.update_instance_snapshot(
+                    instance_id=args.instance_id,
+                    info=info,
+                    instance_json_path=monitor_json_path,
+                )
+                launch_ledger.update_monitor_result(
+                    instance_id=args.instance_id,
+                    signals=signals.__dict__,
+                    monitor_json_path=monitor_json_path,
+                    logs_path=logs_path,
+                    error_summary="\n".join(signals.errors[-20:])[:4000] if signals.errors else None,
+                )
+            except Exception as exc:
+                print(f"WARN launch ledger monitor update failed: {exc}", file=sys.stderr)
             should_destroy = last_recommendation.startswith("TERMINATE_") or last_recommendation.startswith("CONSIDER_TERMINATE_")
             if should_destroy and args.destroy_on_fail:
                 if not args.yes_destroy:
@@ -231,6 +250,14 @@ def main() -> int:
                     return 3
                 print(f"Destroying instance {args.instance_id}: {last_recommendation}", file=sys.stderr)
                 result = vast.destroy_instance(id=args.instance_id)
+                try:
+                    launch_ledger.mark_destroyed(
+                        instance_id=args.instance_id,
+                        reason=last_recommendation,
+                        destroyed_by_script=True,
+                    )
+                except Exception as exc:
+                    print(f"WARN launch ledger destroy update failed: {exc}", file=sys.stderr)
                 print(json.dumps(result, indent=2, sort_keys=True, default=str))
                 return 4
             if signals.api_ready or signals.vllm_started:

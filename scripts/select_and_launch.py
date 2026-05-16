@@ -23,10 +23,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from vastai import VastAI
 
+from scripts import launch_ledger
 from scripts.monitor_instance_readiness import port_url
 
 COSTING_STATUSES = {"running", "loading", "starting", "stopped", "exited", "unknown", "offline"}
-BAD_STATUSES = {"exited", "unknown", "offline"}
+BAD_STATUSES = {"exited", "offline"}
 DEFAULT_LAUNCH_PROFILE = Path("config/launch-profiles/qwen3.5-9b-awq.interruptible.json")
 
 
@@ -173,12 +174,32 @@ def print_current_infra(instances: list[dict[str, Any]], volumes: dict[str, Any]
     return total_known
 
 
+def storage_metrics(offer: dict[str, Any], context: dict[str, Any]) -> dict[str, float]:
+    storage = context["launch"]["storage"]
+    requested_gb = float(storage["disk_gb"])
+    storage_raw = offer.get("storage_total_cost")
+    total_raw = offer.get("dph_total")
+    storage_hour = float(storage_raw) if storage_raw is not None else math.inf
+    total_hour = float(total_raw) if total_raw is not None else math.inf
+    storage_per_gb_hour = storage_hour / requested_gb if requested_gb > 0 else math.inf
+    storage_fraction = storage_hour / total_hour if total_hour > 0 and math.isfinite(total_hour) else math.inf
+    compute_hour = max(0.0, total_hour - storage_hour) if math.isfinite(total_hour) else math.inf
+    return {
+        "requested_gb": requested_gb,
+        "storage_hour": storage_hour,
+        "storage_per_gb_hour": storage_per_gb_hour,
+        "storage_fraction": storage_fraction,
+        "compute_hour": compute_hour,
+    }
+
+
 def offer_passes_policy(offer: dict[str, Any], context: dict[str, Any]) -> tuple[bool, list[str]]:
     reasons: list[str] = []
     launch = context["launch"]
     gpu = context["gpu"]
     pricing = launch["pricing"]
     storage = launch["storage"]
+    sm = storage_metrics(offer, context)
     network = launch["network"]
     reliability = launch["reliability"]
 
@@ -205,7 +226,13 @@ def offer_passes_policy(offer: dict[str, Any], context: dict[str, Any]) -> tuple
         (float(offer.get("gpu_total_ram") or 0) >= float(gpu["min_gpu_total_ram_mb"]), "gpu_total_ram"),
         (float(offer.get("cuda_max_good") or 0) >= float(gpu["min_cuda_max_good"]), "cuda_max_good"),
         (float(offer.get("dph_total") or math.inf) <= float(pricing["max_dph_total"]), "dph_total"),
-        (float(offer.get("storage_total_cost") or math.inf) <= float(storage["max_storage_total_cost_per_hour"]), "storage_total_cost"),
+        (sm["storage_hour"] <= float(storage["max_storage_total_cost_per_hour"]), "storage_total_cost"),
+        (sm["storage_per_gb_hour"] <= float(storage["max_storage_cost_per_gb_hour"]), "storage_cost_per_gb_hour"),
+        (
+            "max_storage_fraction_of_total" not in storage
+            or sm["storage_fraction"] <= float(storage["max_storage_fraction_of_total"]),
+            "storage_fraction_of_total",
+        ),
         (float(offer.get("disk_bw") or offer.get("disk_io") or 0) >= float(storage.get("min_disk_bw") or 0), "disk_bw"),
         (float(offer.get("internet_down_cost_per_tb") or 0) <= float(network["max_internet_down_cost_per_tb"]), "internet_down_cost_per_tb"),
         (float(offer.get("internet_up_cost_per_tb") or 0) <= float(network["max_internet_up_cost_per_tb"]), "internet_up_cost_per_tb"),
@@ -292,13 +319,16 @@ def search_policy_offers(vast: VastAI, context: dict[str, Any]) -> list[dict[str
         status = "PASS" if ok else "FAIL " + ",".join(reasons)
         preferred = "*" if is_preferred_machine(offer, context) else " "
         greylisted = "!" if is_greylisted_machine(offer, context) else " "
+        sm = storage_metrics(offer, context)
         print(
             f"{status:22} "
             f"pref={preferred} grey={greylisted} "
             f"id={offer.get('id')} gpu={offer.get('gpu_name')} "
             f"cuda={offer.get('cuda_max_good')} "
             f"dph={money(offer.get('dph_total'))}/hr "
-            f"storage={money(offer.get('storage_total_cost'))}/hr "
+            f"storage={money(sm['storage_hour'])}/hr "
+            f"storageGB={money(sm['storage_per_gb_hour'])}/GBhr "
+            f"storagePct={number(sm['storage_fraction'] * 100, 1)}% "
             f"disk_bw={number(offer.get('disk_bw') or offer.get('disk_io'), 1)} "
             f"downTB={money(offer.get('internet_down_cost_per_tb'))} "
             f"upTB={money(offer.get('internet_up_cost_per_tb'))} "
@@ -320,6 +350,7 @@ def print_selected_offer(offer: dict[str, Any], context: dict[str, Any]) -> None
     smoke_minutes = float(launch["pricing"].get("target_first_test_minutes", 10))
     dph = float(offer.get("dph_total") or 0)
     storage_hour = float(offer.get("storage_total_cost") or 0)
+    sm = storage_metrics(offer, context)
     down_tb = float(offer.get("internet_down_cost_per_tb") or 0)
     up_tb = float(offer.get("internet_up_cost_per_tb") or 0)
     expected_tb = float(launch.get("selection", {}).get("expected_model_download_tb", model.get("expected_model_download_tb", 0)))
@@ -342,8 +373,14 @@ def print_selected_offer(offer: dict[str, Any], context: dict[str, Any]) -> None
     print("Costs")
     print("=====")
     print(f"base hourly:        {money(offer.get('dph_base'))}/hr")
-    print(f"storage hourly:     {money(storage_hour)}/hr for {launch['storage']['disk_gb']}GB")
+    print(f"compute hourly:     {money(sm['compute_hour'])}/hr")
+    print(f"storage hourly:     {money(storage_hour)}/hr for {sm['requested_gb']:.0f}GB")
+    print(f"storage per GB-hr:  {money(sm['storage_per_gb_hour'])}/GB-hr")
+    print(f"storage share:      {number(sm['storage_fraction'] * 100, 1)}%")
     print(f"total hourly:       {money(dph)}/hr")
+    warn_storage_fraction = float(launch["storage"].get("warn_storage_fraction_of_total", 0.25))
+    if sm["storage_fraction"] > warn_storage_fraction:
+        print(f"WARN: storage is {number(sm['storage_fraction'] * 100, 1)}% of total hourly cost")
     print(f"per minute:         {money(dph / 60.0)}/min")
     print(f"per second:         {money(dph / 3600.0)}/sec")
     print(f"download cost/TB:   {money(down_tb)}/TB")
@@ -425,12 +462,16 @@ def poll_instance(vast: VastAI, instance_id: int, timeout_s: int) -> dict[str, A
     last: dict[str, Any] = {}
     while time.time() - start < timeout_s:
         last = vast.show_instance(id=instance_id)
-        status = str(last.get("actual_status") or last.get("status") or "unknown")
+        actual_status = last.get("actual_status")
+        status = str(actual_status or last.get("status") or last.get("cur_state") or "unknown")
         print(f"instance {instance_id} status={status}")
         if status == "running":
             return last
         if status in BAD_STATUSES:
             return last
+        # Vast can briefly report actual_status/status as unknown immediately
+        # after create_instance even when cur_state will settle to running.
+        # Keep polling unknown instead of treating it as terminal.
         time.sleep(10)
     return last
 
@@ -486,7 +527,8 @@ def main() -> None:
         if top > 1:
             print(f"Passing offer #{idx}")
             print("================")
-        save_json(Path(f"offers/{offer['id']}.selected.json"), offer)
+        selected_offer_path = Path(f"offers/{offer['id']}.selected.json")
+        save_json(selected_offer_path, offer)
         print_selected_offer(offer, context)
 
     if args.check_only:
@@ -507,7 +549,9 @@ def main() -> None:
     }
     if launch.get("market") in {"interruptible", "bid", "spot"}:
         create_kwargs["price"] = float(launch["spot"]["max_bid_dph"])
+    create_started_at = launch_ledger.now_utc()
     result = vast.create_instance(**create_kwargs)
+    create_returned_at = launch_ledger.now_utc()
     print("Create result:")
     print(json.dumps(result, indent=2, sort_keys=True, default=str))
     save_json(Path("state/last-create-result.json"), result)
@@ -515,8 +559,27 @@ def main() -> None:
     if not instance_id:
         print("No instance id in create result; stop here.")
         return
+    selected_offer_path = Path(f"offers/{selected['id']}.selected.json")
+    try:
+        launch_ledger.record_created_launch(
+            context=context,
+            offer=selected,
+            create_result=result,
+            instance_id=int(instance_id),
+            selected_offer_json_path=selected_offer_path,
+            create_started_at=create_started_at,
+            create_returned_at=create_returned_at,
+        )
+        print(f"Recorded launch ledger row for vast:instance:{int(instance_id)}")
+    except Exception as exc:
+        print(f"WARN: launch ledger insert failed: {exc}", file=sys.stderr)
     info = poll_instance(vast, int(instance_id), args.poll_timeout)
-    save_json(Path(f"instances/{instance_id}.json"), info)
+    instance_json_path = Path(f"instances/{instance_id}.json")
+    save_json(instance_json_path, info)
+    try:
+        launch_ledger.update_instance_snapshot(instance_id=int(instance_id), info=info, instance_json_path=instance_json_path)
+    except Exception as exc:
+        print(f"WARN: launch ledger instance update failed: {exc}", file=sys.stderr)
     print(f"Saved instance details to instances/{instance_id}.json")
 
     if not args.no_monitor:
@@ -534,6 +597,16 @@ def main() -> None:
         print("Starting readiness monitor:")
         print("  " + " ".join(monitor_cmd))
         result = subprocess.run(monitor_cmd, check=False)
+        try:
+            launch_ledger.update_monitor_result(instance_id=int(instance_id), monitor_exit_code=result.returncode)
+            if result.returncode == 4:
+                launch_ledger.mark_destroyed(
+                    instance_id=int(instance_id),
+                    reason="monitor_destroyed_failed_launch",
+                    destroyed_by_script=True,
+                )
+        except Exception as exc:
+            print(f"WARN: launch ledger monitor update failed: {exc}", file=sys.stderr)
         if result.returncode == 4:
             print("Monitor destroyed the instance; skipping post-launch smoke.")
             return
@@ -542,6 +615,10 @@ def main() -> None:
 
     if not args.no_smoke_chat:
         smoke_code = print_api_config_and_smoke(vast, int(instance_id), model["served_model_name"], args.smoke_message)
+        try:
+            launch_ledger.update_smoke_result(instance_id=int(instance_id), smoke_exit_code=smoke_code)
+        except Exception as exc:
+            print(f"WARN: launch ledger smoke update failed: {exc}", file=sys.stderr)
         if smoke_code != 0:
             raise SystemExit(smoke_code)
 

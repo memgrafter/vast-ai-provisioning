@@ -30,7 +30,12 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Iterable
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts import launch_ledger
 
 
 SAMPLE_RE = re.compile(r"^(?P<name>[a-zA-Z_:][a-zA-Z0-9_:]*)(?P<labels>\{[^}]*\})?\s+(?P<value>[-+0-9.eE]+)\s*$")
@@ -174,6 +179,44 @@ def print_gauge(before: Metrics, after: Metrics, elapsed_s: float) -> None:
     print("```")
 
 
+def current_metrics_payload(metrics: Metrics) -> dict[str, float]:
+    return {
+        "vllm.requests_running": metrics.get("vllm:num_requests_running"),
+        "vllm.requests_waiting": metrics.get("vllm:num_requests_waiting"),
+        "vllm.kv_cache_usage_percent": metrics.get("vllm:kv_cache_usage_perc") * 100.0,
+        "vllm.prompt_tokens_total": metrics.get("vllm:prompt_tokens_total"),
+        "vllm.generation_tokens_total": metrics.get("vllm:generation_tokens_total"),
+        "vllm.prefix_cache_queries_total": metrics.get("vllm:prefix_cache_queries_total"),
+        "vllm.prefix_cache_hits_total": metrics.get("vllm:prefix_cache_hits_total"),
+        "vllm.prompt_tokens_cached_total": metrics.get("vllm:prompt_tokens_cached_total"),
+        "vllm.request_success_stop_total": metrics.label_value("vllm:request_success_total", finished_reason="stop"),
+        "vllm.request_success_length_total": metrics.label_value("vllm:request_success_total", finished_reason="length"),
+        "vllm.request_success_error_total": metrics.label_value("vllm:request_success_total", finished_reason="error"),
+        "vllm.request_success_abort_total": metrics.label_value("vllm:request_success_total", finished_reason="abort"),
+        "vllm.ttft_count": metrics.get("vllm:time_to_first_token_seconds_count"),
+        "vllm.ttft_sum_seconds": metrics.get("vllm:time_to_first_token_seconds_sum"),
+        "vllm.queue_count": metrics.get("vllm:request_queue_time_seconds_count"),
+        "vllm.queue_sum_seconds": metrics.get("vllm:request_queue_time_seconds_sum"),
+        "vllm.inference_count": metrics.get("vllm:request_inference_time_seconds_count"),
+        "vllm.inference_sum_seconds": metrics.get("vllm:request_inference_time_seconds_sum"),
+    }
+
+
+def interval_metrics_payload(before: Metrics, after: Metrics, elapsed_s: float) -> dict[str, float]:
+    prompt_delta = after.get("vllm:prompt_tokens_total") - before.get("vllm:prompt_tokens_total")
+    generation_delta = after.get("vllm:generation_tokens_total") - before.get("vllm:generation_tokens_total")
+    return {
+        "vllm.window_seconds": elapsed_s,
+        "vllm.prompt_tokens_delta": prompt_delta,
+        "vllm.generation_tokens_delta": generation_delta,
+        "vllm.total_tokens_delta": prompt_delta + generation_delta,
+        "vllm.prompt_tokens_per_second": prompt_delta / elapsed_s if elapsed_s > 0 else 0.0,
+        "vllm.generation_tokens_per_second": generation_delta / elapsed_s if elapsed_s > 0 else 0.0,
+        "vllm.total_tokens_per_second": (prompt_delta + generation_delta) / elapsed_s if elapsed_s > 0 else 0.0,
+        **current_metrics_payload(after),
+    }
+
+
 def print_summary(metrics: Metrics) -> None:
     running = metrics.get("vllm:num_requests_running")
     waiting = metrics.get("vllm:num_requests_waiting")
@@ -296,6 +339,9 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument("--interval", type=float, help="Print a recent throughput gauge using two scrapes this many seconds apart")
     parser.add_argument("--log-file", help="Append output to this file instead of stdout")
     parser.add_argument("--repeat", action="store_true", help="Repeat interval gauges forever; requires --interval")
+    parser.add_argument("--instance-id", type=int, help="Vast instance id for writing metrics to launch ledger")
+    parser.add_argument("--record-ledger", action="store_true", help="Record selected vLLM metrics to state/launches.sqlite3")
+    parser.add_argument("--db", type=Path, default=launch_ledger.DEFAULT_DB_PATH, help="Launch ledger sqlite path")
     args = parser.parse_args(argv)
 
     if args.metrics_url:
@@ -319,6 +365,20 @@ def main(argv: Iterable[str] | None = None) -> int:
         if args.interval is not None and args.interval <= 0:
             parser.error("--interval must be > 0")
 
+        if args.record_ledger and args.instance_id is None:
+            parser.error("--record-ledger requires --instance-id")
+
+        def record_payload(payload: dict[str, float], interval: bool) -> None:
+            if not args.record_ledger:
+                return
+            launch_ledger.record_metric_samples(
+                instance_id=args.instance_id,
+                source="vllm_metrics_interval" if interval else "vllm_metrics",
+                metrics=payload,
+                details={"metrics_url": url, "interval": args.interval if interval else None},
+                db_path=args.db,
+            )
+
         def emit_once() -> None:
             text = fetch_metrics(url, api_key, args.timeout)
             if args.interval is not None:
@@ -326,10 +386,14 @@ def main(argv: Iterable[str] | None = None) -> int:
                 start = time.monotonic()
                 time.sleep(args.interval)
                 after = parse_metrics(fetch_metrics(url, api_key, args.timeout))
+                elapsed = time.monotonic() - start
                 print(f"=== {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')} ===")
-                print_gauge(before, after, time.monotonic() - start)
+                print_gauge(before, after, elapsed)
+                record_payload(interval_metrics_payload(before, after, elapsed), interval=True)
             else:
-                print_summary(parse_metrics(text))
+                metrics = parse_metrics(text)
+                print_summary(metrics)
+                record_payload(current_metrics_payload(metrics), interval=False)
 
         if args.log_file:
             while True:
