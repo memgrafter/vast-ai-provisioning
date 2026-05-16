@@ -51,3 +51,19 @@
   - If stable, try `turboquant_4bit_nc` around 65536 context. Only try more aggressive presets after quality/acceptance checks.
   - Keep non-TurboQuant 16K/18K profiles available as rollback baselines.
   - Do not stream/re-export models for TurboQuant; it should be a profile/template setting only.
+
+- [ ] Add calibrated KV-cache quantization/scaling checks per model/profile, especially every profile using `kv_cache_dtype=fp8`:
+  - Qwen3.6-27B-FP8 B200/H200/PRO6000WS profiles currently rely on vLLM default/unscaled FP8 KV factors; logs warn this can affect accuracy.
+  - Carnice NVFP4/modelopt profiles need the same review when fp8 KV is enabled; weight NVFP4 calibration does not automatically imply KV-cache scaling is calibrated.
+  - Qwen3.6 AWQ/AWQ-Marlin profiles need the same review when fp8 KV is enabled; weight AWQ calibration does not automatically imply KV-cache scaling is calibrated.
+  - Decide whether to source scaling factors from checkpoint metadata, run calibration, or keep fp8 KV as throughput-only with documented quality caveat.
+
+- B200 Carnice NVFP4 MTP3 peak-TPS notes, shared-prefix coding burn-in, max_tokens=1024 unless noted:
+  - c=2: ~198 tps/user, 397 tok/s total. no queueing, ~2.6% KV, shared 60K prefix, 2 measured turns/user with 2048 output cap.
+  - c=24: ~105 tps/user, 2528 tok/s total. no meaningful queueing, ~15% KV, shared 60K prefix, 2 measured turns/user with 2048 output cap.
+  - c=128: ~29.6 tps/user, 3782 tok/s total. about 12 queueing at peak, ~76% KV, shared 60K prefix, 2 measured turns/user with 1024 output cap.
+  - c=192: ~16.0 tps/user, 3071 tok/s total. about 33 queueing, ~100% KV / KV-limited, shared 60K prefix, 2 measured turns/user with 1024 output cap.
+  - c=24 agentic sustained: ~118.5 tps/user, 2845 tok/s total. 4 sequential measured requests/user after 1 warmup, max_tokens=20000, shared 30K prefix (~30.5K prompt), max_waiting=7, max_kv=19.8%, latency avg/p95 ~76.9s/130.5s, TTFT avg ~0.70s. Recent windows held ~3.1k-3.55k tok/s at 20-24 running with ~83-86% draft acceptance.
+  - c=64 agentic sustained: ~77.2 tps/user, 4942 tok/s total. 4 sequential measured requests/user after 1 warmup, max_tokens=20000, shared 30K prefix (~30.5K prompt), max_waiting=12, max_kv=50.3%, latency avg/p95 ~129.7s/216.9s, TTFT avg ~1.22s. Recent windows held ~4.7k-5.7k tok/s at 52-60 running with ~82-88% draft acceptance.
+  - c=128 agentic sustained: ~42.6 tps/user, 5450 tok/s total. 4 sequential measured requests/user after 1 warmup, max_tokens=20000, shared 30K prefix (~30.5K prompt), max_waiting=26, max_kv=100.0%, latency avg/p95 ~241.8s/417.2s, TTFT avg ~14.56s, queue avg ~13.02s. Saturated upper point and now lower aggregate than c=96; recent high-throughput windows ~6.0k-6.5k tok/s at 92-103 running with ~83-87% draft acceptance.
+  - c=96 agentic sustained: ~58.1 tps/user, 5575 tok/s total. 4 sequential measured requests/user after 1 warmup, max_tokens=20000, shared 30K prefix (~30.5K prompt), max_waiting=2, max_kv=75.3%, latency avg/p95 ~173.9s/295.0s, TTFT avg ~1.34s, queue avg ~0.11s. Best current sweet spot: higher aggregate than c=128 without KV saturation; recent windows ~5.4k-5.9k tok/s at 71-85 running with ~81-87% draft acceptance.
