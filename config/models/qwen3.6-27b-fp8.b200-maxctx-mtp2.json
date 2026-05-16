@@ -1,0 +1,34 @@
+{
+  "name": "qwen3.6-27b-fp8-b200-maxctx-mtp2",
+  "hf_model_id": "Qwen/Qwen3.6-27B-FP8",
+  "r2_prefix": "Qwen/Qwen3.6-27B-FP8",
+  "model_dir": "/workspace/models/Qwen/Qwen3.6-27B-FP8",
+  "served_model_name": "qwen3.6-27b-fp8-b200-maxctx-mtp2",
+  "quantization": "fp8",
+  "expected_model_download_tb": 0.031,
+  "vllm": {
+    "dtype": "auto",
+    "max_model_len": 262144,
+    "gpu_memory_utilization": 0.9,
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "max_num_seqs": 64,
+    "max_num_batched_tokens": 16384,
+    "max_new_tokens": 30000,
+    "kv_cache_dtype": "fp8",
+    "enable_auto_tool_choice": false,
+    "tool_call_parser": null,
+    "reasoning_parser": "qwen3",
+    "enable_prefix_caching": true,
+    "language_model_only": true,
+    "speculative_config": {
+      "method": "qwen3_next_mtp",
+      "num_speculative_tokens": 2
+    },
+    "extra_args": [],
+    "force_quantization": null
+  },
+  "notes": "B200 profile for official Qwen3.6-27B-FP8 at the model-card max context target, with fp8 KV, prefix caching, first-class max-num-batched-tokens, MTP n=2, and max_new_tokens=30000. max_num_batched_tokens is set to 16384 after 65536 triggered a B200 torch.compile/Triton illegal-memory-access crash during startup. Use for separate B200 max TPS, scheduler concurrency, and warmed-prefix KV-store concurrency tests."
+}
