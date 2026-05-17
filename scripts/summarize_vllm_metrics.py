@@ -4,16 +4,15 @@
 Usage:
     . env.vast-management
     ./run.sh scripts/summarize_vllm_metrics.py \
-      --base-url http://<host>:<mapped_8000>/v1
+      --instance-id <vast-instance-id>
 
 Or print a recent throughput gauge from two scrapes:
     . env.vast-management
     ./run.sh scripts/summarize_vllm_metrics.py \
-      --base-url http://<host>:<mapped_8000>/v1 \
+      --instance-id <vast-instance-id> \
       --interval 10
 
-Or:
-    . env.vast-management
+Fixed URL mode is still available for non-Vast targets:
     ./run.sh scripts/summarize_vllm_metrics.py \
       --metrics-url http://<host>:<mapped_8000>/metrics
 """
@@ -31,7 +30,7 @@ import urllib.request
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -109,13 +108,82 @@ def avg(total: float, count: float) -> str:
     return f"{total / count:.2f}"
 
 
-def fetch_metrics(url: str, api_key: str | None, timeout: int) -> str:
+class MetricsEndpoint:
+    def __init__(self, *, metrics_url: str | None, base_url: str | None, instance_id: int | None, container_port: str) -> None:
+        self.fixed_metrics_url = metrics_url.rstrip("/") if metrics_url else None
+        self.fixed_base_url = base_url.rstrip("/") if base_url else None
+        self.instance_id = instance_id
+        self.container_port = container_port
+        self._current_metrics_url: str | None = None
+        self._vast: Any | None = None
+        self.endpoint_changes = 0
+
+    def _vast_client(self) -> Any:
+        if self._vast is None:
+            from vastai import VastAI
+
+            self._vast = VastAI()
+        return self._vast
+
+    def _url_from_fixed_base(self) -> str | None:
+        if not self.fixed_base_url:
+            return None
+        base = self.fixed_base_url
+        if base.endswith("/v1"):
+            base = base[:-3]
+        return base + "/metrics"
+
+    def _resolve_vast_metrics_url(self) -> str:
+        if self.instance_id is None:
+            raise RuntimeError("instance_id is not set")
+        info = self._vast_client().show_instance(id=self.instance_id)
+        host = info.get("public_ipaddr")
+        ports = info.get("ports") or {}
+        entries = ports.get(self.container_port) or []
+        mapped = (entries[0] or {}).get("HostPort") if entries else None
+        if not host or not mapped:
+            raise RuntimeError(f"could not resolve {self.container_port} for instance {self.instance_id}")
+        return f"http://{host}:{mapped}/metrics"
+
+    def resolve(self, *, force: bool = False) -> str:
+        if self.fixed_metrics_url:
+            return self.fixed_metrics_url
+        fixed_base_url = self._url_from_fixed_base()
+        if fixed_base_url:
+            return fixed_base_url
+        if not force and self._current_metrics_url:
+            return self._current_metrics_url
+        new_url = self._resolve_vast_metrics_url()
+        if self._current_metrics_url and self._current_metrics_url != new_url:
+            self.endpoint_changes += 1
+        self._current_metrics_url = new_url
+        return new_url
+
+    def refresh(self) -> str:
+        return self.resolve(force=True)
+
+    @property
+    def is_dynamic(self) -> bool:
+        return not self.fixed_metrics_url and not self.fixed_base_url and self.instance_id is not None
+
+
+def fetch_metrics(endpoint: MetricsEndpoint, api_key: str | None, timeout: int) -> str:
     headers = {}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=timeout) as response:
-        return response.read().decode("utf-8", errors="replace")
+    last_exc: Exception | None = None
+    for attempt in range(2):
+        try:
+            req = urllib.request.Request(endpoint.resolve(), headers=headers)
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                return response.read().decode("utf-8", errors="replace")
+        except Exception as exc:
+            last_exc = exc
+            if attempt == 0 and endpoint.is_dynamic:
+                endpoint.refresh()
+                continue
+            raise
+    raise RuntimeError(f"metrics fetch failed: {last_exc}")
 
 
 def print_gauge(before: Metrics, after: Metrics, elapsed_s: float) -> None:
@@ -331,28 +399,28 @@ def print_summary(metrics: Metrics) -> None:
 
 def main(argv: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Summarize vLLM /metrics output")
-    parser.add_argument("--base-url", help="Base URL, e.g. http://host:port or http://host:port/v1")
-    parser.add_argument("--metrics-url", help="Full metrics URL. Overrides --base-url")
+    parser.add_argument("--base-url", help="Base URL, e.g. http://host:port or http://host:port/v1. Optional when --instance-id is set")
+    parser.add_argument("--metrics-url", help="Full metrics URL. Overrides --base-url and --instance-id endpoint resolution")
     parser.add_argument("--api-key-env", default="VLLM_API_KEY", help="Env var containing bearer token")
     parser.add_argument("--no-auth", action="store_true", help="Do not send Authorization header")
     parser.add_argument("--timeout", type=int, default=30)
     parser.add_argument("--interval", type=float, help="Print a recent throughput gauge using two scrapes this many seconds apart")
     parser.add_argument("--log-file", help="Append output to this file instead of stdout")
     parser.add_argument("--repeat", action="store_true", help="Repeat interval gauges forever; requires --interval")
-    parser.add_argument("--instance-id", type=int, help="Vast instance id for writing metrics to launch ledger")
+    parser.add_argument("--instance-id", type=int, help="Vast instance id for dynamic port resolution and writing metrics to launch ledger")
+    parser.add_argument("--container-port", default="8000/tcp", help="Container port to resolve when --instance-id is used without --base-url/--metrics-url")
     parser.add_argument("--record-ledger", action="store_true", help="Record selected vLLM metrics to state/launches.sqlite3")
     parser.add_argument("--db", type=Path, default=launch_ledger.DEFAULT_DB_PATH, help="Launch ledger sqlite path")
     args = parser.parse_args(argv)
 
-    if args.metrics_url:
-        url = args.metrics_url
-    elif args.base_url:
-        base = args.base_url.rstrip("/")
-        if base.endswith("/v1"):
-            base = base[:-3]
-        url = base + "/metrics"
-    else:
-        parser.error("provide --base-url or --metrics-url")
+    if not (args.metrics_url or args.base_url or args.instance_id):
+        parser.error("provide --instance-id, --base-url, or --metrics-url")
+    endpoint = MetricsEndpoint(
+        metrics_url=args.metrics_url,
+        base_url=args.base_url,
+        instance_id=args.instance_id,
+        container_port=args.container_port,
+    )
 
     api_key = None if args.no_auth else os.environ.get(args.api_key_env)
     if not args.no_auth and not api_key:
@@ -375,17 +443,22 @@ def main(argv: Iterable[str] | None = None) -> int:
                 instance_id=args.instance_id,
                 source="vllm_metrics_interval" if interval else "vllm_metrics",
                 metrics=payload,
-                details={"metrics_url": url, "interval": args.interval if interval else None},
+                details={
+                    "endpoint_source": "instance_id" if endpoint.is_dynamic else "fixed_url",
+                    "container_port": args.container_port if endpoint.is_dynamic else None,
+                    "interval": args.interval if interval else None,
+                    "endpoint_changes": endpoint.endpoint_changes,
+                },
                 db_path=args.db,
             )
 
         def emit_once() -> None:
-            text = fetch_metrics(url, api_key, args.timeout)
+            text = fetch_metrics(endpoint, api_key, args.timeout)
             if args.interval is not None:
                 before = parse_metrics(text)
                 start = time.monotonic()
                 time.sleep(args.interval)
-                after = parse_metrics(fetch_metrics(url, api_key, args.timeout))
+                after = parse_metrics(fetch_metrics(endpoint, api_key, args.timeout))
                 elapsed = time.monotonic() - start
                 print(f"=== {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')} ===")
                 print_gauge(before, after, elapsed)
