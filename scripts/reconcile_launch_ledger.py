@@ -70,7 +70,7 @@ def main() -> int:
     parser.add_argument(
         "--mark-not-seen",
         action="store_true",
-        help="with --write, record reconcile_not_seen event for ledger rows absent from current Vast instances",
+        help="with --write, mark active ledger rows absent from current Vast instances as destroyed",
     )
     args = parser.parse_args()
 
@@ -95,6 +95,12 @@ def main() -> int:
                     event_name="reconcile_not_seen",
                     source="reconcile",
                     details={"previous_lifecycle_status": row["lifecycle_status"]},
+                    db_path=args.db,
+                )
+                launch_ledger.mark_destroyed(
+                    instance_id=iid,
+                    reason="reconcile_not_seen_in_current_instances",
+                    destroyed_by_script=False,
                     db_path=args.db,
                 )
             continue
