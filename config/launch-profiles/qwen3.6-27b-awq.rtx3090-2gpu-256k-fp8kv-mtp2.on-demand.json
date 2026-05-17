@@ -7,10 +7,10 @@
     "max_internet_down_cost_per_tb": 8.0,
     "max_internet_up_cost_per_tb": 10.0,
     "min_direct_port_count": 1,
-    "min_inet_down": 800
+    "min_inet_down": 128
   },
   "pricing": {
-    "max_dph_total": 0.75,
+    "max_dph_total": 0.4,
     "target_first_test_minutes": 60
   },
   "purpose": "On-demand 2x RTX 3090 experimental 256K profile for Qwen3.6 27B AWQ with awq_marlin, fp8 KV, and Qwen3 Next MTP n=2",
@@ -21,7 +21,10 @@
   "selection": {
     "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
     "geo_query": "geolocation not in [CN]",
-    "greylisted_machine_ids": [],
+    "greylisted_machine_ids": [
+      28229,
+      103173
+    ],
     "preferred_machine_ids": [
       42967
     ],
@@ -39,7 +42,7 @@
     "min_disk_bw": 500
   },
   "template": {
-    "hash_id": "cfd71b81b178c7a9473e127adf390ead",
+    "hash_id": "ff558c10cce0d3d8a4d5b5fb57d1e964",
     "name": "vLLM_R2_Qwen3_6_27B_AWQ_RTX3090_2GPU_256K_FP8KV_MTP2"
   }
 }
