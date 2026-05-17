@@ -16,6 +16,8 @@
     "download_dir": "/workspace/models",
     "max_num_seqs": 2,
     "kv_cache_dtype": "fp8",
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "qwen3_coder",
     "language_model_only": true,
     "reasoning_parser": "qwen3",
     "enable_prefix_caching": true,

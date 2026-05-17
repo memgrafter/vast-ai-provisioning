@@ -39,7 +39,7 @@
     "min_disk_bw": 500
   },
   "template": {
-    "hash_id": "910465ed31fbab3ab1d72d828cde7ec4",
+    "hash_id": "49255304413772fb4f19d7d2265a053a",
     "name": "vLLM_R2_Qwen3_6_27B_FP8_PRO6000WS"
   }
 }
