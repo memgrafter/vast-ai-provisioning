@@ -15,6 +15,9 @@
     "port": 18000,
     "download_dir": "/workspace/models",
     "max_num_seqs": 64,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "qwen3_coder",
+    "reasoning_parser": "qwen3",
     "extra_args": [],
     "force_quantization": null
   }
