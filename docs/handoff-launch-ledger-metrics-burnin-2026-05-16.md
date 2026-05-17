@@ -285,7 +285,7 @@ Example:
 ```bash
 . env.vast-management
 OPENAI_API_KEY="$VLLM_API_KEY" ./run.sh scripts/coding_agent_saturation_ramp.py \
-  --instance-id 36859103 \
+  --instance-id <INSTANCE_ID> \
   --model carnice-v2-27b-nvfp4-text-mtp-b200-maxctx-mtp3 \
   --concurrency 96 \
   --requests-per-concurrency 4 \
@@ -356,7 +356,7 @@ Example:
 
 ```bash
 scripts/report_launch_metrics.py \
-  --instance-id 36859103 \
+  --instance-id <INSTANCE_ID> \
   --since 2026-05-16T07:32:41Z \
   --until 2026-05-16T07:46:43Z \
   --workload-model carnice-v2-27b-nvfp4-text-mtp-b200-maxctx-mtp3 \
@@ -412,7 +412,14 @@ The 24/64/96/128 reports were generated from DB time windows and then given work
 
 ## B200 run windows found in the DB
 
-Observed active clusters for instance `36859103` during the session:
+Observed active clusters for the B200 test instance during the session. The provider instance ID is intentionally redacted in this public handoff. To recover the local launch key from the ignored ledger tomorrow:
+
+```bash
+sqlite3 state/launches.sqlite3 \
+  "select launch_key, launch_profile_name, gpu_name, created_at from launches where gpu_name like '%B200%' order by created_at desc;"
+```
+
+Run windows:
 
 ```text
 24-way:  2026-05-16T06:42:32Z -> 2026-05-16T06:49:20Z
@@ -465,7 +472,7 @@ python -m py_compile \
 Publish-safety grep used for docs:
 
 ```bash
-rg -n "44\\.227|41373|43508|40913|http://|https://|/Users/|state/|instances/|offers/|Bearer|Authorization|VLLM_API|OPENAI_API|api[_-]?key|secret|token|ssh|root@|public_ip|HostPort|details_json" docs/<report>.md
+rg -n "([0-9]{1,3}\\.){3}[0-9]{1,3}|ssh[0-9]+\\.vast\\.ai|http://[^<]|https://[^<]|/Users/|Bearer|Authorization|api[_-]?key|secret|ssh-ed25519|BEGIN .*PRIVATE|root@|public_ip|HostPort|details_json" docs/<report>.md
 ```
 
 Expected: no sensitive hits. Some non-sensitive words such as `tokens` may match broad patterns if the regex is too broad.
