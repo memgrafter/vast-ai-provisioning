@@ -14,13 +14,17 @@
     "host": "127.0.0.1",
     "port": 18000,
     "download_dir": "/workspace/models",
-    "max_num_seqs": 2,
+    "max_num_seqs": 96,
     "kv_cache_dtype": "fp8",
     "enable_auto_tool_choice": true,
     "tool_call_parser": "qwen3_coder",
     "language_model_only": true,
     "reasoning_parser": "qwen3",
     "enable_prefix_caching": true,
+    "speculative_config": {
+      "method": "qwen3_next_mtp",
+      "num_speculative_tokens": 2
+    },
     "extra_args": [],
     "force_quantization": null
   }
