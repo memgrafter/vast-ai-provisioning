@@ -306,12 +306,14 @@ def search_policy_offers(vast: VastAI, context: dict[str, Any]) -> list[dict[str
     query = " ".join(filters)
     market = "interruptible" if launch.get("market") in {"interruptible", "bid", "spot"} else "on-demand"
     no_default = bool(selection.get("search_no_default", False))
-    raw = vast.search_offers(query=query, type=market, order="dph_total", limit=50, storage=storage_gb, no_default=no_default)
+    search_limit = int(selection.get("search_limit", 50))
+    raw = vast.search_offers(query=query, type=market, order="dph_total", limit=search_limit, storage=storage_gb, no_default=no_default)
     passing = []
     print("Offer policy check")
     print("==================")
     print(f"market: {market}")
     print(f"query: {query}")
+    print(f"search_limit: {search_limit}")
     if no_default:
         print("search_no_default: true")
     for offer in raw:
