@@ -16,6 +16,7 @@ scripts/launch_ledger.py
 scripts/reconcile_launch_ledger.py
 scripts/report_launch_metrics.py
 scripts/summarize_vllm_metrics.py
+scripts/clean_terminate_instance.py
 scripts/select_and_launch.py
 scripts/monitor_instance_readiness.py
 scripts/coding_agent_saturation_ramp.py
@@ -342,6 +343,45 @@ burnin_finished
 
 and step summary metrics with `burnin.*` metric names.
 
+## Clean terminate / closeout
+
+Script:
+
+```text
+scripts/clean_terminate_instance.py
+```
+
+Preferred closeout path for benchmark rentals:
+
+```bash
+. env.vast-management
+./run.sh scripts/clean_terminate_instance.py \
+  --instance-id <INSTANCE_ID> \
+  --metrics-interval 10 \
+  --yes
+```
+
+What it does, in order:
+
+1. saves a pre-destroy `show_instance` snapshot under ignored `state/terminate/`
+2. saves a Vast log tail under ignored `state/terminate/`
+3. captures final cumulative vLLM metrics into the ledger
+4. optionally captures a final interval TPS window with `--metrics-interval`
+5. calls Vast destroy only when `--yes` is provided
+6. attempts a post-destroy snapshot/error capture
+7. marks the ledger row `destroyed`
+
+Safe capture-only mode:
+
+```bash
+./run.sh scripts/clean_terminate_instance.py \
+  --instance-id <INSTANCE_ID> \
+  --metrics-interval 10 \
+  --dry-run
+```
+
+Use `--require-metrics` when the instance should not be destroyed unless the final vLLM metrics scrape succeeds.
+
 ## Report generator
 
 Script:
@@ -450,9 +490,10 @@ max-model-len: 262144
 ./run.sh scripts/reconcile_launch_ledger.py --write
 ```
 
-3. Request JSONL is intentionally under ignored `state/burnin/`; publish summaries via Markdown reports only.
-4. Do not commit `state/launches.sqlite3`; it is local analytics state.
-5. If adding more scripts that touch SQLite, use `scripts.launch_ledger` connection helpers so WAL/busy timeout behavior stays consistent.
+3. Prefer `scripts/clean_terminate_instance.py --yes` over ad-hoc `vast.destroy_instance(...)` so final metrics/logs are preserved before the rental is released.
+4. Request JSONL is intentionally under ignored `state/burnin/`; publish summaries via Markdown reports only.
+5. Do not commit `state/launches.sqlite3`; it is local analytics state.
+6. If adding more scripts that touch SQLite, use `scripts.launch_ledger` connection helpers so WAL/busy timeout behavior stays consistent.
 
 ## Verification commands
 
@@ -463,6 +504,7 @@ python -m py_compile \
   scripts/launch_ledger.py \
   scripts/reconcile_launch_ledger.py \
   scripts/report_launch_metrics.py \
+  scripts/clean_terminate_instance.py \
   scripts/select_and_launch.py \
   scripts/monitor_instance_readiness.py \
   scripts/summarize_vllm_metrics.py \
