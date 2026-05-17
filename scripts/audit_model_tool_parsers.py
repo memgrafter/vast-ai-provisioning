@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit model profiles for required vLLM tool-call parser settings."""
+"""Audit model profiles for required vLLM Qwen/Carnice settings."""
 from __future__ import annotations
 
 import argparse
@@ -18,7 +18,7 @@ def expected_parser(profile: dict[str, Any]) -> str | None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Audit Qwen/Carnice vLLM tool-call parser consistency")
+    parser = argparse.ArgumentParser(description="Audit Qwen/Carnice vLLM tool-call parser and MTP consistency")
     parser.add_argument("paths", nargs="*", type=Path, default=[Path("config/models")])
     args = parser.parse_args()
 
@@ -41,14 +41,34 @@ def main() -> int:
         auto = vllm.get("enable_auto_tool_choice")
         actual = vllm.get("tool_call_parser")
         reasoning = vllm.get("reasoning_parser")
-        ok = auto is True and actual == expected and reasoning == "qwen3"
-        status = "OK" if ok else "BAD"
-        print(f"{status:3} {path} auto={auto!r} tool_call_parser={actual!r} expected={expected!r} reasoning_parser={reasoning!r}")
-        if not ok:
+        errors: list[str] = []
+        if auto is not True or actual != expected or reasoning != "qwen3":
+            errors.append(
+                f"tool settings auto={auto!r} tool_call_parser={actual!r} expected={expected!r} reasoning_parser={reasoning!r}"
+            )
+
+        spec = vllm.get("speculative_config")
+        if spec is not None:
+            expected_method = "qwen3_5_mtp" if expected == "qwen3_xml" else "qwen3_next_mtp"
+            method = spec.get("method") if isinstance(spec, dict) else None
+            tokens = spec.get("num_speculative_tokens") if isinstance(spec, dict) else None
+            if method != expected_method:
+                errors.append(f"MTP method={method!r} expected={expected_method!r}")
+            if expected_method == "qwen3_next_mtp" and tokens not in {1, 2}:
+                errors.append(f"qwen3_next_mtp num_speculative_tokens={tokens!r} expected 1 or 2")
+            if expected_method == "qwen3_5_mtp" and tokens != 3:
+                errors.append(f"qwen3_5_mtp num_speculative_tokens={tokens!r} expected 3")
+
+        status = "OK" if not errors else "BAD"
+        spec_text = f" spec={spec!r}" if spec is not None else ""
+        print(f"{status:3} {path} auto={auto!r} tool_call_parser={actual!r} expected={expected!r} reasoning_parser={reasoning!r}{spec_text}")
+        for error in errors:
+            print(f"    - {error}")
+        if errors:
             problems.append(str(path))
 
     if problems:
-        print("\nProfiles with inconsistent tool parser settings:")
+        print("\nProfiles with inconsistent Qwen/Carnice settings:")
         for path in problems:
             print(f"- {path}")
         return 1
