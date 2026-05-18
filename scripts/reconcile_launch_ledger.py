@@ -4,7 +4,8 @@
 This is intentionally conservative:
 - It only uses read-only Vast SDK calls.
 - It never destroys or mutates Vast instances.
-- By default it prints a plan. Use --write to update the local sqlite ledger.
+- By default it updates the local sqlite ledger with read-only Vast observations.
+  Use --dry-run to print without writing.
 - Missing instances are not marked destroyed unless --mark-not-seen is provided,
   because Vast/API visibility can be intermittent.
 """
@@ -183,14 +184,16 @@ def metric_payload(info: dict[str, Any]) -> dict[str, float | int | None]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Reconcile launch ledger with current Vast instance status")
     parser.add_argument("--db", type=Path, default=launch_ledger.DEFAULT_DB_PATH)
-    parser.add_argument("--write", action="store_true", help="write local ledger updates; default only prints")
+    parser.add_argument("--write", action="store_true", help="deprecated no-op; writing is the default")
+    parser.add_argument("--dry-run", action="store_true", help="print reconciliation plan without writing local ledger updates")
     parser.add_argument(
         "--mark-not-seen",
         action="store_true",
-        help="with --write, mark active ledger rows absent from current Vast instances as destroyed only when Vast audit history confirms deletion",
+        help="mark active ledger rows absent from current Vast instances as destroyed only when Vast audit history confirms deletion",
     )
     parser.add_argument("--skip-history", action="store_true", help="do not query Vast audit/charge history")
     args = parser.parse_args()
+    write = not args.dry_run
 
     rows = active_ledger_rows(args.db)
     if not rows:
@@ -214,7 +217,7 @@ def main() -> int:
             print(f"WARN billing history unavailable: {safe_error(exc)}", file=sys.stderr)
 
     print(
-        f"ledger_active_rows={len(rows)} vast_current_instances={len(current)} write={args.write} "
+        f"ledger_active_rows={len(rows)} vast_current_instances={len(current)} write={write} "
         f"history={'off' if args.skip_history else 'on'} audit_deletes={len(audit_deletes)} charge_rows={len(charges)}"
     )
     for row in rows:
@@ -230,7 +233,7 @@ def main() -> int:
                 history_bits.append(f"billed=${float(charge.get('amount') or 0):.4f}")
             history_text = " " + " ".join(history_bits) if history_bits else ""
             print(f"MISSING instance={iid} launch_key={row['launch_key']} ledger_status={row['lifecycle_status']}{history_text}")
-            if args.write:
+            if write:
                 launch_ledger.record_event(
                     instance_id=iid,
                     event_name="reconcile_not_seen",
@@ -277,7 +280,7 @@ def main() -> int:
             f"dph={info.get('dph_total')} storage={info.get('storage_total_cost')} "
             f"duration={info.get('duration')}"
         )
-        if args.write:
+        if write:
             launch_ledger.update_instance_snapshot(
                 instance_id=iid,
                 info=info,
@@ -299,8 +302,8 @@ def main() -> int:
                 db_path=args.db,
             )
 
-    if not args.write:
-        print("Dry run only. Re-run with --write to update local ledger metrics/events.")
+    if not write:
+        print("Dry run only. Re-run without --dry-run to update local ledger metrics/events.")
     return 0
 
 
