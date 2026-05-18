@@ -184,7 +184,6 @@ def metric_payload(info: dict[str, Any]) -> dict[str, float | int | None]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Reconcile launch ledger with current Vast instance status")
     parser.add_argument("--db", type=Path, default=launch_ledger.DEFAULT_DB_PATH)
-    parser.add_argument("--write", action="store_true", help="deprecated no-op; writing is the default")
     parser.add_argument("--dry-run", action="store_true", help="print reconciliation plan without writing local ledger updates")
     parser.add_argument(
         "--mark-not-seen",
