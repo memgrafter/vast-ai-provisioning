@@ -7,10 +7,6 @@ This is intentionally conservative:
 - By default it prints a plan. Use --write to update the local sqlite ledger.
 - Missing instances are not marked destroyed unless --mark-not-seen is provided,
   because Vast/API visibility can be intermittent.
-- When marking a missing instance destroyed, use the first prior reconcile_not_seen
-  event as the inferred termination time if one exists. This avoids charging a
-  long-dead host until the current reconcile run just because an older reconcile
-  was non-mutating.
 """
 from __future__ import annotations
 
@@ -51,25 +47,6 @@ def instance_status(info: dict[str, Any]) -> str:
     return str(info.get("actual_status") or info.get("status") or info.get("cur_state") or "unknown")
 
 
-def first_reconcile_not_seen_at(db_path: Path, launch_key: str) -> str | None:
-    if not db_path.exists():
-        return None
-    con = launch_ledger.open_readonly_db(db_path)
-    try:
-        row = con.execute(
-            """
-            SELECT MIN(event_at) AS first_not_seen_at
-            FROM launch_events
-            WHERE launch_key = ?
-              AND event_name = 'reconcile_not_seen'
-            """,
-            (launch_key,),
-        ).fetchone()
-        return row["first_not_seen_at"] if row else None
-    finally:
-        con.close()
-
-
 def metric_payload(info: dict[str, Any]) -> dict[str, float | int | None]:
     duration = info.get("duration")
     if duration is None and info.get("start_date"):
@@ -93,7 +70,7 @@ def main() -> int:
     parser.add_argument(
         "--mark-not-seen",
         action="store_true",
-        help="with --write, mark active ledger rows absent from current Vast instances as destroyed; uses first prior reconcile_not_seen as inferred termination time if available",
+        help="with --write, mark active ledger rows absent from current Vast instances as destroyed",
     )
     args = parser.parse_args()
 
@@ -111,29 +88,19 @@ def main() -> int:
         iid = int(row["instance_id"])
         info = by_id.get(iid)
         if info is None:
-            previous_not_seen_at = first_reconcile_not_seen_at(args.db, row["launch_key"])
-            inferred_terminated_at = previous_not_seen_at or launch_ledger.now_utc()
-            print(
-                f"MISSING instance={iid} launch_key={row['launch_key']} ledger_status={row['lifecycle_status']} "
-                f"inferred_terminated_at={inferred_terminated_at if args.mark_not_seen else 'n/a'}"
-            )
+            print(f"MISSING instance={iid} launch_key={row['launch_key']} ledger_status={row['lifecycle_status']}")
             if args.write and args.mark_not_seen:
                 launch_ledger.record_event(
                     instance_id=iid,
                     event_name="reconcile_not_seen",
                     source="reconcile",
-                    details={
-                        "previous_lifecycle_status": row["lifecycle_status"],
-                        "previous_not_seen_at": previous_not_seen_at,
-                        "inferred_terminated_at": inferred_terminated_at,
-                    },
+                    details={"previous_lifecycle_status": row["lifecycle_status"]},
                     db_path=args.db,
                 )
                 launch_ledger.mark_destroyed(
                     instance_id=iid,
                     reason="reconcile_not_seen_in_current_instances",
                     destroyed_by_script=False,
-                    terminated_at=inferred_terminated_at,
                     db_path=args.db,
                 )
             continue
