@@ -487,15 +487,17 @@ def mark_destroyed(
     instance_id: int | str,
     reason: str,
     destroyed_by_script: bool = False,
+    terminated_at: str | None = None,
     db_path: Path = DEFAULT_DB_PATH,
 ) -> None:
     t = now_utc()
+    effective_terminated_at = terminated_at or t
     con = init_db(db_path)
     try:
         con.execute(
             """
             UPDATE launches
-            SET terminated_at = COALESCE(terminated_at, :now),
+            SET terminated_at = COALESCE(terminated_at, :terminated_at),
                 last_seen_at = :now,
                 lifecycle_status = 'destroyed',
                 termination_reason = :reason,
@@ -505,6 +507,7 @@ def mark_destroyed(
             """,
             {
                 "now": t,
+                "terminated_at": effective_terminated_at,
                 "reason": reason,
                 "destroyed_by_script": int(destroyed_by_script),
                 "launch_key": launch_key(instance_id),
@@ -518,6 +521,6 @@ def mark_destroyed(
         event_name="instance_destroyed",
         event_at=t,
         source="monitor" if destroyed_by_script else "manual_or_reconcile",
-        details={"reason": reason, "destroyed_by_script": destroyed_by_script},
+        details={"reason": reason, "destroyed_by_script": destroyed_by_script, "terminated_at": effective_terminated_at},
         db_path=db_path,
     )
