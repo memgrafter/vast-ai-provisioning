@@ -6,8 +6,9 @@ This is intentionally conservative:
 - It never destroys or mutates Vast instances.
 - By default it updates the local sqlite ledger with read-only Vast observations.
   Use --dry-run to print without writing.
-- Missing instances are not marked destroyed unless --mark-not-seen is provided,
-  because Vast/API visibility can be intermittent.
+- Missing instances are marked destroyed only when Vast audit history confirms
+  an instance delete event. Mere absence from current instances is recorded as
+  reconcile_not_seen but is not treated as termination evidence.
 """
 from __future__ import annotations
 
@@ -185,11 +186,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Reconcile launch ledger with current Vast instance status")
     parser.add_argument("--db", type=Path, default=launch_ledger.DEFAULT_DB_PATH)
     parser.add_argument("--dry-run", action="store_true", help="print reconciliation plan without writing local ledger updates")
-    parser.add_argument(
-        "--mark-not-seen",
-        action="store_true",
-        help="mark active ledger rows absent from current Vast instances as destroyed only when Vast audit history confirms deletion",
-    )
     parser.add_argument("--skip-history", action="store_true", help="do not query Vast audit/charge history")
     args = parser.parse_args()
     write = not args.dry_run
@@ -257,20 +253,19 @@ def main() -> int:
                         },
                         db_path=args.db,
                     )
-                if args.mark_not_seen:
-                    if delete_event:
-                        launch_ledger.mark_destroyed(
-                            instance_id=iid,
-                            reason="vast_audit_instance_delete",
-                            destroyed_by_script=False,
-                            terminated_at=str(delete_event["deleted_at"]),
-                            db_path=args.db,
-                        )
-                    else:
-                        print(
-                            f"WARN not marking instance={iid} destroyed: no Vast audit delete event found",
-                            file=sys.stderr,
-                        )
+                if delete_event:
+                    launch_ledger.mark_destroyed(
+                        instance_id=iid,
+                        reason="vast_audit_instance_delete",
+                        destroyed_by_script=False,
+                        terminated_at=str(delete_event["deleted_at"]),
+                        db_path=args.db,
+                    )
+                else:
+                    print(
+                        f"WARN not marking instance={iid} destroyed: no Vast audit delete event found",
+                        file=sys.stderr,
+                    )
             continue
 
         status = instance_status(info)
