@@ -1,0 +1,587 @@
+#!/usr/bin/env python3
+"""Deterministic agentic-coding benchmark runner.
+
+This runner does not ask the model to invent benchmark tasks. It reads a static
+problem manifest, sends each language-bound problem in manifest order, validates
+basic response shape, correlates optional llama.cpp backend timing logs, and
+writes a compact Markdown report.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import statistics
+import sys
+import time
+import urllib.error
+import urllib.request
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+LANGUAGE_ALIASES: dict[str, set[str]] = {
+    "cpp": {"cpp", "c++", "cc", "cxx"},
+    "c++": {"cpp", "c++", "cc", "cxx"},
+    "python": {"python", "py"},
+    "java": {"java"},
+    "typescript": {"typescript", "ts"},
+    "javascript": {"javascript", "js"},
+    "go": {"go", "golang"},
+}
+
+REQUIRED_SECTIONS = ["## Approach", "## Code", "## Complexity", "## Tests", "## Self-evaluation"]
+FORBIDDEN_DRIFT_PHRASES = [
+    "i will create a new",
+    "let me create a problem",
+    "here is a new leetcode",
+    "i'll ask myself",
+]
+
+
+@dataclass
+class BackendRelease:
+    task: int
+    slot_tokens: int
+    truncated: int
+    prompt_ms: float | None = None
+    prompt_tokens: int | None = None
+    prompt_tps: float | None = None
+    eval_ms: float | None = None
+    eval_tokens: int | None = None
+    eval_tps: float | None = None
+    draft_acceptance: float | None = None
+    draft_accepted: int | None = None
+    draft_generated: int | None = None
+
+
+@dataclass
+class RequestResult:
+    iteration: int
+    request_id: str
+    task_id: str
+    title: str
+    language: str
+    http_status: int
+    client_start: str
+    client_end: str
+    response_bytes: int
+    content_chars: int
+    usage: dict[str, Any] | None
+    validation: dict[str, Any]
+    backend: BackendRelease | None
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def iso_now() -> str:
+    return utc_now().isoformat().replace("+00:00", "Z")
+
+
+def load_manifest(path: Path) -> dict[str, Any]:
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    if manifest.get("version") != 1:
+        raise ValueError(f"unsupported manifest version: {manifest.get('version')!r}")
+    problems = manifest.get("problems")
+    if not isinstance(problems, list) or not problems:
+        raise ValueError("manifest must contain a non-empty problems list")
+    seen_ids: set[str] = set()
+    for index, problem in enumerate(problems, start=1):
+        for key in ["id", "title", "language", "code_fence", "prompt", "requirements"]:
+            if key not in problem:
+                raise ValueError(f"problem #{index} missing required key: {key}")
+        if problem["id"] in seen_ids:
+            raise ValueError(f"duplicate problem id: {problem['id']}")
+        seen_ids.add(problem["id"])
+        if not isinstance(problem["requirements"], list) or not problem["requirements"]:
+            raise ValueError(f"problem {problem['id']} must include non-empty requirements")
+    return manifest
+
+
+def build_messages(problem: dict[str, Any], request_id: str, iteration: int) -> list[dict[str, str]]:
+    requirements = "\n".join(f"- {item}" for item in problem["requirements"])
+    patterns = "\n".join(f"- {item}" for item in problem.get("language_patterns", [])) or "- Use idiomatic language design."
+    code_fence = problem["code_fence"]
+    system = (
+        "You are an expert competitive-programming and systems-design coding assistant. "
+        "Solve exactly the provided problem. Do not invent a new problem. Do not change the requested language."
+    )
+    user = f"""REQUEST_ID: {request_id}
+TASK_ID: {problem['id']}
+ITERATION: {iteration}
+LANGUAGE: {problem['language']}
+EXPECTED_CODE_FENCE: ```{code_fence}
+
+You must solve this exact static benchmark problem. Do not create a new problem.
+
+# Problem
+{problem['title']}
+
+{problem['prompt']}
+
+# Language-specific design patterns to elicit
+{patterns}
+
+# Requirements
+{requirements}
+
+# Required response format
+TASK_ID: {problem['id']}
+LANGUAGE: {problem['language']}
+
+## Approach
+Explain the algorithm.
+
+## Code
+```{code_fence}
+<complete solution>
+```
+
+## Complexity
+State time and space complexity.
+
+## Tests
+Give representative tests.
+
+## Self-evaluation
+List likely bugs and edge cases.
+"""
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
+def request_json(base_url: str, api_key: str | None, payload: dict[str, Any], timeout: int) -> tuple[int, bytes, dict[str, str]]:
+    body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    req = urllib.request.Request(f"{base_url.rstrip('/')}/chat/completions", data=body, method="POST")
+    req.add_header("Content-Type", "application/json")
+    if api_key:
+        req.add_header("Authorization", f"Bearer {api_key}")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status, resp.read(), dict(resp.headers.items())
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read(), dict(exc.headers.items())
+
+
+def extract_content(response_body: bytes) -> tuple[str, dict[str, Any] | None, dict[str, Any]]:
+    text = response_body.decode("utf-8", errors="replace")
+    data = json.loads(text)
+    usage = data.get("usage") if isinstance(data, dict) else None
+    content = ""
+    choices = data.get("choices") or []
+    if choices:
+        choice = choices[0]
+        message = choice.get("message") or {}
+        content = (
+            message.get("content")
+            or message.get("reasoning_content")
+            or message.get("reasoning")
+            or choice.get("text")
+            or ""
+        )
+    if isinstance(content, list):
+        content = "\n".join(part.get("text", str(part)) if isinstance(part, dict) else str(part) for part in content)
+    return content, usage, data
+
+
+def validate_response(content: str, problem: dict[str, Any]) -> dict[str, Any]:
+    missing_sections = [section for section in REQUIRED_SECTIONS if section not in content]
+    task_id_present = f"TASK_ID: {problem['id']}" in content
+    language_present = f"LANGUAGE: {problem['language']}" in content
+    fence_aliases = LANGUAGE_ALIASES.get(problem["code_fence"].lower(), {problem["code_fence"].lower()})
+    fences = {match.lower() for match in re.findall(r"```([A-Za-z0-9_+#.-]+)", content)}
+    fence_ok = bool(fences & fence_aliases)
+    lower_content = content.lower()
+    drift_phrases = [phrase for phrase in FORBIDDEN_DRIFT_PHRASES if phrase in lower_content]
+    code_block_count = len(re.findall(r"```", content)) // 2
+    ok = not missing_sections and task_id_present and language_present and fence_ok and not drift_phrases
+    return {
+        "ok": ok,
+        "missing_sections": missing_sections,
+        "task_id_present": task_id_present,
+        "language_present": language_present,
+        "code_fence_ok": fence_ok,
+        "code_fences_seen": sorted(fences),
+        "code_block_count": code_block_count,
+        "drift_phrases": drift_phrases,
+    }
+
+
+def parse_backend_releases(path: Path) -> list[BackendRelease]:
+    if not path.exists():
+        return []
+    current_task: int | None = None
+    timing_by_task: dict[int, dict[str, Any]] = {}
+    releases: list[BackendRelease] = []
+    timing_task_re = re.compile(r"slot print_timing: id\s+\d+ \| task (\d+) \|")
+    prompt_re = re.compile(r"prompt eval time =\s*([0-9.]+) ms /\s*(\d+) tokens .*?([0-9.]+) tokens per second")
+    eval_re = re.compile(r"eval time =\s*([0-9.]+) ms /\s*(\d+) tokens .*?([0-9.]+) tokens per second")
+    draft_re = re.compile(r"draft acceptance rate = ([0-9.]+) \(\s*(\d+) accepted /\s*(\d+) generated\)")
+    release_re = re.compile(r"task (\d+) \| stop processing: n_tokens = (\d+), truncated = (\d+)")
+    for line in path.read_text(errors="replace").splitlines():
+        match = timing_task_re.search(line)
+        if match:
+            current_task = int(match.group(1))
+            timing_by_task.setdefault(current_task, {})
+        match = prompt_re.search(line)
+        if match and current_task is not None:
+            timing_by_task.setdefault(current_task, {}).update(
+                prompt_ms=float(match.group(1)), prompt_tokens=int(match.group(2)), prompt_tps=float(match.group(3))
+            )
+        match = eval_re.search(line)
+        if match and current_task is not None:
+            timing_by_task.setdefault(current_task, {}).update(
+                eval_ms=float(match.group(1)), eval_tokens=int(match.group(2)), eval_tps=float(match.group(3))
+            )
+        match = draft_re.search(line)
+        if match and current_task is not None:
+            timing_by_task.setdefault(current_task, {}).update(
+                draft_acceptance=float(match.group(1)),
+                draft_accepted=int(match.group(2)),
+                draft_generated=int(match.group(3)),
+            )
+        match = release_re.search(line)
+        if match:
+            task = int(match.group(1))
+            timing = timing_by_task.get(task, {})
+            releases.append(
+                BackendRelease(
+                    task=task,
+                    slot_tokens=int(match.group(2)),
+                    truncated=int(match.group(3)),
+                    **timing,
+                )
+            )
+    return releases
+
+
+def wait_for_new_backend_release(path: Path | None, previous_count: int, timeout_seconds: int) -> BackendRelease | None:
+    if path is None:
+        return None
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        releases = parse_backend_releases(path)
+        if len(releases) > previous_count:
+            return releases[-1]
+        time.sleep(0.5)
+    return None
+
+
+
+def backend_totals(rows: list[RequestResult]) -> dict[str, Any]:
+    prompt_tokens = 0
+    prompt_ms = 0.0
+    eval_tokens = 0
+    eval_ms = 0.0
+    draft_accepted = 0
+    draft_generated = 0
+    for row in rows:
+        backend = row.backend
+        if backend is None:
+            continue
+        if backend.prompt_tokens is not None and backend.prompt_ms is not None:
+            prompt_tokens += backend.prompt_tokens
+            prompt_ms += backend.prompt_ms
+        if backend.eval_tokens is not None and backend.eval_ms is not None:
+            eval_tokens += backend.eval_tokens
+            eval_ms += backend.eval_ms
+        if backend.draft_accepted is not None and backend.draft_generated is not None:
+            draft_accepted += backend.draft_accepted
+            draft_generated += backend.draft_generated
+    return {
+        "prompt_tokens": prompt_tokens,
+        "prompt_seconds": prompt_ms / 1000.0,
+        "prefill_tps": prompt_tokens / (prompt_ms / 1000.0) if prompt_ms > 0 else None,
+        "eval_tokens": eval_tokens,
+        "eval_seconds": eval_ms / 1000.0,
+        "generation_tps": eval_tokens / (eval_ms / 1000.0) if eval_ms > 0 else None,
+        "draft_acceptance": draft_accepted / draft_generated if draft_generated else None,
+        "draft_accepted": draft_accepted,
+        "draft_generated": draft_generated,
+    }
+
+
+def fmt_float(value: float | None, digits: int = 2) -> str:
+    return "n/a" if value is None else f"{value:.{digits}f}"
+
+
+def parse_proxy_status_counts(proxy_log: Path | None) -> dict[str, int]:
+    if proxy_log is None or not proxy_log.exists():
+        return {}
+    counts: dict[str, int] = {}
+    for line in proxy_log.read_text(errors="replace").splitlines():
+        if "POST /v1/chat/completions" not in line:
+            continue
+        match = re.search(r'"POST /v1/chat/completions HTTP/1\.1" (\d+)', line)
+        if match:
+            counts[match.group(1)] = counts.get(match.group(1), 0) + 1
+    return counts
+
+
+def parse_backend_header(backend_log: Path | None) -> dict[str, str]:
+    if backend_log is None or not backend_log.exists():
+        return {}
+    header: dict[str, str] = {}
+    for line in backend_log.read_text(errors="replace").splitlines()[:80]:
+        if line.startswith("MODEL="):
+            header["model"] = line.split("=", 1)[1]
+        elif line.startswith("CTX="):
+            header["ctx_line"] = line
+        elif line.startswith("CACHE_K="):
+            header["cache_line"] = line
+        elif line.startswith("SERVE="):
+            header["serve_line"] = line
+        elif " - CUDA" in line:
+            header.setdefault("gpu", line.strip())
+        elif "upgrading K from" in line:
+            header["kv_auto_upgrade"] = line.strip()
+        elif "new slot, n_ctx" in line:
+            header["slot"] = line.strip()
+    return header
+
+
+def context_bands(results: list[RequestResult], band_size: int = 30_000) -> list[tuple[int, int, list[RequestResult], dict[str, Any]]]:
+    rows = [row for row in results if row.backend is not None]
+    if not rows:
+        return []
+    max_ctx = max(row.backend.slot_tokens for row in rows if row.backend is not None)
+    bands = []
+    for low in range(0, max_ctx + band_size, band_size):
+        high = low + band_size
+        band_rows = [
+            row for row in rows
+            if row.backend is not None and row.backend.slot_tokens <= high and (low == 0 or row.backend.slot_tokens > low)
+        ]
+        bands.append((low, high, band_rows, backend_totals(band_rows)))
+    return bands
+
+
+def median_backend_value(rows: list[RequestResult], field: str) -> float | None:
+    values = [getattr(row.backend, field) for row in rows if row.backend is not None and getattr(row.backend, field) is not None]
+    if not values:
+        return None
+    return float(statistics.median(values))
+
+
+def generate_report(path: Path, manifest_path: Path, run_id: str, results: list[RequestResult], backend_log: Path | None, proxy_log: Path | None) -> None:
+    validated = [result.validation.get("ok") is True for result in results]
+    backend_rows = [result for result in results if result.backend is not None]
+    trunc_sum = sum(result.backend.truncated for result in backend_rows if result.backend is not None)
+    max_ctx = max((result.backend.slot_tokens for result in backend_rows if result.backend is not None), default=None)
+    totals = backend_totals(results)
+    proxy_counts = parse_proxy_status_counts(proxy_log)
+    backend_header = parse_backend_header(backend_log)
+    proxy_summary = "not provided" if not proxy_counts else ", ".join(f"HTTP {code}: {count}" for code, count in sorted(proxy_counts.items()))
+    lines = [
+        "# Deterministic Agentic Benchmark Report",
+        "",
+        f"Run ID: `{run_id}`",
+        f"Manifest: `{manifest_path}`",
+        f"Backend log: `{backend_log or 'not provided'}`",
+        f"Proxy log: `{proxy_log or 'not provided'}` ({proxy_summary})",
+        "",
+    ]
+    if backend_header:
+        lines.extend(["## llama.cpp runtime", ""])
+        for key in ["model", "ctx_line", "cache_line", "serve_line", "gpu", "kv_auto_upgrade", "slot"]:
+            if key in backend_header:
+                lines.append(f"- {key}: `{backend_header[key]}`")
+        lines.append("")
+    lines.extend([
+        "## Validity",
+        "",
+        f"- Requests completed: {len(results)}",
+        f"- Responses passing validation: {sum(validated)} / {len(validated)}",
+        f"- Backend-correlated requests: {len(backend_rows)} / {len(results)}",
+        f"- Max backend context: {max_ctx if max_ctx is not None else 'n/a'}",
+        f"- Truncated responses: {trunc_sum}",
+        f"- Proxy status counts: {proxy_summary}",
+        "",
+        "## Overall llama.cpp timing",
+        "",
+        f"- Prompt-eval tokens: {totals['prompt_tokens']}",
+        f"- Prompt-eval seconds: {fmt_float(totals['prompt_seconds'], 3)}",
+        f"- Weighted prefill TPS: {fmt_float(totals['prefill_tps'])} tok/s",
+        f"- Generation tokens: {totals['eval_tokens']}",
+        f"- Generation seconds: {fmt_float(totals['eval_seconds'], 3)}",
+        f"- Weighted generation TPS: {fmt_float(totals['generation_tps'])} tok/s",
+        f"- Draft acceptance: {fmt_float(totals['draft_acceptance'], 4)} ({totals['draft_accepted']} / {totals['draft_generated']})",
+        "",
+        "These TPS values come from llama.cpp final timing blocks: `prompt eval time` and `eval time`. If the server reuses an existing slot/checkpoint, prompt-eval tokens are the tokens actually evaluated for that request, not necessarily the full OpenAI `usage.prompt_tokens` value.",
+        "",
+        "## Context bands",
+        "",
+        "| Final context band | Requests | Context range | Prefill tok/s | Median prefill tok/s | Gen tok/s | Median gen tok/s | Draft acceptance |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ])
+    for low, high, band_rows, band_totals in context_bands(results):
+        contexts = [row.backend.slot_tokens for row in band_rows if row.backend is not None]
+        context_range = f"{min(contexts)}-{max(contexts)}" if contexts else "n/a"
+        lines.append(
+            f"| {low // 1000}-{high // 1000}k | {len(band_rows)} | {context_range} | "
+            f"{fmt_float(band_totals['prefill_tps'])} | {fmt_float(median_backend_value(band_rows, 'prompt_tps'))} | "
+            f"{fmt_float(band_totals['generation_tps'])} | {fmt_float(median_backend_value(band_rows, 'eval_tps'))} | "
+            f"{fmt_float(band_totals['draft_acceptance'], 4)} |"
+        )
+    lines.extend([
+        "",
+        "## Requests",
+        "",
+        "| Iter | Task | Lang | HTTP | Valid | Context | Prompt eval toks | Prefill tok/s | Gen toks | Gen tok/s | Draft acc |",
+        "|---:|---|---|---:|---|---:|---:|---:|---:|---:|---:|",
+    ])
+    for result in results:
+        backend = result.backend
+        lines.append(
+            "| {iter} | `{task}` | {lang} | {http} | {valid} | {ctx} | {ptok} | {prefill} | {gtok} | {gen} | {draft} |".format(
+                iter=result.iteration,
+                task=result.task_id,
+                lang=result.language,
+                http=result.http_status,
+                valid="yes" if result.validation.get("ok") else "no",
+                ctx=backend.slot_tokens if backend else "n/a",
+                ptok=backend.prompt_tokens if backend and backend.prompt_tokens is not None else "n/a",
+                prefill=fmt_float(backend.prompt_tps if backend else None),
+                gtok=backend.eval_tokens if backend and backend.eval_tokens is not None else "n/a",
+                gen=fmt_float(backend.eval_tps if backend else None),
+                draft=fmt_float(backend.draft_acceptance if backend else None, 4),
+            )
+        )
+    lines.extend(["", "## Validation failures", ""])
+    failures = [result for result in results if not result.validation.get("ok")]
+    if not failures:
+        lines.append("None.")
+    else:
+        for result in failures:
+            lines.append(f"- Iteration {result.iteration} `{result.task_id}`: `{json.dumps(result.validation, sort_keys=True)}`")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def run(args: argparse.Namespace) -> int:
+    manifest_path = Path(args.manifest)
+    manifest = load_manifest(manifest_path)
+    problems = manifest["problems"][: args.max_problems] if args.max_problems else manifest["problems"]
+    if not problems:
+        raise ValueError("selected problem list is empty")
+    run_id = args.run_id or utc_now().strftime("det-agentic-%Y%m%d-%H%M%S")
+    out_dir = Path(args.out_dir or Path("benchmark") / "runs" / run_id)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    responses_dir = out_dir / "responses"
+    responses_dir.mkdir(exist_ok=True)
+    jsonl_path = out_dir / "requests.jsonl"
+    report_path = out_dir / "report.md"
+    backend_log = Path(args.backend_log) if args.backend_log else None
+    proxy_log = Path(args.proxy_log) if args.proxy_log else None
+    api_key = args.api_key or (os.environ.get(args.api_key_env) if args.api_key_env else None)
+
+    results: list[RequestResult] = []
+    previous_backend_count = len(parse_backend_releases(backend_log)) if backend_log else 0
+
+    if args.target_context is not None:
+        total_iterations = args.max_iterations
+    else:
+        total_iterations = len(problems) if args.max_iterations is None else min(len(problems), args.max_iterations)
+
+    for iteration in range(1, total_iterations + 1):
+        problem = problems[(iteration - 1) % len(problems)]
+        request_id = f"{run_id}-iter-{iteration:04d}-{problem['id']}"
+        messages = build_messages(problem, request_id, iteration)
+        payload = {
+            "model": args.model,
+            "messages": messages,
+            "temperature": args.temperature,
+            "top_p": args.top_p,
+            "max_tokens": args.max_tokens,
+            "stream": False,
+            "metadata": {"run_id": run_id, "request_id": request_id, "task_id": problem["id"]},
+        }
+        if args.dry_run:
+            content = ""
+            status = 0
+            raw = b""
+            usage = None
+            validation = {"ok": True, "dry_run": True}
+            backend = None
+            start_time = end_time = iso_now()
+        else:
+            start_time = iso_now()
+            status, raw, _headers = request_json(args.base_url, api_key, payload, args.timeout)
+            end_time = iso_now()
+            response_path = responses_dir / f"{iteration:04d}-{problem['id']}.json"
+            response_path.write_bytes(raw)
+            try:
+                content, usage, _data = extract_content(raw)
+            except Exception as exc:
+                content = ""
+                usage = None
+                validation = {"ok": False, "parse_error": str(exc)}
+            else:
+                validation = validate_response(content, problem)
+            backend = wait_for_new_backend_release(backend_log, previous_backend_count, args.backend_wait) if status == 200 else None
+            if backend is not None:
+                previous_backend_count += 1
+        result = RequestResult(
+            iteration=iteration,
+            request_id=request_id,
+            task_id=problem["id"],
+            title=problem["title"],
+            language=problem["language"],
+            http_status=status,
+            client_start=start_time,
+            client_end=end_time,
+            response_bytes=len(raw),
+            content_chars=len(content),
+            usage=usage,
+            validation=validation,
+            backend=backend,
+        )
+        results.append(result)
+        with jsonl_path.open("a", encoding="utf-8") as handle:
+            row = asdict(result)
+            handle.write(json.dumps(row, sort_keys=True) + "\n")
+        print(
+            f"iter={iteration} task={problem['id']} status={status} valid={validation.get('ok')} "
+            f"ctx={backend.slot_tokens if backend else 'n/a'} gen_tps={fmt_float(backend.eval_tps if backend else None)}",
+            flush=True,
+        )
+        if args.fail_fast and (status != 200 or not validation.get("ok") or (backend is None and backend_log is not None)):
+            break
+        if args.target_context and backend is not None and backend.slot_tokens >= args.target_context:
+            break
+
+    generate_report(report_path, manifest_path, run_id, results, backend_log, proxy_log)
+    print(f"wrote {jsonl_path}")
+    print(f"wrote {report_path}")
+    return 0 if all(result.validation.get("ok") for result in results) else 1
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest", default="benchmark/problem_manifest.example.json")
+    parser.add_argument("--base-url", default=os.environ.get("OPENAI_BASE_URL", "http://127.0.0.1:8081/v1"))
+    parser.add_argument("--model", default=os.environ.get("OPENAI_MODEL", "qwen3.6-28b-reap-iq3-m"))
+    parser.add_argument("--api-key", default=None)
+    parser.add_argument("--api-key-env", default="LLAMACPP_API_KEY")
+    parser.add_argument("--run-id", default=None)
+    parser.add_argument("--out-dir", default=None)
+    parser.add_argument("--max-problems", type=int, default=None)
+    parser.add_argument("--max-iterations", type=int, default=1000, help="Maximum requests when --target-context is set; otherwise caps one manifest pass")
+    parser.add_argument("--max-tokens", type=int, default=2048)
+    parser.add_argument("--temperature", type=float, default=0.0)
+    parser.add_argument("--top-p", type=float, default=1.0)
+    parser.add_argument("--timeout", type=int, default=900)
+    parser.add_argument("--backend-log", default=None, help="Optional local llama.cpp backend log to correlate after each request")
+    parser.add_argument("--proxy-log", default=None, help="Optional local proxy log to summarize in the report")
+    parser.add_argument("--backend-wait", type=int, default=30)
+    parser.add_argument("--target-context", type=int, default=None)
+    parser.add_argument("--fail-fast", action="store_true")
+    parser.add_argument("--dry-run", action="store_true", help="Validate manifest and write a report without calling an API")
+    return parser.parse_args(argv)
+
+
+if __name__ == "__main__":
+    raise SystemExit(run(parse_args(sys.argv[1:])))

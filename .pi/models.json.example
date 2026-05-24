@@ -1,0 +1,33 @@
+{
+  "providers": {
+    "vast_llama.cpp": {
+      "baseUrl": "http://127.0.0.1:18081/v1",
+      "api": "openai-completions",
+      "apiKey": "VLLM_API_KEY",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false,
+        "supportsUsageInStreaming": true,
+        "thinkingFormat": "qwen-chat-template"
+      },
+      "models": [
+        {
+          "id": "qwen3.6-28b-reap-iq3-m",
+          "name": "Vast Qwen3.6 28B REAP IQ3_M 262k",
+          "reasoning": true,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 262144,
+          "maxTokens": 32768,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
+        }
+      ]
+    }
+  }
+}

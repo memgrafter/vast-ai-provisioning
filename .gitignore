@@ -13,6 +13,7 @@ env.*
 !env.*example
 .env
 .env.*
+.pi/
 
 # Vast template snapshots: ignored by default because fetched templates can contain private IDs.
 templates/*
@@ -26,6 +27,7 @@ offers/
 tmp/
 watch_*
 vllm_log*.md
+logs/
 
 # Python/cache noise
 __pycache__/
