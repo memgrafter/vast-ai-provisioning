@@ -106,7 +106,9 @@ The build writes `state/templates/manifest.json`. `scripts/apply_vast_template.p
 ./run.sh
 ```
 
-Run a read-only launch/cost check with:
+## Check-only availability/cost checks
+
+Use `--check-only` for read-only offer and cost checks. It must not prompt or launch an instance.
 
 ```bash
 . env.vast-management
@@ -116,11 +118,18 @@ Run a read-only launch/cost check with:
   --top 1
 ```
 
-Use `--skip-current-infra` with `--check-only` to skip querying current instances. Prefer `--check-only` over legacy `--dry-run` for no-prompt read-only checks.
+In check-only mode, the launcher prints current instances and known hourly burn, notes owned volumes are not checked, searches offers through the policy filter, summarizes the top passing offers, and exits before launch.
+
+Useful check-only flags:
+
+- `--skip-current-infra` skips querying current instances and only searches offers.
+- `--top N` controls how many passing offers to summarize.
+
+Prefer `--check-only` over `--dry-run` for no-prompt read-only checks. `--dry-run` shows the selected offer then exits, but launch mode can still prompt before that point.
 
 ## Launch flow
 
-Use the guarded profile launcher:
+Use the guarded profile launcher for real launches:
 
 ```bash
 . env.vast-management
@@ -128,15 +137,9 @@ Use the guarded profile launcher:
   --launch-profile config/launch-profiles/qwen3.5-9b-awq.interruptible.json
 ```
 
-It must:
+Launch mode must show current instances and known hourly burn, note owned volumes are not checked, prompt before search/selection, print the selected offer and cost estimate, prompt before launch, and save runtime JSON locally only. Use `--yes-current-infra` and `--yes-launch` only when intentionally skipping those prompts.
 
-1. support `--check-only` for read-only offer/cost checks with no launch prompts
-2. show current instances and known hourly burn unless `--skip-current-infra` is used with `--check-only`
-3. note owned volumes are not checked
-4. prompt before search/selection in launch mode
-5. print selected offer and cost estimate
-6. prompt before launch in launch mode
-7. save runtime JSON locally only
+## Runtime output dirs
 
 Runtime output dirs are local/ignored and must not be committed:
 
