@@ -1,5 +1,11 @@
 # TODO
 
+- [ ] P0: Use Vast's better verification strategy during offer selection.
+  - Do not rely only on the SDK `verified` boolean; recent RTX PRO 6000 searches returned `verified=false` even when `verification` was `verified`.
+  - Classify hosts from `verification` (`verified` / `unverified` / `deverified`) plus `is_vm_deverified` and `vericode`.
+  - Update `offer_passes_policy` / `require_verified` handling to accept explicit `verification == "verified"` when appropriate and reject explicit deverified hosts unless a profile intentionally allows them.
+  - Print the verification classification in offer policy output so selection decisions are auditable.
+
 - Add a pre-launch guard that verifies required Vast account-level runtime env vars are actually available to launched instances:
   - `AWS_ACCESS_KEY_ID`
   - `AWS_SECRET_ACCESS_KEY`
