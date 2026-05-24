@@ -29,6 +29,22 @@ DEFAULT_SERVER_BIN = "/workspace/clones/llama-cpp-turboquant/build-cuda/bin/llam
 DEFAULT_REMOTE_CODE_DIR = "/workspace/code/llm-cache-llama.cpp"
 COSTING_STATUSES = {"running", "loading", "starting", "stopped", "exited", "unknown", "offline"}
 BAD_STATUSES = {"exited", "offline"}
+SENSITIVE_KEY_PARTS = ("key", "token", "secret", "password")
+
+
+def redact(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: "<redacted>" if any(part in key.lower() for part in SENSITIVE_KEY_PARTS) else redact(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [redact(item) for item in value]
+    return value
+
+
+def instance_status(info: dict[str, Any]) -> str:
+    return str(info.get("actual_status") or info.get("status") or info.get("cur_state") or "unknown")
 
 
 def money(value: Any) -> str:
@@ -257,7 +273,7 @@ def poll_instance(vast: VastAI, instance_id: int, timeout_s: int) -> dict[str, A
     last: dict[str, Any] = {}
     while time.time() - start < timeout_s:
         last = vast.show_instance(id=instance_id)
-        status = str(last.get("actual_status") or last.get("status") or last.get("cur_state") or "unknown")
+        status = instance_status(last)
         print(f"instance {instance_id} status={status}")
         if status == "running" or status.lower() in BAD_STATUSES:
             return last
@@ -372,6 +388,19 @@ if [ ! -x {remote_code_dir}/run-lmcache-proxy-stack.sh ]; then
   echo "ERROR: stack missing at {args.remote_code_dir}; include it in the artifact or use --sync-local-code" >&2
   exit 1
 fi
+python3 - <<'PY'
+from pathlib import Path
+path = Path({remote_code_dir!r}) / "lmcache-proxy-on-demand.py"
+if path.exists():
+    text = path.read_text()
+    marker = 'authorization = self.headers.get("Authorization")'
+    nl = chr(10)
+    old = "        if body_bytes:" + nl + '            req.add_header("Content-Type", self.headers.get("Content-Type", "application/json"))' + nl
+    new = old + nl + '        authorization = self.headers.get("Authorization")' + nl + '        if authorization:' + nl + '            req.add_header("Authorization", authorization)' + nl
+    if marker not in text and old in text:
+        path.write_text(text.replace(old, new, 1))
+        print("Patched LMCache proxy to forward Authorization headers")
+PY
 
 cat > {remote_code_dir}/run-vast-llamacpp-stack.sh <<'SH'
 #!/usr/bin/env bash
@@ -495,9 +524,10 @@ def launch_instance(vast: VastAI, offer: dict[str, Any], args: argparse.Namespac
         onstart_cmd="mkdir -p /workspace && echo llama.cpp-vast-ready > /workspace/onstart.txt",
         cancel_unavail=True,
     )
+    redacted_result = redact(result)
     print("Create result:")
-    print(json.dumps(result, indent=2, sort_keys=True, default=str))
-    save_json(Path("state/last-create-llamacpp.json"), {"offer": offer, "create_result": result})
+    print(json.dumps(redacted_result, indent=2, sort_keys=True, default=str))
+    save_json(Path("state/last-create-llamacpp.json"), {"offer": offer, "create_result": redacted_result})
     instance_id = result.get("new_contract") or result.get("id")
     if not instance_id:
         raise RuntimeError("Create result did not include an instance id")
@@ -539,6 +569,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--yes-launch", action="store_true")
     parser.add_argument("--yes-bootstrap", action="store_true")
     parser.add_argument("--no-bootstrap", action="store_true")
+    parser.add_argument("--instance-id", type=int, default=0, help="bootstrap or inspect an already-created Vast instance")
     parser.add_argument("--search-limit", type=int, default=50)
     parser.add_argument("--gpu-name", default=DEFAULT_GPU_NAME)
     parser.add_argument("--num-gpus", type=int, default=1)
@@ -595,6 +626,27 @@ def main() -> None:
         save_json(Path("state/current-infra.json"), {"instances": instances, "volumes_note": "owned volumes not checked"})
         print_current_infra(instances)
 
+    if args.instance_id:
+        info = poll_instance(vast, args.instance_id, args.poll_timeout)
+        save_json(Path(f"instances/{args.instance_id}.llamacpp.json"), redact(info))
+        status = instance_status(info)
+        if status != "running":
+            raise RuntimeError(f"Instance {args.instance_id} did not reach running status; status={status}")
+        host, ssh_port = ssh_target(info)
+        print(f"ssh=root@{host} -p {ssh_port}")
+        wait_for_ssh(host, ssh_port, args.ssh_timeout)
+        if args.no_bootstrap:
+            print_endpoint(info, host, ssh_port, args)
+            return
+        if not args.yes_bootstrap and not ask("Bootstrap llama.cpp stack on this instance?"):
+            print("Aborted before bootstrap.")
+            return
+        bootstrap_host(host, ssh_port, args)
+        info = vast.show_instance(id=args.instance_id)
+        save_json(Path(f"instances/{args.instance_id}.llamacpp.json"), redact(info))
+        print_endpoint(info, host, ssh_port, args)
+        return
+
     if not args.check_only and not args.yes_current_infra:
         if not ask("Continue to search/select a new llama.cpp instance?"):
             print("Aborted before search.")
@@ -627,8 +679,8 @@ def main() -> None:
     attach_ssh_key(vast, instance_id, args.local_ssh_pub_key)
 
     info = poll_instance(vast, instance_id, args.poll_timeout)
-    save_json(Path(f"instances/{instance_id}.llamacpp.json"), info)
-    status = str(info.get("actual_status") or info.get("status") or "unknown")
+    save_json(Path(f"instances/{instance_id}.llamacpp.json"), redact(info))
+    status = instance_status(info)
     if status != "running":
         raise RuntimeError(f"Instance {instance_id} did not reach running status; status={status}")
 
@@ -645,7 +697,7 @@ def main() -> None:
 
     bootstrap_host(host, ssh_port, args)
     info = vast.show_instance(id=instance_id)
-    save_json(Path(f"instances/{instance_id}.llamacpp.json"), info)
+    save_json(Path(f"instances/{instance_id}.llamacpp.json"), redact(info))
     print_endpoint(info, host, ssh_port, args)
 
 
