@@ -15,6 +15,7 @@ import shlex
 import subprocess
 import sys
 import time
+from requests import HTTPError
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -416,13 +417,15 @@ export BACKEND_HOST=127.0.0.1
 export BACKEND_PORT={args.backend_port}
 export CTX=${{CTX:-{args.ctx}}}
 export NPRED=${{NPRED:-{args.n_predict}}}
-export NGL=${{NGL:-999}}
+export NGL=${{NGL:-{args.ngl}}}
 export THREADS=${{THREADS:-{args.threads}}}
 export BATCH=${{BATCH:-{args.batch}}}
 export UBATCH=${{UBATCH:-{args.ubatch}}}
 export CACHE_K=${{CACHE_K:-{args.cache_k}}}
 export CACHE_V=${{CACHE_V:-{args.cache_v}}}
 export SPEC_TYPE=${{SPEC_TYPE:-{args.spec_type}}}
+export FLASH_ATTN=${{FLASH_ATTN:-{args.flash_attn}}}
+export KV_OFFLOAD=${{KV_OFFLOAD:-{1 if args.kv_offload else 0}}}
 export EXTRA_FLAGS={extra_flags_q}
 export LOG_DIR=/workspace/logs
 export CACHE_DIR=/workspace/cache/llama.cpp-launch-scripts/slot-kv
@@ -514,16 +517,22 @@ def print_endpoint(info: dict[str, Any], host: str, port: int, args: argparse.Na
 
 def launch_instance(vast: VastAI, offer: dict[str, Any], args: argparse.Namespace) -> int:
     env = {f"-p {args.container_port}:{args.container_port}": "1"} if args.publish_port else {}
-    result = vast.create_instance(
-        id=int(offer["id"]),
-        image=args.image,
-        disk=args.disk_gb,
-        label=args.label,
-        runtype="ssh_direc ssh_proxy",
-        env=env,
-        onstart_cmd="mkdir -p /workspace && echo llama.cpp-vast-ready > /workspace/onstart.txt",
-        cancel_unavail=True,
-    )
+    try:
+        result = vast.create_instance(
+            id=int(offer["id"]),
+            image=args.image,
+            disk=args.disk_gb,
+            label=args.label,
+            runtype="ssh_direc ssh_proxy",
+            env=env,
+            onstart_cmd="mkdir -p /workspace && echo llama.cpp-vast-ready > /workspace/onstart.txt",
+            cancel_unavail=True,
+        )
+    except HTTPError as exc:
+        response_text = ""
+        if exc.response is not None:
+            response_text = exc.response.text[:1000]
+        raise RuntimeError(f"Vast create_instance failed for offer {offer['id']}: {response_text or exc.response.status_code if exc.response is not None else 'HTTP error'}") from None
     redacted_result = redact(result)
     print("Create result:")
     print(json.dumps(redacted_result, indent=2, sort_keys=True, default=str))
@@ -598,12 +607,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cuda-arch", default="120")
     parser.add_argument("--ctx", type=int, default=35000)
     parser.add_argument("--n-predict", type=int, default=4096)
+    parser.add_argument("--ngl", type=int, default=999)
     parser.add_argument("--threads", type=int, default=12)
     parser.add_argument("--batch", type=int, default=64)
     parser.add_argument("--ubatch", type=int, default=16)
     parser.add_argument("--cache-k", default="turbo3")
     parser.add_argument("--cache-v", default="turbo3")
     parser.add_argument("--spec-type", default="ngram-mod")
+    parser.add_argument("--flash-attn", default="auto")
+    parser.add_argument("--kv-offload", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--extra-flags", default="")
     parser.add_argument("--llamacpp-api-key-env", default="")
     parser.add_argument("--allow-api-key-argv", action="store_true")
