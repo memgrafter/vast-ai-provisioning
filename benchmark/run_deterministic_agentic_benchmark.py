@@ -119,10 +119,17 @@ def build_system_message() -> dict[str, str]:
     }
 
 
-def build_user_message(problem: dict[str, Any], request_id: str, iteration: int) -> dict[str, str]:
+def build_user_message(problem: dict[str, Any], request_id: str, iteration: int, solution_dir: Path | None = None) -> dict[str, str]:
     requirements = "\n".join(f"- {item}" for item in problem["requirements"])
     patterns = "\n".join(f"- {item}" for item in problem.get("language_patterns", [])) or "- Use idiomatic language design."
     code_fence = problem["code_fence"]
+    workspace = ""
+    if solution_dir is not None:
+        workspace = (
+            "\n# Benchmark workspace\n"
+            f"If you create or modify files, use only this run-specific directory: {solution_dir}\n"
+            "Do not reuse files outside this directory.\n"
+        )
     user = f"""REQUEST_ID: {request_id}
 TASK_ID: {problem['id']}
 ITERATION: {iteration}
@@ -140,7 +147,7 @@ You must solve this exact static benchmark problem. Do not create a new problem.
 {patterns}
 
 # Requirements
-{requirements}
+{requirements}{workspace}
 
 # Required response format
 TASK_ID: {problem['id']}
@@ -561,9 +568,8 @@ def strip_ansi(text: str) -> str:
     return ANSI_RE.sub("", text)
 
 
-def tmux_window_exists(session: str, window: str) -> bool:
-    existing = run_command(["tmux", "list-windows", "-t", session, "-F", "#{window_name}"], check=False)
-    return window in existing.stdout.splitlines()
+def tmux_session_exists(session: str) -> bool:
+    return run_command(["tmux", "has-session", "-t", session], check=False).returncode == 0
 
 
 def tmux_pane_id(session: str, window: str) -> str:
@@ -578,31 +584,31 @@ def capture_pane_text(target: str, lines: int = 4000) -> str:
     return strip_ansi(run_command(["tmux", "capture-pane", "-p", "-t", target, "-S", f"-{lines}"], check=False).stdout)
 
 
-def ensure_pi_pane(session: str, window: str, cwd: Path, pi_model: str, pi_session_file: Path) -> str:
+def create_pi_tmux_session(session: str, window: str, cwd: Path, pi_model: str, pi_session_file: Path) -> str:
     launch = (
         f"cd {shlex.quote(str(cwd))} && "
         "source env.vast-management 2>/dev/null || true && "
         f"exec pi --model {shlex.quote(pi_model)} --session {shlex.quote(str(pi_session_file))}"
     )
-    if run_command(["tmux", "has-session", "-t", session], check=False).returncode != 0:
-        run_command(["tmux", "new-session", "-d", "-s", session, "-n", window, "-c", str(cwd), "bash", "-lc", launch])
-    else:
-        if tmux_window_exists(session, window):
-            run_command(["tmux", "kill-window", "-t", f"{session}:{window}"])
+    if tmux_session_exists(session):
+        if run_command(["tmux", "list-windows", "-t", session, "-F", "#{window_name}"], check=False).stdout.splitlines().count(window):
+            run_command(["tmux", "kill-window", "-t", f"{session}:{window}"], check=False)
         run_command(["tmux", "new-window", "-d", "-t", session, "-n", window, "-c", str(cwd), "bash", "-lc", launch])
+    else:
+        run_command(["tmux", "new-session", "-d", "-s", session, "-n", window, "-c", str(cwd), "bash", "-lc", launch])
     pane_id = tmux_pane_id(session, window)
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:
         if pane_current_command(pane_id) in {"node", "pi"}:
-            break
+            return pane_id
         time.sleep(0.5)
-    return pane_id
+    raise TimeoutError(f"pi pane did not start in tmux session {session}")
 
 
 def submit_prompt_to_pane(pane_id: str, prompt_path: Path, buffer_name: str) -> None:
     run_command(["tmux", "load-buffer", "-b", buffer_name, str(prompt_path)])
     try:
-        run_command(["tmux", "paste-buffer", "-b", buffer_name, "-t", pane_id])
+        run_command(["tmux", "paste-buffer", "-p", "-b", buffer_name, "-t", pane_id])
     finally:
         run_command(["tmux", "delete-buffer", "-b", buffer_name], check=False)
     run_command(["tmux", "send-keys", "-t", pane_id, "Enter"])
@@ -629,6 +635,13 @@ def assistant_messages(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+def user_messages(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        entry for entry in entries
+        if entry.get("type") == "message" and isinstance(entry.get("message"), dict) and entry["message"].get("role") == "user"
+    ]
+
+
 def message_content_to_text(content: Any) -> str:
     if isinstance(content, str):
         return content
@@ -646,20 +659,22 @@ def message_content_to_text(content: Any) -> str:
     return ""
 
 
-def wait_for_assistant_turn(session_file: Path, before_count: int, timeout_seconds: int) -> dict[str, Any]:
+def wait_for_assistant_turn(session_file: Path, before_user_count: int, before_assistant_count: int, timeout_seconds: int) -> dict[str, Any]:
     deadline = time.monotonic() + timeout_seconds
     last_signature: tuple[int, int, int] | None = None
     stable_polls = 0
     while time.monotonic() < deadline:
         entries = load_session_entries(session_file)
+        users = user_messages(entries)
         assistants = assistant_messages(entries)
-        if len(assistants) > before_count and session_file.exists():
-            latest_message = entries[-1].get("message") if entries and entries[-1].get("type") == "message" else None
+        if len(users) > before_user_count and len(assistants) > before_assistant_count and session_file.exists():
+            latest_entry = entries[-1] if entries else None
+            latest_message = latest_entry.get("message") if isinstance(latest_entry, dict) and latest_entry.get("type") == "message" else None
             latest_role = latest_message.get("role") if isinstance(latest_message, dict) else None
             latest_stop_reason = latest_message.get("stopReason") if isinstance(latest_message, dict) else None
-            if latest_role == "assistant" and latest_stop_reason != "toolUse":
+            if latest_role == "assistant" and latest_stop_reason not in {"toolUse", "aborted"}:
                 stat = session_file.stat()
-                signature = (len(entries), len(assistants), stat.st_size)
+                signature = (len(entries), len(users), len(assistants), stat.st_size)
                 if signature == last_signature:
                     stable_polls += 1
                 else:
@@ -686,73 +701,92 @@ def run_pi_tmux(args: argparse.Namespace, manifest: dict[str, Any], manifest_pat
     responses_dir = out_dir / "responses"
     prompts_dir = out_dir / "prompts"
     captures_dir = out_dir / "tmux-captures"
-    for path in [responses_dir, prompts_dir, captures_dir]:
+    solution_dir = out_dir / "solutions"
+    for path in [responses_dir, prompts_dir, captures_dir, solution_dir]:
         path.mkdir(exist_ok=True)
     pi_session_file = Path(args.pi_session_file or (out_dir / "pi-session.jsonl"))
     pi_session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_name = args.tmux_session or f"{args.tmux_session_prefix}-{run_id}"
     repo_root = Path.cwd()
-    pane_id = "dry-run" if args.dry_run else ensure_pi_pane(args.tmux_session, args.tmux_window, repo_root, args.pi_model, pi_session_file)
-    total_iterations = args.max_iterations if args.target_context is not None else (len(problems) if args.max_iterations is None else min(len(problems), args.max_iterations))
+    pane_id = "dry-run"
     results: list[RequestResult] = []
-    for iteration in range(1, total_iterations + 1):
-        problem = problems[(iteration - 1) % len(problems)]
-        request_id = f"{run_id}-iter-{iteration:04d}-{problem['id']}"
-        prompt = build_user_message(problem, request_id, iteration)["content"]
-        prompt_path = prompts_dir / f"{iteration:04d}-{problem['id']}.txt"
-        response_path = responses_dir / f"{iteration:04d}-{problem['id']}.txt"
-        capture_path = captures_dir / f"{iteration:04d}-{problem['id']}.txt"
-        prompt_path.write_text(prompt, encoding="utf-8")
-        start_time = iso_now()
-        if args.dry_run:
-            status_code = 0
-            content = ""
-            validation = {"ok": True, "dry_run": True}
-            end_time = start_time
-        else:
-            before_count = len(assistant_messages(load_session_entries(pi_session_file)))
-            submit_prompt_to_pane(pane_id, prompt_path, f"det-agentic-{iteration}")
-            try:
-                assistant_entry = wait_for_assistant_turn(pi_session_file, before_count, args.timeout)
+    try:
+        if not args.dry_run:
+            pane_id = create_pi_tmux_session(session_name, args.tmux_window, repo_root, args.pi_model, pi_session_file)
+        total_iterations = args.max_iterations
+        for iteration in range(1, total_iterations + 1):
+            problem = problems[(iteration - 1) % len(problems)]
+            request_id = f"{run_id}-iter-{iteration:04d}-{problem['id']}"
+            prompt = build_user_message(problem, request_id, iteration, solution_dir=solution_dir)["content"]
+            prompt_path = prompts_dir / f"{iteration:04d}-{problem['id']}.txt"
+            response_path = responses_dir / f"{iteration:04d}-{problem['id']}.txt"
+            capture_path = captures_dir / f"{iteration:04d}-{problem['id']}.txt"
+            prompt_path.write_text(prompt, encoding="utf-8")
+            start_time = iso_now()
+            if args.dry_run:
                 status_code = 0
-                content = message_content_to_text((assistant_entry.get("message") or {}).get("content"))
-                validation = validate_response(content, problem)
-            except TimeoutError as exc:
-                status_code = 124
                 content = ""
-                validation = {"ok": False, "timeout": str(exc)}
-            end_time = iso_now()
-            capture_path.write_text(capture_pane_text(pane_id), encoding="utf-8")
-            response_path.write_text(content, encoding="utf-8")
-        result = RequestResult(
-            iteration=iteration,
-            request_id=request_id,
-            task_id=problem["id"],
-            title=problem["title"],
-            language=problem["language"],
-            http_status=200 if status_code == 0 else status_code,
-            client_start=start_time,
-            client_end=end_time,
-            response_bytes=len(content.encode("utf-8")),
-            content_chars=len(content),
-            usage=None,
-            validation=validation,
-            observed_context=None,
-            prompt_tokens=None,
-            completion_tokens=None,
-            backend=None,
-        )
-        results.append(result)
-        with jsonl_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(asdict(result), sort_keys=True) + "\n")
-        print(f"iter={iteration} task={problem['id']} pi_status={status_code} valid={validation.get('ok')} chars={len(content)}", flush=True)
-        if args.fail_fast and (status_code != 0 or not validation.get("ok")):
-            break
-    generate_report(report_path, manifest_path, run_id, results, None, None)
-    print(f"tmux pane={pane_id}")
-    print(f"pi_session={pi_session_file}")
-    print(f"wrote {jsonl_path}")
-    print(f"wrote {report_path}")
-    return 0 if all(result.validation.get("ok") for result in results) else 1
+                validation = {"ok": True, "dry_run": True}
+                end_time = start_time
+            else:
+                before_entries = load_session_entries(pi_session_file)
+                before_user_count = len(user_messages(before_entries))
+                before_assistant_count = len(assistant_messages(before_entries))
+                submit_prompt_to_pane(pane_id, prompt_path, f"det-agentic-{iteration}")
+                try:
+                    assistant_entry = wait_for_assistant_turn(pi_session_file, before_user_count, before_assistant_count, args.timeout)
+                    assistant_message = assistant_entry.get("message") or {}
+                    status_code = 0
+                    content = message_content_to_text(assistant_message.get("content"))
+                    validation = {
+                        "ok": True,
+                        "mode": "pi_tmux_unscored",
+                        "stop_reason": assistant_message.get("stopReason"),
+                        "provider": assistant_message.get("provider"),
+                        "model": assistant_message.get("model"),
+                    }
+                except TimeoutError as exc:
+                    status_code = 124
+                    content = ""
+                    validation = {"ok": False, "timeout": str(exc)}
+                end_time = iso_now()
+                capture_path.write_text(capture_pane_text(pane_id), encoding="utf-8")
+                response_path.write_text(content, encoding="utf-8")
+            result = RequestResult(
+                iteration=iteration,
+                request_id=request_id,
+                task_id=problem["id"],
+                title=problem["title"],
+                language=problem["language"],
+                http_status=200 if status_code == 0 else status_code,
+                client_start=start_time,
+                client_end=end_time,
+                response_bytes=len(content.encode("utf-8")),
+                content_chars=len(content),
+                usage=None,
+                validation=validation,
+                observed_context=None,
+                prompt_tokens=None,
+                completion_tokens=None,
+                backend=None,
+            )
+            results.append(result)
+            with jsonl_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(asdict(result), sort_keys=True) + "\n")
+            print(f"iter={iteration} task={problem['id']} pi_status={status_code} valid={validation.get('ok')} chars={len(content)}", flush=True)
+            if args.fail_fast and (status_code != 0 or not validation.get("ok")):
+                break
+        generate_report(report_path, manifest_path, run_id, results, None, None)
+        print(f"tmux session={session_name}")
+        print(f"tmux pane={pane_id}")
+        print(f"pi_session={pi_session_file}")
+        print(f"solution_dir={solution_dir}")
+        print(f"wrote {jsonl_path}")
+        print(f"wrote {report_path}")
+        return 0 if all(result.validation.get("ok") for result in results) else 1
+    finally:
+        if not args.dry_run and not args.keep_session:
+            run_command(["tmux", "kill-session", "-t", session_name], check=False)
 
 
 def run(args: argparse.Namespace) -> int:
@@ -914,9 +948,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.set_defaults(accumulate_context=True)
     parser.add_argument("--fail-fast", action="store_true")
     parser.add_argument("--pi-model", default=None, help="Pi model for --driver pi-tmux, e.g. provider/model")
-    parser.add_argument("--tmux-session", default="vast", help="tmux session for --driver pi-tmux")
+    parser.add_argument("--tmux-session", default=None, help="Explicit tmux session name for --driver pi-tmux. Defaults to a unique session per run.")
+    parser.add_argument("--tmux-session-prefix", default="det-agentic-benchmark", help="Prefix for auto-generated tmux session names in --driver pi-tmux")
     parser.add_argument("--tmux-window", default="deterministic-agentic", help="tmux window for --driver pi-tmux")
     parser.add_argument("--pi-session-file", default=None, help="Pi session file for --driver pi-tmux. Defaults inside out-dir.")
+    parser.add_argument("--keep-session", action="store_true", help="Keep the benchmark-owned tmux session after exit")
     parser.add_argument("--dry-run", action="store_true", help="Validate manifest and write a report without calling an API")
     return parser.parse_args(argv)
 

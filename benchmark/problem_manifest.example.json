@@ -3,21 +3,84 @@
   "description": "Example deterministic agentic-coding benchmark manifest. Add more problems in fixed order; each problem binds its target implementation language.",
   "problems": [
     {
-      "id": "cpp_rollback_dsu_dynamic_connectivity_001",
+      "id": "python_rollback_dsu_dynamic_connectivity_001",
       "title": "Offline Dynamic Connectivity with Rollback DSU",
-      "language": "cpp",
-      "code_fence": "cpp",
+      "language": "python",
+      "code_fence": "python",
       "category": "graph_offline_queries",
       "difficulty": "leetcode_hard",
       "language_patterns": [
-        "RAII-friendly class design",
+        "clear class boundaries for rollback DSU",
         "iterative segment tree over time intervals",
-        "rollback/disjoint-set data structure with explicit history stack"
+        "explicit history stack for rollback"
       ],
       "prompt": "You are given n nodes labeled 0..n-1 and a sequence of q operations. Each operation is one of: add an undirected edge (u, v), remove a previously added edge (u, v), or ask whether two nodes (u, v) are connected at that time. Edges may be added and removed multiple times, but removals are valid and refer to an edge currently active. Return the answer to every connectivity query in order. Constraints: 1 <= n <= 200000, 1 <= q <= 200000. The solution must run in O((q log q) alpha(n)) or better and avoid recursion depth issues where practical.",
       "requirements": [
         "Explain the offline interval construction for active edge lifetimes.",
-        "Implement rollback DSU as a C++ class with clear invariants.",
+        "Implement rollback DSU as a Python class with clear invariants.",
+        "Use a segment tree over time to apply active intervals and rollback after visiting a node.",
+        "Return answers in query order.",
+        "Include edge cases: repeated add/remove cycles, self queries, disconnected nodes."
+      ]
+    },
+    {
+      "id": "typescript_rollback_dsu_dynamic_connectivity_001",
+      "title": "Offline Dynamic Connectivity with Rollback DSU",
+      "language": "typescript",
+      "code_fence": "ts",
+      "category": "graph_offline_queries",
+      "difficulty": "leetcode_hard",
+      "language_patterns": [
+        "type-safe data structures with interfaces/types",
+        "iterative segment tree over time intervals",
+        "explicit rollback history stack"
+      ],
+      "prompt": "You are given n nodes labeled 0..n-1 and a sequence of q operations. Each operation is one of: add an undirected edge (u, v), remove a previously added edge (u, v), or ask whether two nodes (u, v) are connected at that time. Edges may be added and removed multiple times, but removals are valid and refer to an edge currently active. Return the answer to every connectivity query in order. Constraints: 1 <= n <= 200000, 1 <= q <= 200000. The solution must run in O((q log q) alpha(n)) or better and avoid recursion depth issues where practical.",
+      "requirements": [
+        "Explain the offline interval construction for active edge lifetimes.",
+        "Implement rollback DSU with TypeScript classes/types and clear invariants.",
+        "Use a segment tree over time to apply active intervals and rollback after visiting a node.",
+        "Return answers in query order.",
+        "Include edge cases: repeated add/remove cycles, self queries, disconnected nodes."
+      ]
+    },
+    {
+      "id": "go_rollback_dsu_dynamic_connectivity_001",
+      "title": "Offline Dynamic Connectivity with Rollback DSU",
+      "language": "go",
+      "code_fence": "go",
+      "category": "graph_offline_queries",
+      "difficulty": "leetcode_hard",
+      "language_patterns": [
+        "struct + method receiver design",
+        "iterative segment tree over time intervals",
+        "explicit rollback history stack"
+      ],
+      "prompt": "You are given n nodes labeled 0..n-1 and a sequence of q operations. Each operation is one of: add an undirected edge (u, v), remove a previously added edge (u, v), or ask whether two nodes (u, v) are connected at that time. Edges may be added and removed multiple times, but removals are valid and refer to an edge currently active. Return the answer to every connectivity query in order. Constraints: 1 <= n <= 200000, 1 <= q <= 200000. The solution must run in O((q log q) alpha(n)) or better and avoid recursion depth issues where practical.",
+      "requirements": [
+        "Explain the offline interval construction for active edge lifetimes.",
+        "Implement rollback DSU as Go structs with clear invariants.",
+        "Use a segment tree over time to apply active intervals and rollback after visiting a node.",
+        "Return answers in query order.",
+        "Include edge cases: repeated add/remove cycles, self queries, disconnected nodes."
+      ]
+    },
+    {
+      "id": "rust_rollback_dsu_dynamic_connectivity_001",
+      "title": "Offline Dynamic Connectivity with Rollback DSU",
+      "language": "rust",
+      "code_fence": "rust",
+      "category": "graph_offline_queries",
+      "difficulty": "leetcode_hard",
+      "language_patterns": [
+        "ownership-safe state transitions",
+        "iterative segment tree over time intervals",
+        "explicit rollback history stack"
+      ],
+      "prompt": "You are given n nodes labeled 0..n-1 and a sequence of q operations. Each operation is one of: add an undirected edge (u, v), remove a previously added edge (u, v), or ask whether two nodes (u, v) are connected at that time. Edges may be added and removed multiple times, but removals are valid and refer to an edge currently active. Return the answer to every connectivity query in order. Constraints: 1 <= n <= 200000, 1 <= q <= 200000. The solution must run in O((q log q) alpha(n)) or better and avoid recursion depth issues where practical.",
+      "requirements": [
+        "Explain the offline interval construction for active edge lifetimes.",
+        "Implement rollback DSU as Rust structs with clear invariants.",
         "Use a segment tree over time to apply active intervals and rollback after visiting a node.",
         "Return answers in query order.",
         "Include edge cases: repeated add/remove cycles, self queries, disconnected nodes."
