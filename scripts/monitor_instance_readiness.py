@@ -136,12 +136,17 @@ def print_status(instance_id: int, info: dict[str, Any], signals: Signals, elaps
     status = str(info.get("actual_status") or info.get("status") or "unknown")
     url = port_url(info)
     print(f"[{now_utc()}] instance={instance_id} status={status} elapsed={elapsed:.0f}s machine={info.get('machine_id')} gpu={info.get('gpu_name')}")
+    status_msg = str(info.get("status_msg") or "").strip()
+    status_msg_image_pull_seen = any(token in status_msg for token in ["Pulling", "Pull complete", "Download complete", "Verifying Checksum"])
+    effective_image_pull_seen = signals.image_pull_seen or status_msg_image_pull_seen
     if url:
         print(f"  vllm_api: {url}")
+    if status_msg:
+        print(f"  status_msg: {status_msg[:240]}")
     print(
         "  signals: "
         f"image_cached={signals.image_cached} "
-        f"image_pull_seen={signals.image_pull_seen} "
+        f"image_pull_seen={effective_image_pull_seen} "
         f"provisioning_started={signals.provisioning_started} "
         f"r2_sync_started={signals.r2_sync_started} "
         f"r2_transfer_active={signals.r2_transfer_active} "
@@ -165,7 +170,7 @@ def print_status(instance_id: int, info: dict[str, Any], signals: Signals, elaps
         recommendation = "WAIT_R2_OR_PROVISIONING"
     elif elapsed >= provisioning_deadline and not signals.provisioning_started:
         recommendation = "CONSIDER_TERMINATE_NO_PROVISIONING"
-    elif elapsed >= image_deadline and signals.image_pull_seen and not signals.image_cached:
+    elif elapsed >= image_deadline and effective_image_pull_seen and not signals.image_cached:
         recommendation = "CONSIDER_TERMINATE_SLOW_IMAGE_PULL"
     print(f"  recommendation: {recommendation}")
     if signals.errors:
