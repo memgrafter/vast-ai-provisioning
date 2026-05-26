@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Example deterministic agentic-coding benchmark manifest. Add more problems in fixed order; each problem binds its target implementation language.",
+  "description": "Deterministic agentic-coding benchmark manifest with 30 fixed problems rotating across python/typescript/go/rust.",
   "problems": [
     {
       "id": "python_rollback_dsu_dynamic_connectivity_001",
@@ -10,80 +10,626 @@
       "category": "graph_offline_queries",
       "difficulty": "leetcode_hard",
       "language_patterns": [
-        "clear class boundaries for rollback DSU",
-        "iterative segment tree over time intervals",
-        "explicit history stack for rollback"
+        "idiomatic dataclasses / typed helpers",
+        "clear invariant comments",
+        "deterministic test harnesses"
       ],
-      "prompt": "You are given n nodes labeled 0..n-1 and a sequence of q operations. Each operation is one of: add an undirected edge (u, v), remove a previously added edge (u, v), or ask whether two nodes (u, v) are connected at that time. Edges may be added and removed multiple times, but removals are valid and refer to an edge currently active. Return the answer to every connectivity query in order. Constraints: 1 <= n <= 200000, 1 <= q <= 200000. The solution must run in O((q log q) alpha(n)) or better and avoid recursion depth issues where practical.",
+      "prompt": "You are given n nodes labeled 0..n-1 and a sequence of q operations: add edge(u,v), remove edge(u,v), and connected(u,v) query. Removals are always valid for currently-active edges. Return all query answers in order with O((q log q) alpha(n)) or better.",
       "requirements": [
-        "Explain the offline interval construction for active edge lifetimes.",
-        "Implement rollback DSU as a Python class with clear invariants.",
-        "Use a segment tree over time to apply active intervals and rollback after visiting a node.",
-        "Return answers in query order.",
-        "Include edge cases: repeated add/remove cycles, self queries, disconnected nodes."
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in python with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
       ]
     },
     {
-      "id": "typescript_rollback_dsu_dynamic_connectivity_001",
-      "title": "Offline Dynamic Connectivity with Rollback DSU",
+      "id": "typescript_sliding_window_median_002",
+      "title": "Sliding Window Median",
       "language": "typescript",
       "code_fence": "ts",
-      "category": "graph_offline_queries",
+      "category": "heaps_and_order_stats",
       "difficulty": "leetcode_hard",
       "language_patterns": [
-        "type-safe data structures with interfaces/types",
-        "iterative segment tree over time intervals",
-        "explicit rollback history stack"
+        "strict TypeScript types/interfaces",
+        "Map/Set-based bookkeeping",
+        "deterministic test cases"
       ],
-      "prompt": "You are given n nodes labeled 0..n-1 and a sequence of q operations. Each operation is one of: add an undirected edge (u, v), remove a previously added edge (u, v), or ask whether two nodes (u, v) are connected at that time. Edges may be added and removed multiple times, but removals are valid and refer to an edge currently active. Return the answer to every connectivity query in order. Constraints: 1 <= n <= 200000, 1 <= q <= 200000. The solution must run in O((q log q) alpha(n)) or better and avoid recursion depth issues where practical.",
+      "prompt": "Given nums and window size k, output medians for every contiguous window. Support duplicates and negative values. Target O(n log k).",
       "requirements": [
-        "Explain the offline interval construction for active edge lifetimes.",
-        "Implement rollback DSU with TypeScript classes/types and clear invariants.",
-        "Use a segment tree over time to apply active intervals and rollback after visiting a node.",
-        "Return answers in query order.",
-        "Include edge cases: repeated add/remove cycles, self queries, disconnected nodes."
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in typescript with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
       ]
     },
     {
-      "id": "go_rollback_dsu_dynamic_connectivity_001",
-      "title": "Offline Dynamic Connectivity with Rollback DSU",
+      "id": "go_lca_binary_lifting_003",
+      "title": "Lowest Common Ancestor with Binary Lifting",
       "language": "go",
       "code_fence": "go",
-      "category": "graph_offline_queries",
+      "category": "trees_lca",
       "difficulty": "leetcode_hard",
       "language_patterns": [
-        "struct + method receiver design",
-        "iterative segment tree over time intervals",
-        "explicit rollback history stack"
+        "small structs with method receivers",
+        "explicit slice/map lifecycle",
+        "deterministic table-driven tests"
       ],
-      "prompt": "You are given n nodes labeled 0..n-1 and a sequence of q operations. Each operation is one of: add an undirected edge (u, v), remove a previously added edge (u, v), or ask whether two nodes (u, v) are connected at that time. Edges may be added and removed multiple times, but removals are valid and refer to an edge currently active. Return the answer to every connectivity query in order. Constraints: 1 <= n <= 200000, 1 <= q <= 200000. The solution must run in O((q log q) alpha(n)) or better and avoid recursion depth issues where practical.",
+      "prompt": "Given a rooted tree and many LCA queries, preprocess and answer each query quickly. Include depth alignment and ancestor jumping.",
       "requirements": [
-        "Explain the offline interval construction for active edge lifetimes.",
-        "Implement rollback DSU as Go structs with clear invariants.",
-        "Use a segment tree over time to apply active intervals and rollback after visiting a node.",
-        "Return answers in query order.",
-        "Include edge cases: repeated add/remove cycles, self queries, disconnected nodes."
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in go with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
       ]
     },
     {
-      "id": "rust_rollback_dsu_dynamic_connectivity_001",
-      "title": "Offline Dynamic Connectivity with Rollback DSU",
+      "id": "rust_segment_tree_lazy_range_add_sum_004",
+      "title": "Segment Tree Lazy Propagation (Range Add / Range Sum)",
       "language": "rust",
       "code_fence": "rust",
-      "category": "graph_offline_queries",
+      "category": "segment_tree",
       "difficulty": "leetcode_hard",
       "language_patterns": [
         "ownership-safe state transitions",
-        "iterative segment tree over time intervals",
-        "explicit rollback history stack"
+        "Vec/HashMap with explicit mutability",
+        "deterministic test module"
       ],
-      "prompt": "You are given n nodes labeled 0..n-1 and a sequence of q operations. Each operation is one of: add an undirected edge (u, v), remove a previously added edge (u, v), or ask whether two nodes (u, v) are connected at that time. Edges may be added and removed multiple times, but removals are valid and refer to an edge currently active. Return the answer to every connectivity query in order. Constraints: 1 <= n <= 200000, 1 <= q <= 200000. The solution must run in O((q log q) alpha(n)) or better and avoid recursion depth issues where practical.",
+      "prompt": "Process m operations over an array: range add and range sum query. Require O(log n) per op.",
       "requirements": [
-        "Explain the offline interval construction for active edge lifetimes.",
-        "Implement rollback DSU as Rust structs with clear invariants.",
-        "Use a segment tree over time to apply active intervals and rollback after visiting a node.",
-        "Return answers in query order.",
-        "Include edge cases: repeated add/remove cycles, self queries, disconnected nodes."
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in rust with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "python_scc_condensation_dp_005",
+      "title": "SCC Condensation Longest Path",
+      "language": "python",
+      "code_fence": "python",
+      "category": "graphs_scc",
+      "difficulty": "leetcode_hard",
+      "language_patterns": [
+        "idiomatic dataclasses / typed helpers",
+        "clear invariant comments",
+        "deterministic test harnesses"
+      ],
+      "prompt": "Given a directed graph with node weights, condense SCCs and compute max path weight in DAG of components.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in python with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "typescript_dijkstra_dynamic_obstacles_006",
+      "title": "Dijkstra with Time-Dependent Blocks",
+      "language": "typescript",
+      "code_fence": "ts",
+      "category": "shortest_path",
+      "difficulty": "leetcode_hard",
+      "language_patterns": [
+        "strict TypeScript types/interfaces",
+        "Map/Set-based bookkeeping",
+        "deterministic test cases"
+      ],
+      "prompt": "Find minimum travel time in weighted graph where some nodes are blocked during specific intervals. Waiting is allowed.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in typescript with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "go_topk_stream_decay_007",
+      "title": "Top-K Frequent in Time-Decay Stream",
+      "language": "go",
+      "code_fence": "go",
+      "category": "streaming",
+      "difficulty": "leetcode_medium",
+      "language_patterns": [
+        "small structs with method receivers",
+        "explicit slice/map lifecycle",
+        "deterministic table-driven tests"
+      ],
+      "prompt": "Maintain top-k keys under exponential time decay over events (key, timestamp). Support queryTopK at arbitrary times.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in go with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "rust_interval_union_queries_008",
+      "title": "Interval Union with Coverage Queries",
+      "language": "rust",
+      "code_fence": "rust",
+      "category": "intervals",
+      "difficulty": "leetcode_medium",
+      "language_patterns": [
+        "ownership-safe state transitions",
+        "Vec/HashMap with explicit mutability",
+        "deterministic test module"
+      ],
+      "prompt": "Maintain dynamic set of integer intervals under add/remove and answer coverage length and point coverage queries.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in rust with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "python_aho_corasick_filter_009",
+      "title": "Aho-Corasick Multi-Pattern Filter",
+      "language": "python",
+      "code_fence": "python",
+      "category": "strings_automata",
+      "difficulty": "leetcode_hard",
+      "language_patterns": [
+        "idiomatic dataclasses / typed helpers",
+        "clear invariant comments",
+        "deterministic test harnesses"
+      ],
+      "prompt": "Given many patterns and a large text stream, report all pattern occurrences with start indices efficiently.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in python with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "typescript_persistent_trie_xor_010",
+      "title": "Persistent Trie Maximum XOR Queries",
+      "language": "typescript",
+      "code_fence": "ts",
+      "category": "persistent_ds",
+      "difficulty": "leetcode_hard",
+      "language_patterns": [
+        "strict TypeScript types/interfaces",
+        "Map/Set-based bookkeeping",
+        "deterministic test cases"
+      ],
+      "prompt": "Build versioned structure over prefix insertions and answer max-xor query over subarray prefixes.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in typescript with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "go_min_cost_max_flow_assignment_011",
+      "title": "Min-Cost Max-Flow Assignment",
+      "language": "go",
+      "code_fence": "go",
+      "category": "flow",
+      "difficulty": "leetcode_hard",
+      "language_patterns": [
+        "small structs with method receivers",
+        "explicit slice/map lifecycle",
+        "deterministic table-driven tests"
+      ],
+      "prompt": "Assign workers to tasks with capacities and costs. Minimize total cost while maximizing assignments.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in go with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "rust_edmonds_karp_cut_recovery_012",
+      "title": "Max-Flow Min-Cut Recovery",
+      "language": "rust",
+      "code_fence": "rust",
+      "category": "flow",
+      "difficulty": "leetcode_medium",
+      "language_patterns": [
+        "ownership-safe state transitions",
+        "Vec/HashMap with explicit mutability",
+        "deterministic test module"
+      ],
+      "prompt": "Compute max flow and output one minimum cut partition and cut edges.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in rust with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "python_suffix_array_lcp_queries_013",
+      "title": "Suffix Array + LCP Range Queries",
+      "language": "python",
+      "code_fence": "python",
+      "category": "strings_suffix",
+      "difficulty": "leetcode_hard",
+      "language_patterns": [
+        "idiomatic dataclasses / typed helpers",
+        "clear invariant comments",
+        "deterministic test harnesses"
+      ],
+      "prompt": "Build suffix array and LCP; answer longest common prefix between suffixes and repeated substring queries.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in python with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "typescript_treap_order_statistics_014",
+      "title": "Implicit Treap for Sequence Ops",
+      "language": "typescript",
+      "code_fence": "ts",
+      "category": "balanced_bst",
+      "difficulty": "leetcode_hard",
+      "language_patterns": [
+        "strict TypeScript types/interfaces",
+        "Map/Set-based bookkeeping",
+        "deterministic test cases"
+      ],
+      "prompt": "Support sequence insert/delete/reverse/range-sum/kth operations in logarithmic time.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in typescript with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "go_binary_indexed_tree_2d_015",
+      "title": "2D Fenwick Tree for Matrix Updates",
+      "language": "go",
+      "code_fence": "go",
+      "category": "fenwick",
+      "difficulty": "leetcode_medium",
+      "language_patterns": [
+        "small structs with method receivers",
+        "explicit slice/map lifecycle",
+        "deterministic table-driven tests"
+      ],
+      "prompt": "Support point updates and rectangle sum queries on dynamic matrix.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in go with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "rust_mo_algorithm_distinct_016",
+      "title": "Mo's Algorithm Distinct Count",
+      "language": "rust",
+      "code_fence": "rust",
+      "category": "offline_queries",
+      "difficulty": "leetcode_medium",
+      "language_patterns": [
+        "ownership-safe state transitions",
+        "Vec/HashMap with explicit mutability",
+        "deterministic test module"
+      ],
+      "prompt": "Answer many static range queries asking number of distinct values with near O((n+q)sqrt(n)).",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in rust with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "python_weighted_interval_scheduling_017",
+      "title": "Weighted Interval Scheduling with Reconstruction",
+      "language": "python",
+      "code_fence": "python",
+      "category": "dp_intervals",
+      "difficulty": "leetcode_medium",
+      "language_patterns": [
+        "idiomatic dataclasses / typed helpers",
+        "clear invariant comments",
+        "deterministic test harnesses"
+      ],
+      "prompt": "Select non-overlapping jobs with max profit and reconstruct chosen job indices.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in python with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "typescript_bitmask_tsp_small_018",
+      "title": "Bitmask TSP Path Reconstruction",
+      "language": "typescript",
+      "code_fence": "ts",
+      "category": "bitmask_dp",
+      "difficulty": "leetcode_hard",
+      "language_patterns": [
+        "strict TypeScript types/interfaces",
+        "Map/Set-based bookkeeping",
+        "deterministic test cases"
+      ],
+      "prompt": "For n<=20 weighted complete graph, compute shortest Hamiltonian path/cycle and reconstruct route.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in typescript with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "go_regex_engine_subset_019",
+      "title": "Regex Engine Subset (.,*)",
+      "language": "go",
+      "code_fence": "go",
+      "category": "parsing_dp",
+      "difficulty": "leetcode_hard",
+      "language_patterns": [
+        "small structs with method receivers",
+        "explicit slice/map lifecycle",
+        "deterministic table-driven tests"
+      ],
+      "prompt": "Implement matcher for pattern language containing lowercase letters, dot, and star with full-string match.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in go with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "rust_json_diff_min_patch_020",
+      "title": "JSON Tree Diff Minimum Patch",
+      "language": "rust",
+      "code_fence": "rust",
+      "category": "trees_diff",
+      "difficulty": "leetcode_hard",
+      "language_patterns": [
+        "ownership-safe state transitions",
+        "Vec/HashMap with explicit mutability",
+        "deterministic test module"
+      ],
+      "prompt": "Given two JSON trees, produce minimal patch operations add/remove/replace preserving object key order semantics.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in rust with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "python_rate_limiter_token_bucket_021",
+      "title": "Distributed Token Bucket Limiter",
+      "language": "python",
+      "code_fence": "python",
+      "category": "systems_design",
+      "difficulty": "leetcode_medium",
+      "language_patterns": [
+        "idiomatic dataclasses / typed helpers",
+        "clear invariant comments",
+        "deterministic test harnesses"
+      ],
+      "prompt": "Design thread-safe token bucket limiter with burst support and deterministic tests for race conditions.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in python with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "typescript_kafka_rebalance_sim_022",
+      "title": "Consumer Group Rebalance Simulation",
+      "language": "typescript",
+      "code_fence": "ts",
+      "category": "systems_simulation",
+      "difficulty": "leetcode_medium",
+      "language_patterns": [
+        "strict TypeScript types/interfaces",
+        "Map/Set-based bookkeeping",
+        "deterministic test cases"
+      ],
+      "prompt": "Simulate partition assignment strategies and rebalance events; output assignments after each event.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in typescript with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "go_raft_log_compaction_023",
+      "title": "Raft Log Compaction State Machine",
+      "language": "go",
+      "code_fence": "go",
+      "category": "distributed_systems",
+      "difficulty": "leetcode_hard",
+      "language_patterns": [
+        "small structs with method receivers",
+        "explicit slice/map lifecycle",
+        "deterministic table-driven tests"
+      ],
+      "prompt": "Model Raft log append/commit/snapshot compaction transitions and validate safety invariants.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in go with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "rust_btree_page_split_merge_024",
+      "title": "B-Tree Page Split/Merge",
+      "language": "rust",
+      "code_fence": "rust",
+      "category": "storage_index",
+      "difficulty": "leetcode_hard",
+      "language_patterns": [
+        "ownership-safe state transitions",
+        "Vec/HashMap with explicit mutability",
+        "deterministic test module"
+      ],
+      "prompt": "Implement B-Tree insert/delete with page split/merge and in-order iterator correctness checks.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in rust with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "python_lru_ttl_cache_025",
+      "title": "LRU Cache with TTL Expiration",
+      "language": "python",
+      "code_fence": "python",
+      "category": "cache",
+      "difficulty": "leetcode_medium",
+      "language_patterns": [
+        "idiomatic dataclasses / typed helpers",
+        "clear invariant comments",
+        "deterministic test harnesses"
+      ],
+      "prompt": "Implement cache with capacity, get/put, and per-key TTL. Expired keys act missing and are cleaned lazily.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in python with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "typescript_scheduler_deadline_priority_026",
+      "title": "Preemptive Deadline Scheduler",
+      "language": "typescript",
+      "code_fence": "ts",
+      "category": "scheduling",
+      "difficulty": "leetcode_medium",
+      "language_patterns": [
+        "strict TypeScript types/interfaces",
+        "Map/Set-based bookkeeping",
+        "deterministic test cases"
+      ],
+      "prompt": "Simulate scheduler with arrival times, priorities, and deadlines; output execution trace and missed deadlines.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in typescript with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "go_union_find_equations_027",
+      "title": "Equation Satisfiability with DSU",
+      "language": "go",
+      "code_fence": "go",
+      "category": "union_find",
+      "difficulty": "leetcode_medium",
+      "language_patterns": [
+        "small structs with method receivers",
+        "explicit slice/map lifecycle",
+        "deterministic table-driven tests"
+      ],
+      "prompt": "Given equations like a==b and a!=b, determine satisfiability over variable set.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in go with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "rust_geo_hash_grid_index_028",
+      "title": "Geospatial Grid Index Range Search",
+      "language": "rust",
+      "code_fence": "rust",
+      "category": "spatial_index",
+      "difficulty": "leetcode_medium",
+      "language_patterns": [
+        "ownership-safe state transitions",
+        "Vec/HashMap with explicit mutability",
+        "deterministic test module"
+      ],
+      "prompt": "Index points in 2D and answer rectangular range and nearest-neighbor candidate queries efficiently.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in rust with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "python_event_sourcing_snapshot_029",
+      "title": "Event Sourcing Replay with Snapshots",
+      "language": "python",
+      "code_fence": "python",
+      "category": "event_sourcing",
+      "difficulty": "leetcode_medium",
+      "language_patterns": [
+        "idiomatic dataclasses / typed helpers",
+        "clear invariant comments",
+        "deterministic test harnesses"
+      ],
+      "prompt": "Replay ordered events to reconstruct aggregate state with periodic snapshots for faster recovery.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in python with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
+      ]
+    },
+    {
+      "id": "typescript_cdc_merge_ordering_030",
+      "title": "Change Data Capture Merge Ordering",
+      "language": "typescript",
+      "code_fence": "ts",
+      "category": "stream_processing",
+      "difficulty": "leetcode_hard",
+      "language_patterns": [
+        "strict TypeScript types/interfaces",
+        "Map/Set-based bookkeeping",
+        "deterministic test cases"
+      ],
+      "prompt": "Merge multiple CDC streams with per-source ordering and watermark constraints; emit deterministic final ordering.",
+      "requirements": [
+        "Explain the core algorithm and why it meets complexity bounds.",
+        "Implement the solution in typescript with clear invariants.",
+        "Include representative edge cases and deterministic tests.",
+        "State exact time and space complexity.",
+        "Avoid unnecessary global mutable state; keep behavior deterministic."
       ]
     }
   ]
