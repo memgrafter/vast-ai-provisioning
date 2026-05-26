@@ -13,7 +13,9 @@ import argparse
 import json
 import os
 import re
+import shlex
 import statistics
+import subprocess
 import sys
 import time
 import urllib.error
@@ -72,6 +74,9 @@ class RequestResult:
     content_chars: int
     usage: dict[str, Any] | None
     validation: dict[str, Any]
+    observed_context: int | None
+    prompt_tokens: int | None
+    completion_tokens: int | None
     backend: BackendRelease | None
 
 
@@ -103,14 +108,21 @@ def load_manifest(path: Path) -> dict[str, Any]:
     return manifest
 
 
-def build_messages(problem: dict[str, Any], request_id: str, iteration: int) -> list[dict[str, str]]:
+def build_system_message() -> dict[str, str]:
+    return {
+        "role": "system",
+        "content": (
+            "You are an expert competitive-programming and systems-design coding assistant. "
+            "Solve exactly the provided benchmark problem. Do not invent a new problem. "
+            "Do not change the requested language. Preserve the required response format."
+        ),
+    }
+
+
+def build_user_message(problem: dict[str, Any], request_id: str, iteration: int) -> dict[str, str]:
     requirements = "\n".join(f"- {item}" for item in problem["requirements"])
     patterns = "\n".join(f"- {item}" for item in problem.get("language_patterns", [])) or "- Use idiomatic language design."
     code_fence = problem["code_fence"]
-    system = (
-        "You are an expert competitive-programming and systems-design coding assistant. "
-        "Solve exactly the provided problem. Do not invent a new problem. Do not change the requested language."
-    )
     user = f"""REQUEST_ID: {request_id}
 TASK_ID: {problem['id']}
 ITERATION: {iteration}
@@ -151,7 +163,11 @@ Give representative tests.
 ## Self-evaluation
 List likely bugs and edge cases.
 """
-    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    return {"role": "user", "content": user}
+
+
+def build_messages(problem: dict[str, Any], request_id: str, iteration: int) -> list[dict[str, str]]:
+    return [build_system_message(), build_user_message(problem, request_id, iteration)]
 
 
 def request_json(base_url: str, api_key: str | None, payload: dict[str, Any], timeout: int) -> tuple[int, bytes, dict[str, str]]:
@@ -165,6 +181,19 @@ def request_json(base_url: str, api_key: str | None, payload: dict[str, Any], ti
             return resp.status, resp.read(), dict(resp.headers.items())
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read(), dict(exc.headers.items())
+
+
+def stringify_response_part(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "\n".join(
+            part.get("text", str(part)) if isinstance(part, dict) else str(part)
+            for part in value
+        )
+    return str(value)
 
 
 def extract_content(response_body: bytes) -> tuple[str, dict[str, Any] | None, dict[str, Any]]:
@@ -186,6 +215,28 @@ def extract_content(response_body: bytes) -> tuple[str, dict[str, Any] | None, d
     if isinstance(content, list):
         content = "\n".join(part.get("text", str(part)) if isinstance(part, dict) else str(part) for part in content)
     return content, usage, data
+
+
+def usage_token_count(usage: dict[str, Any] | None, key: str) -> int | None:
+    if not isinstance(usage, dict):
+        return None
+    value = usage.get(key)
+    return value if isinstance(value, int) else None
+
+
+def observed_context_for_backend(backend_mode: str, usage: dict[str, Any] | None, backend: BackendRelease | None) -> int | None:
+    if backend_mode == "llama.cpp" and backend is not None:
+        return backend.slot_tokens
+    return usage_token_count(usage, "prompt_tokens")
+
+
+def target_context_threshold(backend_mode: str, target_context: int | None, response_headroom: int | None, max_tokens: int) -> int | None:
+    if target_context is None:
+        return None
+    if backend_mode == "vllm":
+        headroom = max_tokens if response_headroom is None else response_headroom
+        return max(0, target_context - headroom)
+    return target_context
 
 
 def validate_response(content: str, problem: dict[str, Any]) -> dict[str, Any]:
@@ -371,7 +422,7 @@ def generate_report(path: Path, manifest_path: Path, run_id: str, results: list[
     validated = [result.validation.get("ok") is True for result in results]
     backend_rows = [result for result in results if result.backend is not None]
     trunc_sum = sum(result.backend.truncated for result in backend_rows if result.backend is not None)
-    max_ctx = max((result.backend.slot_tokens for result in backend_rows if result.backend is not None), default=None)
+    max_ctx = max((result.observed_context for result in results if result.observed_context is not None), default=None)
     totals = backend_totals(results)
     proxy_counts = parse_proxy_status_counts(proxy_log)
     backend_header = parse_backend_header(backend_log)
@@ -443,7 +494,7 @@ def generate_report(path: Path, manifest_path: Path, run_id: str, results: list[
                 lang=result.language,
                 http=result.http_status,
                 valid="yes" if result.validation.get("ok") else "no",
-                ctx=backend.slot_tokens if backend else "n/a",
+                ctx=result.observed_context if result.observed_context is not None else "n/a",
                 ptok=backend.prompt_tokens if backend and backend.prompt_tokens is not None else "n/a",
                 prefill=fmt_float(backend.prompt_tps if backend else None),
                 gtok=backend.eval_tokens if backend and backend.eval_tokens is not None else "n/a",
@@ -461,6 +512,249 @@ def generate_report(path: Path, manifest_path: Path, run_id: str, results: list[
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def resolve_model_settings(models_config: Path, model_id: str) -> dict[str, Any] | None:
+    if not models_config.exists():
+        return None
+    config = json.loads(models_config.read_text(encoding="utf-8"))
+    requested_provider: str | None = None
+    requested_model = model_id
+    if "/" in model_id:
+        requested_provider, requested_model = model_id.split("/", 1)
+    for provider_name, provider in (config.get("providers") or {}).items():
+        if requested_provider is not None and provider_name != requested_provider:
+            continue
+        for model in provider.get("models") or []:
+            if model.get("id") == requested_model or model.get("id") == model_id:
+                compat = {}
+                compat.update(provider.get("compat") or {})
+                compat.update(model.get("compat") or {})
+                return {
+                    "provider_name": provider_name,
+                    "provider": provider,
+                    "model": model,
+                    "compat": compat,
+                    "max_tokens": int(model["maxTokens"]) if model.get("maxTokens") is not None else None,
+                    "reasoning": bool(model.get("reasoning")),
+                }
+    return None
+
+
+def apply_reasoning_payload_settings(payload: dict[str, Any], model_settings: dict[str, Any] | None) -> None:
+    if not model_settings or not model_settings.get("reasoning"):
+        return
+    thinking_format = (model_settings.get("compat") or {}).get("thinkingFormat")
+    if thinking_format == "qwen-chat-template":
+        payload.setdefault("chat_template_kwargs", {})["enable_thinking"] = True
+    elif thinking_format == "qwen":
+        payload["enable_thinking"] = True
+
+
+
+def run_command(command: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=check)
+
+
+ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+
+
+def strip_ansi(text: str) -> str:
+    return ANSI_RE.sub("", text)
+
+
+def tmux_window_exists(session: str, window: str) -> bool:
+    existing = run_command(["tmux", "list-windows", "-t", session, "-F", "#{window_name}"], check=False)
+    return window in existing.stdout.splitlines()
+
+
+def tmux_pane_id(session: str, window: str) -> str:
+    return run_command(["tmux", "display-message", "-p", "-t", f"{session}:{window}", "#{pane_id}"]).stdout.strip()
+
+
+def pane_current_command(target: str) -> str:
+    return run_command(["tmux", "display-message", "-p", "-t", target, "#{pane_current_command}"], check=False).stdout.strip()
+
+
+def capture_pane_text(target: str, lines: int = 4000) -> str:
+    return strip_ansi(run_command(["tmux", "capture-pane", "-p", "-t", target, "-S", f"-{lines}"], check=False).stdout)
+
+
+def ensure_pi_pane(session: str, window: str, cwd: Path, pi_model: str, pi_session_file: Path) -> str:
+    launch = (
+        f"cd {shlex.quote(str(cwd))} && "
+        "source env.vast-management 2>/dev/null || true && "
+        f"exec pi --model {shlex.quote(pi_model)} --session {shlex.quote(str(pi_session_file))}"
+    )
+    if run_command(["tmux", "has-session", "-t", session], check=False).returncode != 0:
+        run_command(["tmux", "new-session", "-d", "-s", session, "-n", window, "-c", str(cwd), "bash", "-lc", launch])
+    else:
+        if tmux_window_exists(session, window):
+            run_command(["tmux", "kill-window", "-t", f"{session}:{window}"])
+        run_command(["tmux", "new-window", "-d", "-t", session, "-n", window, "-c", str(cwd), "bash", "-lc", launch])
+    pane_id = tmux_pane_id(session, window)
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        if pane_current_command(pane_id) in {"node", "pi"}:
+            break
+        time.sleep(0.5)
+    return pane_id
+
+
+def submit_prompt_to_pane(pane_id: str, prompt_path: Path, buffer_name: str) -> None:
+    run_command(["tmux", "load-buffer", "-b", buffer_name, str(prompt_path)])
+    try:
+        run_command(["tmux", "paste-buffer", "-b", buffer_name, "-t", pane_id])
+    finally:
+        run_command(["tmux", "delete-buffer", "-b", buffer_name], check=False)
+    run_command(["tmux", "send-keys", "-t", pane_id, "Enter"])
+
+
+def load_session_entries(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    entries: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not line.strip():
+            continue
+        try:
+            entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return entries
+
+
+def assistant_messages(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        entry for entry in entries
+        if entry.get("type") == "message" and isinstance(entry.get("message"), dict) and entry["message"].get("role") == "assistant"
+    ]
+
+
+def message_content_to_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, dict):
+        if isinstance(content.get("text"), str):
+            return content["text"]
+        return ""
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            text = message_content_to_text(item)
+            if text:
+                parts.append(text)
+        return "\n".join(parts)
+    return ""
+
+
+def wait_for_assistant_turn(session_file: Path, before_count: int, timeout_seconds: int) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout_seconds
+    last_signature: tuple[int, int, int] | None = None
+    stable_polls = 0
+    while time.monotonic() < deadline:
+        entries = load_session_entries(session_file)
+        assistants = assistant_messages(entries)
+        if len(assistants) > before_count and session_file.exists():
+            latest_message = entries[-1].get("message") if entries and entries[-1].get("type") == "message" else None
+            latest_role = latest_message.get("role") if isinstance(latest_message, dict) else None
+            latest_stop_reason = latest_message.get("stopReason") if isinstance(latest_message, dict) else None
+            if latest_role == "assistant" and latest_stop_reason != "toolUse":
+                stat = session_file.stat()
+                signature = (len(entries), len(assistants), stat.st_size)
+                if signature == last_signature:
+                    stable_polls += 1
+                else:
+                    last_signature = signature
+                    stable_polls = 0
+                if stable_polls >= 2:
+                    return assistants[-1]
+            else:
+                last_signature = None
+                stable_polls = 0
+        else:
+            last_signature = None
+            stable_polls = 0
+        time.sleep(1)
+    raise TimeoutError(f"timed out waiting for assistant turn in {session_file}")
+
+
+def run_pi_tmux(args: argparse.Namespace, manifest: dict[str, Any], manifest_path: Path, run_id: str, out_dir: Path, jsonl_path: Path, report_path: Path) -> int:
+    problems = manifest["problems"][: args.max_problems] if args.max_problems else manifest["problems"]
+    if not problems:
+        raise ValueError("selected problem list is empty")
+    if not args.pi_model:
+        raise ValueError("--driver pi-tmux requires --pi-model")
+    responses_dir = out_dir / "responses"
+    prompts_dir = out_dir / "prompts"
+    captures_dir = out_dir / "tmux-captures"
+    for path in [responses_dir, prompts_dir, captures_dir]:
+        path.mkdir(exist_ok=True)
+    pi_session_file = Path(args.pi_session_file or (out_dir / "pi-session.jsonl"))
+    pi_session_file.parent.mkdir(parents=True, exist_ok=True)
+    repo_root = Path.cwd()
+    pane_id = "dry-run" if args.dry_run else ensure_pi_pane(args.tmux_session, args.tmux_window, repo_root, args.pi_model, pi_session_file)
+    total_iterations = args.max_iterations if args.target_context is not None else (len(problems) if args.max_iterations is None else min(len(problems), args.max_iterations))
+    results: list[RequestResult] = []
+    for iteration in range(1, total_iterations + 1):
+        problem = problems[(iteration - 1) % len(problems)]
+        request_id = f"{run_id}-iter-{iteration:04d}-{problem['id']}"
+        prompt = build_user_message(problem, request_id, iteration)["content"]
+        prompt_path = prompts_dir / f"{iteration:04d}-{problem['id']}.txt"
+        response_path = responses_dir / f"{iteration:04d}-{problem['id']}.txt"
+        capture_path = captures_dir / f"{iteration:04d}-{problem['id']}.txt"
+        prompt_path.write_text(prompt, encoding="utf-8")
+        start_time = iso_now()
+        if args.dry_run:
+            status_code = 0
+            content = ""
+            validation = {"ok": True, "dry_run": True}
+            end_time = start_time
+        else:
+            before_count = len(assistant_messages(load_session_entries(pi_session_file)))
+            submit_prompt_to_pane(pane_id, prompt_path, f"det-agentic-{iteration}")
+            try:
+                assistant_entry = wait_for_assistant_turn(pi_session_file, before_count, args.timeout)
+                status_code = 0
+                content = message_content_to_text((assistant_entry.get("message") or {}).get("content"))
+                validation = validate_response(content, problem)
+            except TimeoutError as exc:
+                status_code = 124
+                content = ""
+                validation = {"ok": False, "timeout": str(exc)}
+            end_time = iso_now()
+            capture_path.write_text(capture_pane_text(pane_id), encoding="utf-8")
+            response_path.write_text(content, encoding="utf-8")
+        result = RequestResult(
+            iteration=iteration,
+            request_id=request_id,
+            task_id=problem["id"],
+            title=problem["title"],
+            language=problem["language"],
+            http_status=200 if status_code == 0 else status_code,
+            client_start=start_time,
+            client_end=end_time,
+            response_bytes=len(content.encode("utf-8")),
+            content_chars=len(content),
+            usage=None,
+            validation=validation,
+            observed_context=None,
+            prompt_tokens=None,
+            completion_tokens=None,
+            backend=None,
+        )
+        results.append(result)
+        with jsonl_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(asdict(result), sort_keys=True) + "\n")
+        print(f"iter={iteration} task={problem['id']} pi_status={status_code} valid={validation.get('ok')} chars={len(content)}", flush=True)
+        if args.fail_fast and (status_code != 0 or not validation.get("ok")):
+            break
+    generate_report(report_path, manifest_path, run_id, results, None, None)
+    print(f"tmux pane={pane_id}")
+    print(f"pi_session={pi_session_file}")
+    print(f"wrote {jsonl_path}")
+    print(f"wrote {report_path}")
+    return 0 if all(result.validation.get("ok") for result in results) else 1
+
+
 def run(args: argparse.Namespace) -> int:
     manifest_path = Path(args.manifest)
     manifest = load_manifest(manifest_path)
@@ -474,12 +768,24 @@ def run(args: argparse.Namespace) -> int:
     responses_dir.mkdir(exist_ok=True)
     jsonl_path = out_dir / "requests.jsonl"
     report_path = out_dir / "report.md"
+    if args.driver == "pi-tmux":
+        return run_pi_tmux(args, manifest, manifest_path, run_id, out_dir, jsonl_path, report_path)
     backend_log = Path(args.backend_log) if args.backend_log else None
     proxy_log = Path(args.proxy_log) if args.proxy_log else None
-    api_key = args.api_key or (os.environ.get(args.api_key_env) if args.api_key_env else None)
+    default_api_key_env = {"vllm": "VLLM_API_KEY", "llama.cpp": "LLAMACPP_API_KEY", "generic": "OPENAI_API_KEY"}[args.backend]
+    api_key_env = args.api_key_env or default_api_key_env
+    api_key = args.api_key or os.environ.get(api_key_env)
+    model_settings = resolve_model_settings(Path(args.pi_models_config).expanduser(), args.model)
+    max_tokens = args.max_tokens
+    if max_tokens is None and model_settings is not None:
+        max_tokens = model_settings.get("max_tokens")
+    if max_tokens is None:
+        raise ValueError("max tokens was not provided and could not be resolved from .pi/models.json; pass --max-tokens or set model.maxTokens")
 
+    context_threshold = target_context_threshold(args.backend, args.target_context, args.response_headroom, max_tokens)
     results: list[RequestResult] = []
     previous_backend_count = len(parse_backend_releases(backend_log)) if backend_log else 0
+    conversation_history: list[dict[str, str]] = []
 
     if args.target_context is not None:
         total_iterations = args.max_iterations
@@ -489,16 +795,21 @@ def run(args: argparse.Namespace) -> int:
     for iteration in range(1, total_iterations + 1):
         problem = problems[(iteration - 1) % len(problems)]
         request_id = f"{run_id}-iter-{iteration:04d}-{problem['id']}"
-        messages = build_messages(problem, request_id, iteration)
+        current_user_message = build_user_message(problem, request_id, iteration)
+        if args.accumulate_context:
+            messages = [build_system_message(), *conversation_history, current_user_message]
+        else:
+            messages = [build_system_message(), current_user_message]
         payload = {
             "model": args.model,
             "messages": messages,
             "temperature": args.temperature,
             "top_p": args.top_p,
-            "max_tokens": args.max_tokens,
+            "max_tokens": max_tokens,
             "stream": False,
             "metadata": {"run_id": run_id, "request_id": request_id, "task_id": problem["id"]},
         }
+        apply_reasoning_payload_settings(payload, model_settings)
         if args.dry_run:
             content = ""
             status = 0
@@ -521,9 +832,17 @@ def run(args: argparse.Namespace) -> int:
                 validation = {"ok": False, "parse_error": str(exc)}
             else:
                 validation = validate_response(content, problem)
-            backend = wait_for_new_backend_release(backend_log, previous_backend_count, args.backend_wait) if status == 200 else None
+            backend = wait_for_new_backend_release(backend_log, previous_backend_count, args.backend_wait) if status == 200 and backend_log else None
             if backend is not None:
                 previous_backend_count += 1
+        prompt_tokens = usage_token_count(usage, "prompt_tokens")
+        completion_tokens = usage_token_count(usage, "completion_tokens")
+        observed_context = observed_context_for_backend(args.backend, usage, backend)
+        if args.target_context is not None and observed_context is None and not args.dry_run:
+            raise RuntimeError(
+                f"--target-context requires observed context for backend {args.backend!r}; "
+                "vllm/generic need response usage.prompt_tokens, llama.cpp needs --backend-log correlation"
+            )
         result = RequestResult(
             iteration=iteration,
             request_id=request_id,
@@ -537,20 +856,29 @@ def run(args: argparse.Namespace) -> int:
             content_chars=len(content),
             usage=usage,
             validation=validation,
+            observed_context=observed_context,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
             backend=backend,
         )
+        if args.accumulate_context and status == 200 and content:
+            conversation_history.append(current_user_message)
+            conversation_history.append({"role": "assistant", "content": content})
         results.append(result)
         with jsonl_path.open("a", encoding="utf-8") as handle:
             row = asdict(result)
             handle.write(json.dumps(row, sort_keys=True) + "\n")
         print(
             f"iter={iteration} task={problem['id']} status={status} valid={validation.get('ok')} "
-            f"ctx={backend.slot_tokens if backend else 'n/a'} gen_tps={fmt_float(backend.eval_tps if backend else None)}",
+            f"ctx={observed_context if observed_context is not None else 'n/a'} "
+            f"prompt={prompt_tokens if prompt_tokens is not None else 'n/a'} "
+            f"completion={completion_tokens if completion_tokens is not None else 'n/a'} "
+            f"gen_tps={fmt_float(backend.eval_tps if backend else None)}",
             flush=True,
         )
         if args.fail_fast and (status != 200 or not validation.get("ok") or (backend is None and backend_log is not None)):
             break
-        if args.target_context and backend is not None and backend.slot_tokens >= args.target_context:
+        if context_threshold is not None and observed_context is not None and observed_context >= context_threshold:
             break
 
     generate_report(report_path, manifest_path, run_id, results, backend_log, proxy_log)
@@ -561,16 +889,19 @@ def run(args: argparse.Namespace) -> int:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--driver", choices=["direct", "pi-tmux"], default="direct", help="Execution driver. pi-tmux drives real Pi sessions through tmux.")
+    parser.add_argument("--backend", choices=["vllm", "llama.cpp", "generic"], default="generic", help="Backend semantics for context tracking and API-key defaults in direct mode")
     parser.add_argument("--manifest", default="benchmark/problem_manifest.example.json")
     parser.add_argument("--base-url", default=os.environ.get("OPENAI_BASE_URL", "http://127.0.0.1:8081/v1"))
     parser.add_argument("--model", default=os.environ.get("OPENAI_MODEL", "qwen3.6-28b-reap-iq3-m"))
     parser.add_argument("--api-key", default=None)
-    parser.add_argument("--api-key-env", default="LLAMACPP_API_KEY")
+    parser.add_argument("--api-key-env", default=None, help="Environment variable containing API key. Defaults by --backend")
     parser.add_argument("--run-id", default=None)
     parser.add_argument("--out-dir", default=None)
     parser.add_argument("--max-problems", type=int, default=None)
     parser.add_argument("--max-iterations", type=int, default=1000, help="Maximum requests when --target-context is set; otherwise caps one manifest pass")
-    parser.add_argument("--max-tokens", type=int, default=2048)
+    parser.add_argument("--max-tokens", type=int, default=None, help="Completion token cap. Defaults to model.maxTokens from .pi/models.json")
+    parser.add_argument("--pi-models-config", default=".pi/models.json", help="Pi models config used to resolve maxTokens when --max-tokens is omitted")
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--top-p", type=float, default=1.0)
     parser.add_argument("--timeout", type=int, default=900)
@@ -578,7 +909,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--proxy-log", default=None, help="Optional local proxy log to summarize in the report")
     parser.add_argument("--backend-wait", type=int, default=30)
     parser.add_argument("--target-context", type=int, default=None)
+    parser.add_argument("--response-headroom", type=int, default=None, help="For --backend vllm, stop when usage.prompt_tokens reaches target-context minus this headroom. Defaults to max_tokens.")
+    parser.add_argument("--no-accumulate-context", dest="accumulate_context", action="store_false", help="Do not include prior turns in later requests")
+    parser.set_defaults(accumulate_context=True)
     parser.add_argument("--fail-fast", action="store_true")
+    parser.add_argument("--pi-model", default=None, help="Pi model for --driver pi-tmux, e.g. provider/model")
+    parser.add_argument("--tmux-session", default="vast", help="tmux session for --driver pi-tmux")
+    parser.add_argument("--tmux-window", default="deterministic-agentic", help="tmux window for --driver pi-tmux")
+    parser.add_argument("--pi-session-file", default=None, help="Pi session file for --driver pi-tmux. Defaults inside out-dir.")
     parser.add_argument("--dry-run", action="store_true", help="Validate manifest and write a report without calling an API")
     return parser.parse_args(argv)
 
