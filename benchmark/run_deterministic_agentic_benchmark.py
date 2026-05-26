@@ -519,7 +519,32 @@ def generate_report(path: Path, manifest_path: Path, run_id: str, results: list[
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def resolve_model_profile_settings(model_id: str) -> dict[str, Any] | None:
+    for path in sorted(Path("config/models").glob("*.json")):
+        profile = json.loads(path.read_text(encoding="utf-8"))
+        aliases = {str(profile.get("name")), str(profile.get("served_model_name"))}
+        if model_id not in aliases:
+            continue
+        llamacpp = profile.get("llamacpp") or {}
+        vllm = profile.get("vllm") or {}
+        # Use the model's max-tokens default unless a benchmark explicitly
+        # requires a specified different output budget.
+        max_tokens = llamacpp.get("n_predict", vllm.get("max_new_tokens"))
+        return {
+            "provider_name": "model-profile",
+            "provider": {},
+            "model": profile,
+            "compat": profile.get("compat") or {},
+            "max_tokens": int(max_tokens) if max_tokens is not None else None,
+            "reasoning": bool(profile.get("reasoning")),
+        }
+    return None
+
+
 def resolve_model_settings(models_config: Path, model_id: str) -> dict[str, Any] | None:
+    profile_settings = resolve_model_profile_settings(model_id)
+    if profile_settings is not None:
+        return profile_settings
     if not models_config.exists():
         return None
     config = json.loads(models_config.read_text(encoding="utf-8"))
@@ -814,7 +839,7 @@ def run(args: argparse.Namespace) -> int:
     if max_tokens is None and model_settings is not None:
         max_tokens = model_settings.get("max_tokens")
     if max_tokens is None:
-        raise ValueError("max tokens was not provided and could not be resolved from .pi/models.json; pass --max-tokens or set model.maxTokens")
+        raise ValueError("max tokens was not provided and could not be resolved from config/models or .pi/models.json; pass --max-tokens, set model-profile llamacpp.n_predict/vllm.max_new_tokens, or set model.maxTokens")
 
     context_threshold = target_context_threshold(args.backend, args.target_context, args.response_headroom, max_tokens)
     results: list[RequestResult] = []
@@ -934,7 +959,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--out-dir", default=None)
     parser.add_argument("--max-problems", type=int, default=None)
     parser.add_argument("--max-iterations", type=int, default=1000, help="Maximum requests when --target-context is set; otherwise caps one manifest pass")
-    parser.add_argument("--max-tokens", type=int, default=None, help="Completion token cap. Defaults to model.maxTokens from .pi/models.json")
+    parser.add_argument("--max-tokens", type=int, default=None, help="Completion token cap. Defaults to config/models llamacpp.n_predict or vllm.max_new_tokens, then model.maxTokens from .pi/models.json")
     parser.add_argument("--pi-models-config", default=".pi/models.json", help="Pi models config used to resolve maxTokens when --max-tokens is omitted")
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--top-p", type=float, default=1.0)

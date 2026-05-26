@@ -15,10 +15,10 @@ import shlex
 import subprocess
 import sys
 import time
-from requests import HTTPError
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError, URLError
+from requests import HTTPError as RequestsHTTPError
+from urllib.error import HTTPError as UrlHTTPError, URLError
 from urllib.request import Request, urlopen
 
 from vastai import VastAI
@@ -71,6 +71,10 @@ def run(cmd: list[str], *, input_text: str | None = None, timeout: int | None = 
 def save_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, sort_keys=True, default=str) + "\n")
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text())
 
 
 def require_env(name: str) -> str:
@@ -139,7 +143,9 @@ def print_current_infra(instances: list[dict[str, Any]]) -> None:
 
 def offer_reject_reasons(offer: dict[str, Any], args: argparse.Namespace) -> list[str]:
     min_ram_mb = args.min_gpu_ram_gb * 1000.0
+    greylisted_machine_ids = {int(x) for x in (args.greylisted_machine_ids or [])}
     checks = [
+        (machine_id(offer) not in greylisted_machine_ids, "greylisted_machine"),
         (offer.get("verification") != "deverified", "deverified"),
         (offer.get("gpu_name") == args.gpu_name, "gpu_name"),
         (int(offer.get("num_gpus") or 0) == args.num_gpus, "num_gpus"),
@@ -155,8 +161,17 @@ def offer_reject_reasons(offer: dict[str, Any], args: argparse.Namespace) -> lis
     return [name for ok, name in checks if not ok]
 
 
-def offer_score(offer: dict[str, Any]) -> tuple[float, float, float, float, float]:
+def machine_id(offer: dict[str, Any]) -> int:
+    try:
+        return int(offer.get("machine_id"))
+    except Exception:
+        return -1
+
+
+def offer_score(offer: dict[str, Any], args: argparse.Namespace) -> tuple[int, float, float, float, float, float]:
+    preferred_machine_ids = {int(x) for x in (args.preferred_machine_ids or [])}
     return (
+        0 if machine_id(offer) in preferred_machine_ids else 1,
         float(offer.get("dph_total") or math.inf),
         -float(offer.get("reliability2") or 0),
         -float(offer.get("disk_bw") or offer.get("disk_io") or 0),
@@ -167,28 +182,44 @@ def offer_score(offer: dict[str, Any]) -> tuple[float, float, float, float, floa
 
 def search_offers(vast: VastAI, args: argparse.Namespace) -> list[dict[str, Any]]:
     quoted_gpu = json.dumps(args.gpu_name) if any(ch.isspace() for ch in args.gpu_name) else args.gpu_name
-    query = " ".join(
-        [
-            f"num_gpus={args.num_gpus}",
-            "rentable=true",
-            "verified=true",
-            f"gpu_name={quoted_gpu}",
-            f"gpu_total_ram>={args.min_gpu_ram_gb}",
-            f"cuda_max_good>={args.min_cuda}",
-        ]
+    query_parts = [
+        f"num_gpus={args.num_gpus}",
+        "rentable=true",
+        f"gpu_name={quoted_gpu}",
+        f"gpu_total_ram>={args.min_gpu_ram_gb}",
+        f"cuda_max_good>={args.min_cuda}",
+    ]
+    if args.require_verified:
+        query_parts.append("verified=true")
+    if args.geo_query:
+        query_parts.append(args.geo_query)
+    query = " ".join(query_parts)
+    raw_offers = vast.search_offers(
+        query=query,
+        type="on-demand",
+        order="dph_total",
+        limit=args.search_limit,
+        storage=args.disk_gb,
+        no_default=args.search_no_default,
     )
-    raw_offers = vast.search_offers(query=query, type="on-demand", order="dph_total", limit=args.search_limit, storage=args.disk_gb)
     passing: list[dict[str, Any]] = []
 
     print("Offer policy check")
     print("==================")
     print(f"query: {query}")
     print(f"search_limit: {args.search_limit}")
+    print(f"require_verified: {str(args.require_verified).lower()}")
+    if args.search_no_default:
+        print("search_no_default: true")
+    if args.greylisted_machine_ids:
+        print(f"greylisted_machine_ids: {sorted({int(x) for x in args.greylisted_machine_ids})}")
+    if args.preferred_machine_ids:
+        print(f"preferred_machine_ids: {sorted({int(x) for x in args.preferred_machine_ids})}")
     for offer in raw_offers:
         reasons = offer_reject_reasons(offer, args)
         status = "PASS" if not reasons else "FAIL " + ",".join(reasons)
         print(
-            f"{status:24} id={offer.get('id')} machine={offer.get('machine_id')} "
+            f"{status:24} id={offer.get('id')} ask={offer.get('ask_contract_id')} machine={offer.get('machine_id')} "
             f"gpu={offer.get('gpu_name')} cuda={offer.get('cuda_max_good')} "
             f"dph={money(offer.get('dph_total'))}/hr storage={money(offer.get('storage_total_cost'))}/hr "
             f"rel={number(offer.get('reliability2'), 4)} disk_bw={number(offer.get('disk_bw') or offer.get('disk_io'), 1)} "
@@ -196,7 +227,7 @@ def search_offers(vast: VastAI, args: argparse.Namespace) -> list[dict[str, Any]
         )
         if not reasons:
             passing.append(offer)
-    passing.sort(key=offer_score)
+    passing.sort(key=lambda offer: offer_score(offer, args))
     print()
     return passing
 
@@ -206,6 +237,8 @@ def print_offer(offer: dict[str, Any], args: argparse.Namespace) -> None:
     print("Selected offer")
     print("==============")
     print(f"offer_id:       {offer.get('id')}")
+    if offer.get("ask_contract_id") and offer.get("ask_contract_id") != offer.get("id"):
+        print(f"ask_contract_id:{offer.get('ask_contract_id')}")
     print(f"machine_id:     {offer.get('machine_id')}")
     print(f"gpu:            {offer.get('gpu_name')} {offer.get('gpu_total_ram')}MB")
     print(f"cuda/driver:    {offer.get('cuda_max_good')} / {offer.get('driver_version')}")
@@ -378,7 +411,19 @@ SERVER_BIN={server_bin}
 if [ ! -x "$SERVER_BIN" ] && [ "{build_from_source}" = "1" ]; then
   rm -rf /workspace/clones/llama-cpp-turboquant
   git clone --depth 1 https://github.com/TheTom/llama-cpp-turboquant.git /workspace/clones/llama-cpp-turboquant
-  cmake -S /workspace/clones/llama-cpp-turboquant -B /workspace/clones/llama-cpp-turboquant/build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES={args.cuda_arch} -DGGML_CUDA_FA=ON
+  CUDA_ARCH={shlex.quote(args.cuda_arch)}
+  if [ "$CUDA_ARCH" = "auto" ]; then
+    RAW_CC="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '[:space:]' || true)"
+    if [ -n "$RAW_CC" ]; then
+      CUDA_ARCH="${{RAW_CC//./}}"
+      echo "Resolved --cuda-arch auto via compute capability: $RAW_CC -> $CUDA_ARCH"
+    else
+      echo "WARN: could not detect GPU compute capability; defaulting CUDA arch to 89" >&2
+      CUDA_ARCH="89"
+    fi
+  fi
+  echo "Building llama.cpp with -DCMAKE_CUDA_ARCHITECTURES=$CUDA_ARCH"
+  cmake -S /workspace/clones/llama-cpp-turboquant -B /workspace/clones/llama-cpp-turboquant/build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="$CUDA_ARCH" -DGGML_CUDA_FA=ON
   cmake --build /workspace/clones/llama-cpp-turboquant/build-cuda --target llama-server -j"$(nproc)"
 fi
 if [ ! -x "$SERVER_BIN" ]; then
@@ -461,7 +506,7 @@ sleep 2
 """
 
 
-def bootstrap_host(host: str, port: int, args: argparse.Namespace) -> None:
+def bootstrap_host(vast: VastAI, instance_id: int, host: str, port: int, args: argparse.Namespace) -> None:
     if not args.model_r2_key:
         raise SystemExit("--model-r2-key is required for bootstrap")
     write_remote_env(host, port, args)
@@ -474,13 +519,25 @@ def bootstrap_host(host: str, port: int, args: argparse.Namespace) -> None:
         input_text=remote_bootstrap_script(args),
         timeout=args.bootstrap_timeout,
     )
+
+    api_key = os.environ.get(args.llamacpp_api_key_env) if args.llamacpp_api_key_env else None
+    last_endpoint: str | None = None
     for _ in range(max(1, args.service_timeout // 5)):
-        try:
-            ssh_run(host, port, f"curl -fsS --max-time 2 http://127.0.0.1:{args.container_port}/health >/dev/null", timeout=10)
-            return
-        except Exception:
-            time.sleep(5)
-    raise TimeoutError("llama.cpp endpoint did not become healthy")
+        info = vast.show_instance(id=instance_id)
+        endpoint = public_url(info, args.container_port)
+        if endpoint:
+            last_endpoint = endpoint
+            models_code, _ = api_get(f"{endpoint}/v1/models", api_key)
+            if models_code in {200, 401, 403}:
+                return
+            health_code, _ = api_get(f"{endpoint}/health", api_key)
+            if health_code in {200, 401, 403}:
+                return
+        time.sleep(5)
+
+    if last_endpoint:
+        raise TimeoutError(f"llama.cpp endpoint did not become healthy at {last_endpoint}")
+    raise TimeoutError("llama.cpp endpoint did not become healthy; no public port mapping for container port was observed")
 
 
 def api_get(url: str, api_key: str | None) -> tuple[int, str]:
@@ -489,7 +546,7 @@ def api_get(url: str, api_key: str | None) -> tuple[int, str]:
     try:
         with urlopen(request, timeout=10) as response:
             return response.status, response.read().decode(errors="replace")
-    except HTTPError as exc:
+    except UrlHTTPError as exc:
         return exc.code, exc.read().decode(errors="replace")
     except URLError as exc:
         return 0, str(exc)
@@ -517,22 +574,43 @@ def print_endpoint(info: dict[str, Any], host: str, port: int, args: argparse.Na
 
 def launch_instance(vast: VastAI, offer: dict[str, Any], args: argparse.Namespace) -> int:
     env = {f"-p {args.container_port}:{args.container_port}": "1"} if args.publish_port else {}
-    try:
-        result = vast.create_instance(
-            id=int(offer["id"]),
-            image=args.image,
-            disk=args.disk_gb,
-            label=args.label,
-            runtype="ssh_direc ssh_proxy",
-            env=env,
-            onstart_cmd="mkdir -p /workspace && echo llama.cpp-vast-ready > /workspace/onstart.txt",
-            cancel_unavail=True,
-        )
-    except HTTPError as exc:
-        response_text = ""
-        if exc.response is not None:
-            response_text = exc.response.text[:1000]
-        raise RuntimeError(f"Vast create_instance failed for offer {offer['id']}: {response_text or exc.response.status_code if exc.response is not None else 'HTTP error'}") from None
+    candidate_ids: list[int] = []
+    for raw_id in [offer.get("ask_contract_id"), offer.get("id"), offer.get("bundle_id")]:
+        if raw_id is None:
+            continue
+        candidate_id = int(raw_id)
+        if candidate_id not in candidate_ids:
+            candidate_ids.append(candidate_id)
+    last_error = "no candidate ask id"
+    result: dict[str, Any] | None = None
+    launched_id: int | None = None
+    for ask_id in candidate_ids:
+        try:
+            result = vast.create_instance(
+                id=ask_id,
+                image=args.image,
+                disk=args.disk_gb,
+                label=args.label,
+                runtype="ssh_direc ssh_proxy",
+                env=env,
+                onstart_cmd="mkdir -p /workspace && echo llama.cpp-vast-ready > /workspace/onstart.txt",
+                force=not args.require_verified,
+                cancel_unavail=True,
+            )
+            launched_id = ask_id
+            break
+        except RequestsHTTPError as exc:
+            response_text = ""
+            if exc.response is not None:
+                response_text = exc.response.text[:1000]
+            status = exc.response.status_code if exc.response is not None else "HTTP error"
+            last_error = f"ask {ask_id}: {response_text or status}"
+            if "no_such_ask" not in response_text:
+                break
+    if result is None:
+        raise RuntimeError(f"Vast create_instance failed for offer {offer.get('id')}: {last_error}") from None
+    if launched_id != offer.get("id"):
+        print(f"Launched via ask id {launched_id} for selected offer id {offer.get('id')}")
     redacted_result = redact(result)
     print("Create result:")
     print(json.dumps(redacted_result, indent=2, sort_keys=True, default=str))
@@ -558,6 +636,137 @@ def attach_ssh_key(vast: VastAI, instance_id: int, key_path: Path) -> None:
         print(f"WARN: attach_ssh failed: {exc}", file=sys.stderr)
 
 
+def explicit_arg_names(argv: list[str]) -> set[str]:
+    names: set[str] = set()
+    for token in argv:
+        if not token.startswith("--"):
+            continue
+        option = token.split("=", 1)[0]
+        if option.startswith("--no-"):
+            option = "--" + option[5:]
+        names.add(option.removeprefix("--").replace("-", "_"))
+    return names
+
+
+def set_profile_default(args: argparse.Namespace, explicit: set[str], name: str, value: Any) -> None:
+    if value is None or name in explicit:
+        return
+    setattr(args, name, value)
+
+
+def apply_model_profile(args: argparse.Namespace, explicit: set[str], model: dict[str, Any]) -> None:
+    gguf = model.get("gguf") or {}
+    filename = gguf.get("filename")
+    r2_key = gguf.get("r2_key")
+    if not r2_key and filename:
+        r2_key = f"{str(model['r2_prefix']).strip('/')}/{filename}"
+    set_profile_default(args, explicit, "model_r2_key", r2_key)
+    set_profile_default(args, explicit, "model_filename", filename)
+    set_profile_default(args, explicit, "model_alias", model.get("served_model_name") or model.get("name"))
+
+    llamacpp = model.get("llamacpp") or {}
+    field_map = {
+        "ctx_size": "ctx",
+        "n_predict": "n_predict",
+        "n_gpu_layers": "ngl",
+        "threads": "threads",
+        "batch": "batch",
+        "ubatch": "ubatch",
+        "cache_type_k": "cache_k",
+        "cache_type_v": "cache_v",
+        "spec_type": "spec_type",
+        "flash_attn": "flash_attn",
+        "kv_offload": "kv_offload",
+        "extra_flags": "extra_flags",
+    }
+    for source, dest in field_map.items():
+        set_profile_default(args, explicit, dest, llamacpp.get(source))
+
+
+def apply_gpu_profile(args: argparse.Namespace, explicit: set[str], gpu: dict[str, Any]) -> None:
+    set_profile_default(args, explicit, "gpu_name", gpu.get("preferred_gpu_name"))
+    set_profile_default(args, explicit, "num_gpus", gpu.get("num_gpus"))
+    if gpu.get("min_gpu_total_ram_mb") is not None:
+        set_profile_default(args, explicit, "min_gpu_ram_gb", float(gpu["min_gpu_total_ram_mb"]) / 1000.0)
+    set_profile_default(args, explicit, "min_cuda", gpu.get("min_cuda_max_good"))
+
+
+def apply_llamacpp_launch_settings(args: argparse.Namespace, explicit: set[str], settings: dict[str, Any]) -> None:
+    field_map = {
+        "image": "image",
+        "label": "label",
+        "publish_port": "publish_port",
+        "container_port": "container_port",
+        "backend_port": "backend_port",
+        "artifact_r2_key": "artifact_r2_key",
+        "build_from_source": "build_from_source",
+        "sync_local_code": "sync_local_code",
+        "local_code_dir": "local_code_dir",
+        "remote_code_dir": "remote_code_dir",
+        "remote_server_bin": "remote_server_bin",
+        "cuda_arch": "cuda_arch",
+        "threads": "threads",
+        "batch": "batch",
+        "ubatch": "ubatch",
+        "ctx": "ctx",
+        "n_predict": "n_predict",
+        "ngl": "ngl",
+        "cache_k": "cache_k",
+        "cache_v": "cache_v",
+        "spec_type": "spec_type",
+        "flash_attn": "flash_attn",
+        "kv_offload": "kv_offload",
+        "extra_flags": "extra_flags",
+        "llamacpp_api_key_env": "llamacpp_api_key_env",
+        "allow_api_key_argv": "allow_api_key_argv",
+        "startup_timeout": "startup_timeout",
+        "service_timeout": "service_timeout",
+        "bootstrap_timeout": "bootstrap_timeout",
+        "poll_timeout": "poll_timeout",
+        "ssh_timeout": "ssh_timeout",
+        "rsync_timeout": "rsync_timeout",
+    }
+    for source, dest in field_map.items():
+        set_profile_default(args, explicit, dest, settings.get(source))
+
+
+def apply_launch_profile(args: argparse.Namespace, explicit: set[str]) -> None:
+    if not args.launch_profile:
+        if args.model_profile:
+            apply_model_profile(args, explicit, load_json(Path(args.model_profile)))
+        if args.gpu_profile:
+            apply_gpu_profile(args, explicit, load_json(Path(args.gpu_profile)))
+        return
+
+    launch_path = Path(args.launch_profile)
+    launch = load_json(launch_path)
+    if str(launch.get("runtime", "llamacpp")) != "llamacpp":
+        raise SystemExit(f"Launch profile {launch_path} is not a llama.cpp profile")
+
+    model_profile = Path(args.model_profile or launch["model_profile"])
+    gpu_profile = Path(args.gpu_profile or launch["gpu_profile"])
+    apply_model_profile(args, explicit, load_json(model_profile))
+    apply_gpu_profile(args, explicit, load_json(gpu_profile))
+
+    pricing = launch.get("pricing") or {}
+    reliability = launch.get("reliability") or {}
+    network = launch.get("network") or {}
+    storage = launch.get("storage") or {}
+    selection = launch.get("selection") or {}
+    set_profile_default(args, explicit, "max_dph", pricing.get("max_dph_total"))
+    set_profile_default(args, explicit, "min_reliability", reliability.get("min_reliability2"))
+    set_profile_default(args, explicit, "require_verified", reliability.get("require_verified"))
+    set_profile_default(args, explicit, "min_inet_down", network.get("min_inet_down"))
+    set_profile_default(args, explicit, "disk_gb", storage.get("disk_gb"))
+    set_profile_default(args, explicit, "max_storage_hour", storage.get("max_storage_total_cost_per_hour"))
+    set_profile_default(args, explicit, "greylisted_machine_ids", selection.get("greylisted_machine_ids"))
+    set_profile_default(args, explicit, "preferred_machine_ids", selection.get("preferred_machine_ids"))
+    set_profile_default(args, explicit, "geo_query", selection.get("geo_query"))
+    set_profile_default(args, explicit, "search_no_default", selection.get("search_no_default"))
+    set_profile_default(args, explicit, "label", launch.get("name"))
+    apply_llamacpp_launch_settings(args, explicit, launch.get("llamacpp") or {})
+
+
 def validate_args(args: argparse.Namespace) -> None:
     if args.check_only or args.no_bootstrap:
         return
@@ -571,6 +780,9 @@ def validate_args(args: argparse.Namespace) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Select, launch, and bootstrap a Vast llama.cpp instance")
+    parser.add_argument("--launch-profile", default="", help="load llama.cpp, model, GPU, and policy defaults from a launch profile")
+    parser.add_argument("--model-profile", default="", help="load model/R2/llama.cpp defaults from a model profile")
+    parser.add_argument("--gpu-profile", default="", help="load GPU policy defaults from a GPU profile")
     parser.add_argument("--check-only", action="store_true")
     parser.add_argument("--skip-current-infra", action="store_true")
     parser.add_argument("--top", type=int, default=5)
@@ -580,11 +792,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-bootstrap", action="store_true")
     parser.add_argument("--instance-id", type=int, default=0, help="bootstrap or inspect an already-created Vast instance")
     parser.add_argument("--search-limit", type=int, default=50)
+    parser.add_argument("--search-no-default", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--gpu-name", default=DEFAULT_GPU_NAME)
+    parser.add_argument("--greylisted-machine-ids", type=int, nargs="*", default=[])
+    parser.add_argument("--preferred-machine-ids", type=int, nargs="*", default=[])
+    parser.add_argument("--geo-query", default="")
     parser.add_argument("--num-gpus", type=int, default=1)
     parser.add_argument("--min-gpu-ram-gb", type=float, default=15.0)
     parser.add_argument("--min-cuda", type=float, default=12.8)
     parser.add_argument("--min-reliability", type=float, default=0.96)
+    parser.add_argument("--require-verified", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--min-inet-down", type=float, default=100.0)
     parser.add_argument("--max-dph", type=float, default=0.40)
     parser.add_argument("--max-storage-hour", type=float, default=0.08)
@@ -604,7 +821,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--remote-code-dir", default=DEFAULT_REMOTE_CODE_DIR)
     parser.add_argument("--local-ssh-pub-key", type=Path, default=Path("~/.ssh/id_ed25519.pub"))
     parser.add_argument("--remote-server-bin", default=DEFAULT_SERVER_BIN)
-    parser.add_argument("--cuda-arch", default="120")
+    parser.add_argument("--cuda-arch", default="auto")
     parser.add_argument("--ctx", type=int, default=35000)
     parser.add_argument("--n-predict", type=int, default=4096)
     parser.add_argument("--ngl", type=int, default=999)
@@ -625,7 +842,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--startup-timeout", type=int, default=600)
     parser.add_argument("--service-timeout", type=int, default=900)
     parser.add_argument("--rsync-timeout", type=int, default=1800)
-    return parser.parse_args()
+    args = parser.parse_args()
+    apply_launch_profile(args, explicit_arg_names(sys.argv[1:]))
+    return args
 
 
 def main() -> None:
@@ -653,7 +872,7 @@ def main() -> None:
         if not args.yes_bootstrap and not ask("Bootstrap llama.cpp stack on this instance?"):
             print("Aborted before bootstrap.")
             return
-        bootstrap_host(host, ssh_port, args)
+        bootstrap_host(vast, args.instance_id, host, ssh_port, args)
         info = vast.show_instance(id=args.instance_id)
         save_json(Path(f"instances/{args.instance_id}.llamacpp.json"), redact(info))
         print_endpoint(info, host, ssh_port, args)
@@ -707,7 +926,7 @@ def main() -> None:
         print("Aborted before bootstrap.")
         return
 
-    bootstrap_host(host, ssh_port, args)
+    bootstrap_host(vast, instance_id, host, ssh_port, args)
     info = vast.show_instance(id=instance_id)
     save_json(Path(f"instances/{instance_id}.llamacpp.json"), redact(info))
     print_endpoint(info, host, ssh_port, args)

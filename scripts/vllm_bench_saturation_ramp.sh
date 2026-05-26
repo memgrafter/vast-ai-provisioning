@@ -26,9 +26,10 @@ INPUT_LEN="${INPUT_LEN:-4096}"
 OUTPUT_LEN="${OUTPUT_LEN:-1024}"
 NUM_PROMPTS="${NUM_PROMPTS:-200}"
 RATES="${RATES:-2 5 10 15 20 30 40}"
+TOKENIZER="${TOKENIZER:-$MODEL}"
 
-printf 'base_url=%s\nmodel=%s\ninput_len=%s\noutput_len=%s\nnum_prompts=%s\nrates=%s\n\n' \
-  "$BASE_URL" "$MODEL" "$INPUT_LEN" "$OUTPUT_LEN" "$NUM_PROMPTS" "$RATES"
+printf 'base_url=%s\nmodel=%s\ntokenizer=%s\ninput_len=%s\noutput_len=%s\nnum_prompts=%s\nrates=%s\n\n' \
+  "$BASE_URL" "$MODEL" "$TOKENIZER" "$INPUT_LEN" "$OUTPUT_LEN" "$NUM_PROMPTS" "$RATES"
 
 for RATE in $RATES; do
   echo "================================================================"
@@ -40,6 +41,7 @@ for RATE in $RATES; do
     --base-url "$BASE_URL" \
     --endpoint /v1/chat/completions \
     --model "$MODEL" \
+    --tokenizer "$TOKENIZER" \
     --dataset-name random \
     --random-input-len "$INPUT_LEN" \
     --random-output-len "$OUTPUT_LEN" \

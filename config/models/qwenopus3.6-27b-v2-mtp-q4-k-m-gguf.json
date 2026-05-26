@@ -1,0 +1,31 @@
+{
+  "name": "qwenopus3.6-27b-v2-mtp-q4-k-m-gguf",
+  "source": "r2",
+  "hf_model_id": null,
+  "r2_prefix": "qwenopus-3.6-stream",
+  "model_dir": "/workspace/models/qwenopus-3.6-stream",
+  "served_model_name": "qwenopus3.6-27b-v2-mtp-q4-k-m",
+  "quantization": "gguf-q4-k-m",
+  "expected_model_download_tb": 0.017,
+  "gguf": {
+    "filename": "Qwopus3.6-27B-v2-MTP-Q4_K_M.gguf",
+    "r2_key": "qwenopus-3.6-stream/Qwopus3.6-27B-v2-MTP-Q4_K_M.gguf",
+    "r2_size_bytes": 16810713312
+  },
+  "llamacpp": {
+    "model_path": "/workspace/models/Qwopus3.6-27B-v2-MTP-Q4_K_M.gguf",
+    "ctx_size": 160000,
+    "n_predict": 30000,
+    "n_gpu_layers": 999,
+    "threads": 12,
+    "batch": 64,
+    "ubatch": 16,
+    "cache_type_k": "turbo3",
+    "cache_type_v": "turbo3",
+    "spec_type": "ngram-mod",
+    "flash_attn": "auto",
+    "kv_offload": true,
+    "extra_flags": ""
+  },
+  "notes": "R2 contains Q4_K_M and Q8_0 GGUF single-file uploads under qwenopus-3.6-stream. This profile targets the 16.8GB Q4_K_M artifact for 2x RTX 3090 via llama.cpp. No Vast vLLM template is required for this GGUF path."
+}

@@ -40,7 +40,7 @@
     "max_bid_dph": 0
   },
   "storage": {
-    "disk_gb": 100,
+    "disk_gb": 40,
     "max_storage_cost_per_gb_hour": 0.0003,
     "max_storage_total_cost_per_hour": 0.06,
     "min_disk_bw": 500

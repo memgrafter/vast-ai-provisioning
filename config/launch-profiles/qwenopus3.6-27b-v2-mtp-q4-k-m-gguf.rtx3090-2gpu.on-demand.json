@@ -1,0 +1,72 @@
+{
+  "runtime": "llamacpp",
+  "gpu_profile": "config/gpu-profiles/qwenopus-27b-gguf-rtx3090-2gpu.json",
+  "market": "on-demand",
+  "model_profile": "config/models/qwenopus3.6-27b-v2-mtp-q4-k-m-gguf.json",
+  "name": "qwenopus3.6-27b-v2-mtp-q4-k-m-gguf.rtx3090-2gpu.on-demand",
+  "network": {
+    "max_internet_down_cost_per_tb": 8.0,
+    "max_internet_up_cost_per_tb": 10.0,
+    "min_direct_port_count": 1,
+    "min_inet_down": 128
+  },
+  "pricing": {
+    "max_dph_total": 0.5,
+    "target_first_test_minutes": 60
+  },
+  "purpose": "On-demand 2x RTX 3090 llama.cpp launch for the R2-hosted Qwopus3.6 27B v2 MTP Q4_K_M GGUF artifact",
+  "reliability": {
+    "min_reliability2": 0.94,
+    "require_verified": false
+  },
+  "selection": {
+    "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
+    "geo_query": "geolocation not in [CN]",
+    "greylisted_machine_ids": [
+      28229,
+      92165,
+      103173
+    ],
+    "preferred_machine_ids": [
+      70185,
+      104433,
+      95152,
+      42967
+    ],
+    "search_no_default": true,
+    "sort": "preferred_machine_then_effective_cost_then_reliability"
+  },
+  "spot": {
+    "enabled_after_smoke_test": false,
+    "max_bid_dph": 0
+  },
+  "storage": {
+    "disk_gb": 40,
+    "max_storage_cost_per_gb_hour": 0.0003,
+    "max_storage_total_cost_per_hour": 0.06,
+    "min_disk_bw": 500
+  },
+  "llamacpp": {
+    "image": "nvidia/cuda:12.8.1-devel-ubuntu24.04",
+    "label": "qwenopus3.6-27b-q4-rtx3090-2gpu",
+    "publish_port": true,
+    "container_port": 8081,
+    "backend_port": 8082,
+    "build_from_source": true,
+    "sync_local_code": true,
+    "local_code_dir": "~/code/llm-cache-llama.cpp",
+    "remote_code_dir": "/workspace/code/llm-cache-llama.cpp",
+    "cuda_arch": "auto",
+    "llamacpp_api_key_env": "VLLM_API_KEY",
+    "poll_timeout": 900,
+    "ssh_timeout": 600,
+    "bootstrap_timeout": 2400,
+    "startup_timeout": 900,
+    "service_timeout": 900,
+    "rsync_timeout": 1800
+  },
+  "template": {
+    "type": "none",
+    "reason": "GGUF is launched through the llama.cpp SSH bootstrap path; the vLLM R2 Vast template is not used."
+  }
+}
