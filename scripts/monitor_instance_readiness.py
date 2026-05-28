@@ -237,7 +237,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout", type=int, default=1800, help="overall monitor timeout seconds")
     parser.add_argument("--image", default=DEFAULT_MODEL, help="image tag to detect cached-image line")
     parser.add_argument("--image-deadline", type=int, default=180, help="seconds before warning on slow image pull")
-    parser.add_argument("--provisioning-deadline", type=int, default=180, help="seconds before warning if provisioning has not started")
+    parser.add_argument("--provisioning-deadline", type=int, default=300, help="seconds before warning if provisioning has not started")
     parser.add_argument("--once", action="store_true", help="single poll then exit")
     parser.add_argument("--destroy-on-fail", action="store_true", help="destroy instance when a terminate recommendation is reached")
     parser.add_argument("--yes-destroy", action="store_true", help="required with --destroy-on-fail to actually destroy without prompting")
