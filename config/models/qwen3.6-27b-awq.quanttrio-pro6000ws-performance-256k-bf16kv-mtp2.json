@@ -1,0 +1,38 @@
+{
+  "name": "qwen3.6-27b-awq-quanttrio-pro6000ws-performance-256k-bf16kv-mtp2",
+  "hf_model_id": "QuantTrio/Qwen3.6-27B-AWQ",
+  "r2_prefix": "QuantTrio/Qwen3.6-27B-AWQ",
+  "model_dir": "/workspace/models/QuantTrio/Qwen3.6-27B-AWQ",
+  "served_model_name": "qwen3.6-27b-awq-quanttrio-pro6000ws-performance-256k-bf16kv-mtp2",
+  "quantization": "awq",
+  "expected_model_download_tb": 0.025,
+  "vllm": {
+    "dtype": "bfloat16",
+    "max_model_len": 262144,
+    "gpu_memory_utilization": 0.9,
+    "kv_cache_dtype": "bfloat16",
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "max_num_seqs": 8,
+    "max_num_batched_tokens": 16384,
+    "max_new_tokens": 32768,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "qwen3_coder",
+    "reasoning_parser": "qwen3",
+    "enable_prefix_caching": true,
+    "language_model_only": true,
+    "speculative_config": {
+      "method": "qwen3_next_mtp",
+      "num_speculative_tokens": 2
+    },
+    "extra_args": [],
+    "force_quantization": "awq_marlin"
+  },
+  "notes": "Performance-session RTX PRO 6000 WS profile for QuantTrio/Qwen3.6-27B-AWQ with MTP n=2. Copied from the tested BF16 AWQ PRO6000WS profile, preserving max_num_seqs=8, max_model_len=262144, bfloat16 model/KV cache dtype, prefix caching, max_num_batched_tokens=16384, and max_new_tokens=32768, while switching the quant-specific settings to the tested QuantTrio AWQ path with awq_marlin kernels.",
+  "provisioning": {
+    "r2_speed_test_warn_only": false,
+    "r2_speed_test_min_mbps": 16
+  }
+}
