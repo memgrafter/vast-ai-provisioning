@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import time
@@ -21,6 +22,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -101,10 +104,14 @@ def analyze_logs(logs: str, image: str) -> Signals:
             "vllm serve" in logs
             or "Uvicorn running on http://127.0.0.1:18000" in logs
             or "Uvicorn running on http://0.0.0.0:18000" in logs
+            or "Starting vLLM server on http://127.0.0.1:18000" in logs
+            or "Starting vLLM server on http://0.0.0.0:18000" in logs
         ),
         api_ready=(
             "Uvicorn running on http://127.0.0.1:18000" in logs
             or "Uvicorn running on http://0.0.0.0:18000" in logs
+            or "Starting vLLM server on http://127.0.0.1:18000" in logs and "Application startup complete" in logs
+            or "Starting vLLM server on http://0.0.0.0:18000" in logs and "Application startup complete" in logs
             or "vLLM API server" in logs and "ready" in lower
         ),
         speed_test_failed=(
@@ -130,6 +137,47 @@ def port_url(info: dict[str, Any], container_port: str = "8000/tcp") -> str | No
     if host and host_port:
         return f"http://{host}:{host_port}"
     return None
+
+
+def api_status(url: str, api_key: str | None, timeout: int) -> tuple[int, str]:
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    request = Request(url, headers=headers)
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            body = response.read(200).decode(errors="replace")
+            return response.status, body
+    except HTTPError as exc:
+        body = exc.read(200).decode(errors="replace")
+        return exc.code, body
+    except TimeoutError:
+        return 0, "timeout"
+    except URLError as exc:
+        return 0, str(exc.reason)
+    except Exception as exc:
+        return 0, f"{type(exc).__name__}: {exc}"
+
+
+def external_api_probe(info: dict[str, Any], api_key: str | None, container_port: str, timeout: int) -> dict[str, Any]:
+    base_url = port_url(info, container_port)
+    if not base_url:
+        return {"base_url": None, "reachable": False, "models_ok": False, "health_status": None, "models_status": None, "error": "no public port mapping"}
+    health_status, health_body = api_status(f"{base_url}/health", api_key, timeout)
+    models_status, models_body = api_status(f"{base_url}/v1/models", api_key, timeout)
+    if api_key:
+        models_ok = models_status == 200
+        reachable = health_status in {200, 401, 403} or models_status in {200, 401, 403}
+    else:
+        models_ok = models_status in {200, 401, 403}
+        reachable = health_status in {200, 401, 403} or models_ok
+    return {
+        "base_url": base_url,
+        "reachable": reachable,
+        "models_ok": models_ok,
+        "health_status": health_status,
+        "models_status": models_status,
+        "health_body": health_body[:200],
+        "models_body": models_body[:200],
+    }
 
 
 def print_status(instance_id: int, info: dict[str, Any], signals: Signals, elapsed: float, image_deadline: int, provisioning_deadline: int) -> str:
@@ -181,7 +229,7 @@ def print_status(instance_id: int, info: dict[str, Any], signals: Signals, elaps
     return recommendation
 
 
-def main() -> int:
+def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Monitor Vast instance readiness from SDK logs")
     parser.add_argument("instance_id", type=int)
     parser.add_argument("--interval", type=int, default=15, help="poll interval seconds")
@@ -193,10 +241,23 @@ def main() -> int:
     parser.add_argument("--once", action="store_true", help="single poll then exit")
     parser.add_argument("--destroy-on-fail", action="store_true", help="destroy instance when a terminate recommendation is reached")
     parser.add_argument("--yes-destroy", action="store_true", help="required with --destroy-on-fail to actually destroy without prompting")
-    args = parser.parse_args()
+    parser.add_argument("--api-key-env", default="VLLM_API_KEY", help="Env var containing bearer token for external API readiness probes")
+    parser.add_argument("--no-auth", action="store_true", help="Do not send Authorization header to external API readiness probes")
+    parser.add_argument("--external-api-timeout", type=int, default=5, help="seconds for each external API probe request")
+    parser.add_argument("--external-api-deadline", type=int, default=240, help="seconds to allow public API to respond after local vLLM readiness")
+    parser.add_argument("--container-port", default="8000/tcp", help="container port mapping to probe for the public vLLM API")
+    parser.add_argument("--skip-external-api-check", action="store_true", help="old behavior: exit once logs indicate local vLLM readiness")
+    return parser
+
+
+def main() -> int:
+    args = build_arg_parser().parse_args()
 
     vast = VastAI()
+    api_key = None if args.no_auth else os.environ.get(args.api_key_env)
     start = time.time()
+    local_api_ready_since: float | None = None
+    last_external_probe: dict[str, Any] | None = None
     last_recommendation = "WAIT"
     cumulative = Signals(
         image_cached=False,
@@ -233,7 +294,30 @@ def main() -> int:
                 args.image_deadline,
                 args.provisioning_deadline,
             )
+            if signals.api_ready:
+                if local_api_ready_since is None:
+                    local_api_ready_since = time.time()
+                if not args.skip_external_api_check:
+                    last_external_probe = external_api_probe(info, api_key, args.container_port, args.external_api_timeout)
+                    age = time.time() - local_api_ready_since
+                    print(
+                        "  external_api: "
+                        f"base_url={last_external_probe.get('base_url') or 'n/a'} "
+                        f"health_http={last_external_probe.get('health_status')} "
+                        f"models_http={last_external_probe.get('models_status')} "
+                        f"reachable={str(bool(last_external_probe.get('reachable'))).lower()} "
+                        f"models_ok={str(bool(last_external_probe.get('models_ok'))).lower()} "
+                        f"local_ready_age={age:.0f}s",
+                        flush=True,
+                    )
+                    if last_external_probe.get("models_ok"):
+                        last_recommendation = "READY_EXTERNAL_API"
+                    elif age >= args.external_api_deadline:
+                        last_recommendation = "TERMINATE_EXTERNAL_API_UNREACHABLE"
             try:
+                details = {"signals": signals.__dict__}
+                if last_external_probe is not None:
+                    details["external_api_probe"] = last_external_probe
                 launch_ledger.update_instance_snapshot(
                     instance_id=args.instance_id,
                     info=info,
@@ -241,7 +325,7 @@ def main() -> int:
                 )
                 launch_ledger.update_monitor_result(
                     instance_id=args.instance_id,
-                    signals=signals.__dict__,
+                    signals=details,
                     monitor_json_path=monitor_json_path,
                     logs_path=logs_path,
                     error_summary="\n".join(signals.errors[-20:])[:4000] if signals.errors else None,
@@ -265,7 +349,9 @@ def main() -> int:
                     print(f"WARN launch ledger destroy update failed: {exc}", file=sys.stderr)
                 print(json.dumps(result, indent=2, sort_keys=True, default=str))
                 return 4
-            if signals.api_ready or signals.vllm_started:
+            if args.skip_external_api_check and (signals.api_ready or signals.vllm_started):
+                return 0
+            if signals.api_ready and (args.skip_external_api_check or last_recommendation == "READY_EXTERNAL_API"):
                 return 0
             if args.once:
                 return 0
@@ -275,6 +361,9 @@ def main() -> int:
         except KeyboardInterrupt:
             print("Interrupted", file=sys.stderr)
             return 130
+        except (AttributeError, NameError) as exc:
+            print(f"ERROR monitor implementation bug: {exc}", file=sys.stderr)
+            return 1
         except Exception as exc:
             print(f"WARN monitor poll failed: {exc}", file=sys.stderr)
             if args.once:

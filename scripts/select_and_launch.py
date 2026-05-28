@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Select and optionally launch a Vast instance with explicit cost gates.
 
-Note: verified=true is enforced in the Vast search query when required. Returned
-offers may report verified as null, so the consumer script always rejects only
-explicitly deverified offers client-side.
+Note: verified=true is enforced in the Vast search query when required. The
+search query also excludes explicitly deverified offers as a best effort. Vast
+can still return some of them, so the consumer script drops explicitly
+deverified offers client-side before policy logging/selection.
 """
 from __future__ import annotations
 
@@ -28,6 +29,7 @@ from scripts.monitor_instance_readiness import port_url
 
 COSTING_STATUSES = {"running", "loading", "starting", "stopped", "exited", "unknown", "offline"}
 BAD_STATUSES = {"exited", "offline"}
+EXCLUDED_VERIFICATION_STATES = {"deverified"}
 DEFAULT_LAUNCH_PROFILE = Path("config/launch-profiles/qwen3.5-9b-awq.interruptible.json")
 
 
@@ -84,6 +86,49 @@ def load_launch_context(path: Path) -> dict[str, Any]:
         "gpu_profile_path": str(gpu_path),
         "gpu": gpu,
     }
+
+
+POLICY_PATCH_TOP_LEVEL_KEYS = {"network", "pricing", "reliability", "selection", "spot", "storage"}
+
+
+def merge_policy_patch(target: dict[str, Any], patch: dict[str, Any]) -> None:
+    for key, value in patch.items():
+        if key not in POLICY_PATCH_TOP_LEVEL_KEYS:
+            allowed = ", ".join(sorted(POLICY_PATCH_TOP_LEVEL_KEYS))
+            raise ValueError(f"--relax-policy may only patch policy keys: {allowed}; got {key!r}")
+        current = target.get(key)
+        if isinstance(current, dict) and isinstance(value, dict):
+            merge_nested_policy(current, value)
+        else:
+            target[key] = value
+
+
+def merge_nested_policy(target: dict[str, Any], patch: dict[str, Any]) -> None:
+    for key, value in patch.items():
+        current = target.get(key)
+        if isinstance(current, dict) and isinstance(value, dict):
+            merge_nested_policy(current, value)
+        else:
+            target[key] = value
+
+
+def apply_relax_policy(context: dict[str, Any], patches: list[str]) -> list[dict[str, Any]]:
+    applied: list[dict[str, Any]] = []
+    for raw_patch in patches:
+        try:
+            patch = json.loads(raw_patch)
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"Invalid --relax-policy JSON: {exc}") from None
+        if not isinstance(patch, dict):
+            raise SystemExit("--relax-policy must be a JSON object")
+        try:
+            merge_policy_patch(context["launch"], patch)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from None
+        applied.append(patch)
+    if applied:
+        context["relax_policy_patches"] = applied
+    return applied
 
 
 def get_volumes(vast: VastAI) -> dict[str, Any]:
@@ -193,6 +238,71 @@ def storage_metrics(offer: dict[str, Any], context: dict[str, Any]) -> dict[str,
     }
 
 
+def quote_gpu_name(gpu_name: str) -> str:
+    if any(ch.isspace() for ch in gpu_name):
+        return json.dumps(gpu_name)
+    return gpu_name
+
+
+def gpu_policy_configs(gpu: dict[str, Any]) -> list[dict[str, Any]]:
+    explicit_configs = gpu.get("allowed_gpu_configs") or []
+    if explicit_configs:
+        configs: list[dict[str, Any]] = []
+        for raw in explicit_configs:
+            names = raw.get("gpu_names") or [raw.get("gpu_name")]
+            for name in names:
+                if not name:
+                    raise ValueError("allowed_gpu_configs entries must include gpu_name or gpu_names")
+                configs.append(
+                    {
+                        "gpu_name": str(name),
+                        "num_gpus": int(raw["num_gpus"]),
+                        "min_gpu_total_ram_mb": float(raw.get("min_gpu_total_ram_mb", gpu.get("min_gpu_total_ram_mb", 0))),
+                    }
+                )
+        return configs
+
+    config: dict[str, Any] = {
+        "gpu_name": gpu.get("preferred_gpu_name"),
+        "allowed_gpu_names": gpu.get("allowed_gpu_names") or [],
+        "num_gpus": int(gpu["num_gpus"]),
+        "min_gpu_total_ram_mb": float(gpu["min_gpu_total_ram_mb"]),
+    }
+    return [config]
+
+
+def offer_gpu_policy_failures(offer: dict[str, Any], gpu: dict[str, Any]) -> list[str]:
+    configs = gpu_policy_configs(gpu)
+    if gpu.get("allowed_gpu_configs"):
+        offer_gpu_name = offer.get("gpu_name")
+        same_name = [cfg for cfg in configs if offer_gpu_name == cfg["gpu_name"]]
+        if not same_name:
+            return ["allowed_gpu_names"]
+        try:
+            offer_num_gpus = int(offer.get("num_gpus") or 0)
+        except Exception:
+            offer_num_gpus = 0
+        same_count = [cfg for cfg in same_name if offer_num_gpus == cfg["num_gpus"]]
+        if not same_count:
+            return ["num_gpus"]
+        offer_ram_mb = float(offer.get("gpu_total_ram") or 0)
+        if not any(offer_ram_mb >= cfg["min_gpu_total_ram_mb"] for cfg in same_count):
+            return ["gpu_total_ram"]
+        return []
+
+    failures: list[str] = []
+    config = configs[0]
+    if config.get("gpu_name") and offer.get("gpu_name") != config["gpu_name"]:
+        failures.append("gpu_name")
+    if config.get("allowed_gpu_names") and offer.get("gpu_name") not in set(config["allowed_gpu_names"]):
+        failures.append("allowed_gpu_names")
+    if int(offer.get("num_gpus") or 0) != int(config["num_gpus"]):
+        failures.append("num_gpus")
+    if float(offer.get("gpu_total_ram") or 0) < float(config["min_gpu_total_ram_mb"]):
+        failures.append("gpu_total_ram")
+    return failures
+
+
 def offer_passes_policy(offer: dict[str, Any], context: dict[str, Any]) -> tuple[bool, list[str]]:
     reasons: list[str] = []
     launch = context["launch"]
@@ -209,21 +319,10 @@ def offer_passes_policy(offer: dict[str, Any], context: dict[str, Any]) -> tuple
     except Exception:
         machine_id = -1
 
+    reasons.extend(offer_gpu_policy_failures(offer, gpu))
     checks = [
         (machine_id not in greylisted_machines, "greylisted_machine"),
         (offer.get("verification") != "deverified", "deverified"),
-        (
-            (not gpu.get("preferred_gpu_name"))
-            or offer.get("gpu_name") == gpu["preferred_gpu_name"],
-            "gpu_name",
-        ),
-        (
-            (not gpu.get("allowed_gpu_names"))
-            or offer.get("gpu_name") in set(gpu["allowed_gpu_names"]),
-            "allowed_gpu_names",
-        ),
-        (int(offer.get("num_gpus") or 0) == int(gpu["num_gpus"]), "num_gpus"),
-        (float(offer.get("gpu_total_ram") or 0) >= float(gpu["min_gpu_total_ram_mb"]), "gpu_total_ram"),
         (float(offer.get("cuda_max_good") or 0) >= float(gpu["min_cuda_max_good"]), "cuda_max_good"),
         (float(offer.get("dph_total") or math.inf) <= float(pricing["max_dph_total"]), "dph_total"),
         (sm["storage_hour"] <= float(storage["max_storage_total_cost_per_hour"]), "storage_total_cost"),
@@ -269,6 +368,10 @@ def is_greylisted_machine(offer: dict[str, Any], context: dict[str, Any]) -> boo
         return False
 
 
+def has_excluded_verification(offer: dict[str, Any]) -> bool:
+    return offer.get("verification") in EXCLUDED_VERIFICATION_STATES
+
+
 def selection_sort_key(offer: dict[str, Any], context: dict[str, Any]) -> tuple[bool, float, float]:
     return (
         not is_preferred_machine(offer, context),
@@ -277,45 +380,56 @@ def selection_sort_key(offer: dict[str, Any], context: dict[str, Any]) -> tuple[
     )
 
 
+def search_query_for_gpu_config(gpu: dict[str, Any], config: dict[str, Any], require_verified: bool, geo_query: str) -> str:
+    filters = [
+        f"num_gpus={config['num_gpus']}",
+        "rentable=true",
+    ]
+    gpu_name = config.get("gpu_name") or gpu.get("preferred_gpu_name")
+    if gpu_name:
+        filters.append(f"gpu_name={quote_gpu_name(str(gpu_name))}")
+    if require_verified:
+        filters.append("verified=true")
+    filters.append("verification!=deverified")
+    # Vast search query expects GPU RAM in GB-ish units; offer field is returned in MB.
+    min_gpu_ram_gb = float(config["min_gpu_total_ram_mb"]) / 1000.0
+    filters.append(f"gpu_total_ram>={min_gpu_ram_gb}")
+    if float(gpu.get("min_cuda_max_good") or 0) > 0:
+        filters.append(f"cuda_max_good>={gpu['min_cuda_max_good']}")
+    if geo_query:
+        filters.append(geo_query)
+    return " ".join(filters)
+
+
 def search_policy_offers(vast: VastAI, context: dict[str, Any]) -> list[dict[str, Any]]:
     launch = context["launch"]
     gpu = context["gpu"]
     storage_gb = float(launch["storage"]["disk_gb"])
     require_verified = bool(launch["reliability"].get("require_verified", False))
-    verified_filter = "verified=true " if require_verified else ""
-    filters = [
-        f"num_gpus={gpu['num_gpus']}",
-        "rentable=true",
-    ]
-    if gpu.get("preferred_gpu_name"):
-        gpu_name = str(gpu["preferred_gpu_name"])
-        if any(ch.isspace() for ch in gpu_name):
-            gpu_name = json.dumps(gpu_name)
-        filters.append(f"gpu_name={gpu_name}")
-    if require_verified:
-        filters.append("verified=true")
-    # Vast search query expects GPU RAM in GB-ish units; offer field is returned in MB.
-    min_gpu_ram_gb = float(gpu["min_gpu_total_ram_mb"]) / 1000.0
-    filters.append(f"gpu_total_ram>={min_gpu_ram_gb}")
-    if float(gpu.get("min_cuda_max_good") or 0) > 0:
-        filters.append(f"cuda_max_good>={gpu['min_cuda_max_good']}")
     selection = launch.get("selection", {})
     geo_query = str(selection.get("geo_query", "")).strip()
-    if geo_query:
-        filters.append(geo_query)
-    query = " ".join(filters)
     market = "interruptible" if launch.get("market") in {"interruptible", "bid", "spot"} else "on-demand"
     no_default = bool(selection.get("search_no_default", False))
     search_limit = int(selection.get("search_limit", 50))
-    raw = vast.search_offers(query=query, type=market, order="dph_total", limit=search_limit, storage=storage_gb, no_default=no_default)
+    queries = [search_query_for_gpu_config(gpu, config, require_verified, geo_query) for config in gpu_policy_configs(gpu)]
+    raw_by_id: dict[Any, dict[str, Any]] = {}
+    for query in queries:
+        for offer in vast.search_offers(query=query, type=market, order="dph_total", limit=search_limit, storage=storage_gb, no_default=no_default):
+            raw_by_id[offer.get("id", id(offer))] = offer
+    raw_values = list(raw_by_id.values())
+    raw = [offer for offer in raw_values if not has_excluded_verification(offer)]
+    excluded_deverified_count = len(raw_values) - len(raw)
     passing = []
     print("Offer policy check")
     print("==================")
     print(f"market: {market}")
-    print(f"query: {query}")
+    for query in queries:
+        print(f"query: {query}")
     print(f"search_limit: {search_limit}")
     if no_default:
         print("search_no_default: true")
+    if excluded_deverified_count:
+        print(f"excluded_deverified: {excluded_deverified_count}")
     for offer in raw:
         ok, reasons = offer_passes_policy(offer, context)
         status = "PASS" if ok else "FAIL " + ",".join(reasons)
@@ -422,7 +536,17 @@ def api_post_json(url: str, api_key: str, payload: dict[str, Any], timeout: int 
         return 0, str(exc)
 
 
-def print_api_config_and_smoke(vast: VastAI, instance_id: int, model_name: str, message: str) -> int:
+def print_api_config_and_smoke(
+    vast: VastAI,
+    instance_id: int,
+    model_name: str,
+    message: str,
+    *,
+    smoke_timeout: int,
+    smoke_interval: float,
+    smoke_chat_timeout: int,
+    smoke_max_tokens: int,
+) -> int:
     api_key = os.environ.get("VLLM_API_KEY")
     if not api_key:
         print("WARN: local VLLM_API_KEY is missing; cannot smoke chat request.", file=sys.stderr)
@@ -440,23 +564,43 @@ def print_api_config_and_smoke(vast: VastAI, instance_id: int, model_name: str, 
     print(f"chat_completions_url={chat_completions_url}")
     print(f"model={model_name}")
     print("auth_header=Authorization: Bearer $VLLM_API_KEY")
-    code, models = api_get_json(f"{base_url}/models", api_key)
-    print(f"models_http={code}")
-    if code == 200:
-        print("models:", json.dumps(models, default=str)[:500])
-    code, chat = api_post_json(
-        chat_completions_url,
-        api_key,
-        {
-            "model": model_name,
-            "messages": [{"role": "user", "content": message}],
-            "max_tokens": 64,
-            "temperature": 0,
-        },
-    )
-    print(f"chat_http={code}")
-    print(json.dumps(chat, indent=2, default=str)[:2000])
-    return 0 if code == 200 else 1
+
+    deadline = time.time() + smoke_timeout
+    attempt = 0
+    last_models: Any = None
+    last_chat: Any = None
+    payload: dict[str, Any] = {
+        "model": model_name,
+        "messages": [{"role": "user", "content": message}],
+        "temperature": 0,
+    }
+    if smoke_max_tokens > 0:
+        payload["max_tokens"] = smoke_max_tokens
+
+    while True:
+        attempt += 1
+        remaining = max(1, int(deadline - time.time()))
+        code, models = api_get_json(f"{base_url}/models", api_key, timeout=min(10, remaining))
+        last_models = models
+        print(f"models_http={code} attempt={attempt}", flush=True)
+        if code == 200:
+            print("models:", json.dumps(models, default=str)[:500], flush=True)
+            chat_timeout = max(1, min(smoke_chat_timeout, int(deadline - time.time())))
+            code, chat = api_post_json(chat_completions_url, api_key, payload, timeout=chat_timeout)
+            last_chat = chat
+            print(f"chat_http={code} attempt={attempt}", flush=True)
+            print(json.dumps(chat, indent=2, default=str)[:2000], flush=True)
+            if code == 200:
+                return 0
+        if time.time() >= deadline:
+            print(
+                "WARN: smoke test timed out; "
+                f"last_models={str(last_models)[:500]} last_chat={str(last_chat)[:500]}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 1
+        time.sleep(min(smoke_interval, max(0.0, deadline - time.time())))
 
 
 def poll_instance(vast: VastAI, instance_id: int, timeout_s: int) -> dict[str, Any]:
@@ -494,9 +638,21 @@ def main() -> None:
     parser.add_argument("--monitor-interval", type=int, default=15, help="readiness monitor poll interval seconds")
     parser.add_argument("--no-smoke-chat", action="store_true", help="do not print endpoint and run one chat completion after readiness")
     parser.add_argument("--smoke-message", default="Say hello in one short sentence.", help="message for post-launch chat smoke")
+    parser.add_argument("--smoke-timeout", type=int, default=60, help="max seconds for post-launch models/chat smoke polling")
+    parser.add_argument("--smoke-interval", type=float, default=2.0, help="seconds between failed smoke attempts")
+    parser.add_argument("--smoke-chat-timeout", type=int, default=30, help="max seconds for each smoke chat request")
+    parser.add_argument("--smoke-max-tokens", type=int, default=8, help="max generated tokens for smoke chat; <=0 omits max_tokens")
+    parser.add_argument(
+        "--relax-policy",
+        action="append",
+        default=[],
+        metavar="JSON",
+        help="deep-merge a JSON object into launch policy keys (pricing/storage/network/reliability/selection/spot)",
+    )
     args = parser.parse_args()
 
     context = load_launch_context(args.launch_profile)
+    applied_policy_patches = apply_relax_policy(context, args.relax_policy)
     launch = context["launch"]
     model = context["model"]
     print("Launch profile")
@@ -508,6 +664,10 @@ def main() -> None:
     print(f"served name:   {model.get('served_model_name')}")
     print(f"r2 prefix:     {model.get('r2_prefix')}")
     print(f"market:        {launch.get('market')}")
+    if applied_policy_patches:
+        print("relax policy:")
+        for patch in applied_policy_patches:
+            print(json.dumps(patch, sort_keys=True))
     print()
     vast = VastAI()
 
@@ -616,7 +776,16 @@ def main() -> None:
             raise SystemExit(result.returncode)
 
     if not args.no_smoke_chat:
-        smoke_code = print_api_config_and_smoke(vast, int(instance_id), model["served_model_name"], args.smoke_message)
+        smoke_code = print_api_config_and_smoke(
+            vast,
+            int(instance_id),
+            model["served_model_name"],
+            args.smoke_message,
+            smoke_timeout=args.smoke_timeout,
+            smoke_interval=args.smoke_interval,
+            smoke_chat_timeout=args.smoke_chat_timeout,
+            smoke_max_tokens=args.smoke_max_tokens,
+        )
         try:
             launch_ledger.update_smoke_result(instance_id=int(instance_id), smoke_exit_code=smoke_code)
         except Exception as exc:

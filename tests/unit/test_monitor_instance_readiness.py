@@ -1,6 +1,6 @@
 import unittest
 
-from scripts.monitor_instance_readiness import analyze_logs, port_url
+from scripts.monitor_instance_readiness import analyze_logs, build_arg_parser, port_url
 
 IMAGE = "vastai/vllm:v0.20.0-cuda-13.0"
 
@@ -65,6 +65,16 @@ class AnalyzeLogsTests(unittest.TestCase):
         ])
         signals = analyze_logs(logs, IMAGE)
         self.assertEqual(signals.errors, ["ERROR: real provisioning failed"])
+
+
+class ParserTests(unittest.TestCase):
+    def test_container_port_defaults_to_vllm_api_mapping(self):
+        args = build_arg_parser().parse_args(["123"])
+        self.assertEqual(args.container_port, "8000/tcp")
+
+    def test_container_port_can_be_overridden(self):
+        args = build_arg_parser().parse_args(["123", "--container-port", "8080/tcp"])
+        self.assertEqual(args.container_port, "8080/tcp")
 
 
 class PortUrlTests(unittest.TestCase):
