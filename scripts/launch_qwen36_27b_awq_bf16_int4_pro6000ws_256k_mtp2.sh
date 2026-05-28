@@ -42,7 +42,7 @@ Profile summary:
   GPU:     1x RTX PRO 6000 WS, min 90GB VRAM
   Context: 256K / 262144
   KV:      bfloat16
-  Quant:   awq_marlin
+  Quant:   compressed-tensors from model config; no forced --quantization
   MTP:     qwen3_next_mtp, 2 speculative tokens
   Seq cap: max_num_seqs=8; client/proxy should enforce active context budgets
   Response cap: max_new_tokens=32768

@@ -4,7 +4,7 @@
   "r2_prefix": "cyankiwi/Qwen3.6-27B-AWQ-BF16-INT4",
   "model_dir": "/workspace/models/cyankiwi/Qwen3.6-27B-AWQ-BF16-INT4",
   "served_model_name": "qwen3.6-27b-awq-bf16-int4-pro6000ws-performance-256k-mtp2",
-  "quantization": "awq",
+  "quantization": "compressed-tensors",
   "expected_model_download_tb": 0.029,
   "vllm": {
     "dtype": "half",
@@ -28,9 +28,9 @@
       "num_speculative_tokens": 2
     },
     "extra_args": [],
-    "force_quantization": "awq_marlin"
+    "force_quantization": null
   },
-  "notes": "Performance-session RTX PRO 6000 WS profile for cyankiwi/Qwen3.6-27B-AWQ-BF16-INT4 with MTP n=2. Updated from the QuantTrio dense AWQ profile while keeping the same PRO6000WS throughput settings: max_num_seqs=8, max_model_len=262144, bfloat16 KV, awq_marlin, prefix caching, max_num_batched_tokens=16384, and max_new_tokens=32768 so client/proxy admission control can govern active context budgets.",
+  "notes": "Performance-session RTX PRO 6000 WS profile for cyankiwi/Qwen3.6-27B-AWQ-BF16-INT4 with MTP n=2. This model advertises compressed-tensors in config.json, so do not force awq_marlin; let vLLM select the compatible compressed-tensors loader. Keeps the same PRO6000WS throughput settings: max_num_seqs=8, max_model_len=262144, bfloat16 KV, prefix caching, max_num_batched_tokens=16384, and max_new_tokens=32768 so client/proxy admission control can govern active context budgets.",
   "provisioning": {
     "r2_speed_test_warn_only": false,
     "r2_speed_test_min_mbps": 16
