@@ -1,7 +1,6 @@
 {
   "name": "h200-1gpu",
   "preferred_gpu_name": "H200",
-  "canonical_reference": "Observed Vast gpu_name from 2026-05-05 price check",
   "allowed_gpu_names": [
     "H200"
   ],

@@ -28,6 +28,7 @@ tmp/
 watch_*
 vllm_log*.md
 logs/
+benchmark/runs/
 
 # Python/cache noise
 __pycache__/

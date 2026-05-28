@@ -622,7 +622,7 @@ def create_pi_tmux_session(session: str, window: str, cwd: Path, pi_model: str, 
     else:
         run_command(["tmux", "new-session", "-d", "-s", session, "-n", window, "-c", str(cwd), "bash", "-lc", launch])
     pane_id = tmux_pane_id(session, window)
-    deadline = time.monotonic() + 15
+    deadline = time.monotonic() + 90
     while time.monotonic() < deadline:
         if pane_current_command(pane_id) in {"node", "pi"}:
             return pane_id
@@ -748,6 +748,10 @@ def run_pi_tmux(args: argparse.Namespace, manifest: dict[str, Any], manifest_pat
             capture_path = captures_dir / f"{iteration:04d}-{problem['id']}.txt"
             prompt_path.write_text(prompt, encoding="utf-8")
             start_time = iso_now()
+            usage = None
+            observed_context = None
+            prompt_tokens = None
+            completion_tokens = None
             if args.dry_run:
                 status_code = 0
                 content = ""
@@ -763,6 +767,12 @@ def run_pi_tmux(args: argparse.Namespace, manifest: dict[str, Any], manifest_pat
                     assistant_message = assistant_entry.get("message") or {}
                     status_code = 0
                     content = message_content_to_text(assistant_message.get("content"))
+                    raw_usage = assistant_message.get("usage")
+                    usage = raw_usage if isinstance(raw_usage, dict) else None
+                    if usage is not None:
+                        prompt_tokens = usage.get("input") if isinstance(usage.get("input"), int) else usage.get("prompt_tokens")
+                        completion_tokens = usage.get("output") if isinstance(usage.get("output"), int) else usage.get("completion_tokens")
+                        observed_context = prompt_tokens if isinstance(prompt_tokens, int) else None
                     validation = {
                         "ok": True,
                         "mode": "pi_tmux_unscored",
@@ -788,18 +798,20 @@ def run_pi_tmux(args: argparse.Namespace, manifest: dict[str, Any], manifest_pat
                 client_end=end_time,
                 response_bytes=len(content.encode("utf-8")),
                 content_chars=len(content),
-                usage=None,
+                usage=usage,
                 validation=validation,
-                observed_context=None,
-                prompt_tokens=None,
-                completion_tokens=None,
+                observed_context=observed_context,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
                 backend=None,
             )
             results.append(result)
             with jsonl_path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(asdict(result), sort_keys=True) + "\n")
-            print(f"iter={iteration} task={problem['id']} pi_status={status_code} valid={validation.get('ok')} chars={len(content)}", flush=True)
+            print(f"iter={iteration} task={problem['id']} pi_status={status_code} valid={validation.get('ok')} context={observed_context} chars={len(content)}", flush=True)
             if args.fail_fast and (status_code != 0 or not validation.get("ok")):
+                break
+            if args.target_context is not None and observed_context is not None and observed_context >= args.target_context:
                 break
         generate_report(report_path, manifest_path, run_id, results, None, None)
         print(f"tmux session={session_name}")

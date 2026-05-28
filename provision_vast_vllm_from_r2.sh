@@ -197,6 +197,16 @@ VLLM_LANGUAGE_MODEL_ONLY="${VLLM_LANGUAGE_MODEL_ONLY:-false}"
 VLLM_SPECULATIVE_CONFIG_B64="${VLLM_SPECULATIVE_CONFIG_B64:-}"
 VLLM_EXTRA_ARGS="${VLLM_EXTRA_ARGS:-}"
 
+if [ "$VLLM_TENSOR_PARALLEL_SIZE" = "auto" ]; then
+  detected_gpu_count="$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | awk 'NF {count++} END {print count+0}')"
+  if [ "${detected_gpu_count:-0}" -gt 1 ]; then
+    VLLM_TENSOR_PARALLEL_SIZE="$detected_gpu_count"
+  else
+    VLLM_TENSOR_PARALLEL_SIZE=""
+  fi
+  echo "Resolved VLLM_TENSOR_PARALLEL_SIZE=auto to ${VLLM_TENSOR_PARALLEL_SIZE:-single-gpu default}"
+fi
+
 # Use a file for complex vLLM args. This avoids Docker/template/env quoting
 # issues and is read by /opt/supervisor-scripts/vllm.sh after provisioning.
 {

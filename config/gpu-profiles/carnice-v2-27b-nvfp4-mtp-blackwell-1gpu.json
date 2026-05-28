@@ -1,0 +1,83 @@
+{
+  "name": "carnice-v2-27b-nvfp4-mtp-blackwell",
+  "preferred_gpu_name": null,
+  "allowed_gpu_names": [
+    "RTX 5060",
+    "RTX 5070",
+    "RTX 5060 Ti",
+    "RTX 5070 Ti",
+    "RTX 5080",
+    "RTX 5090",
+    "RTX PRO 4000",
+    "RTX PRO 4500",
+    "RTX PRO 5000",
+    "RTX PRO 6000",
+    "RTX PRO 6000 S",
+    "RTX PRO 6000 WS"
+  ],
+  "allowed_gpu_configs": [
+    {
+      "gpu_name": "RTX 5060",
+      "num_gpus": 4,
+      "min_gpu_total_ram_mb": 30000
+    },
+    {
+      "gpu_name": "RTX 5070",
+      "num_gpus": 4,
+      "min_gpu_total_ram_mb": 30000
+    },
+    {
+      "gpu_name": "RTX 5060 Ti",
+      "num_gpus": 2,
+      "min_gpu_total_ram_mb": 30000
+    },
+    {
+      "gpu_name": "RTX 5070 Ti",
+      "num_gpus": 2,
+      "min_gpu_total_ram_mb": 30000
+    },
+    {
+      "gpu_name": "RTX 5080",
+      "num_gpus": 2,
+      "min_gpu_total_ram_mb": 30000
+    },
+    {
+      "gpu_name": "RTX 5090",
+      "num_gpus": 1,
+      "min_gpu_total_ram_mb": 30000
+    },
+    {
+      "gpu_name": "RTX PRO 4000",
+      "num_gpus": 2,
+      "min_gpu_total_ram_mb": 30000
+    },
+    {
+      "gpu_name": "RTX PRO 4500",
+      "num_gpus": 1,
+      "min_gpu_total_ram_mb": 30000
+    },
+    {
+      "gpu_name": "RTX PRO 5000",
+      "num_gpus": 1,
+      "min_gpu_total_ram_mb": 30000
+    },
+    {
+      "gpu_name": "RTX PRO 6000",
+      "num_gpus": 1,
+      "min_gpu_total_ram_mb": 30000
+    },
+    {
+      "gpu_name": "RTX PRO 6000 S",
+      "num_gpus": 1,
+      "min_gpu_total_ram_mb": 30000
+    },
+    {
+      "gpu_name": "RTX PRO 6000 WS",
+      "num_gpus": 1,
+      "min_gpu_total_ram_mb": 30000
+    }
+  ],
+  "min_gpu_total_ram_mb": 30000,
+  "min_cuda_max_good": 13.0,
+  "notes": "Mixed Blackwell profile. 8-12GB consumer GPUs are only allowed as 4-GPU offers, 16GB-class consumer GPUs are only allowed as 2-GPU offers, and 32GB+ consumer/professional GPUs are allowed as 1-GPU offers. All accepted configs require at least about 32GB total VRAM. The launcher uses allowed_gpu_configs for per-GPU-count matching."
+}

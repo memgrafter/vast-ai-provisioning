@@ -1,7 +1,6 @@
 {
   "name": "b200-1gpu",
   "preferred_gpu_name": "B200",
-  "canonical_reference": "Observed Vast gpu_name from 2026-05-15 price check",
   "allowed_gpu_names": [
     "B200"
   ],

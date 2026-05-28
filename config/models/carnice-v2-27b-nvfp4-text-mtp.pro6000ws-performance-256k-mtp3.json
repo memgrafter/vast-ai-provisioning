@@ -1,0 +1,38 @@
+{
+  "name": "carnice-v2-27b-nvfp4-text-mtp-pro6000ws-performance-256k-mtp3",
+  "hf_model_id": "sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP",
+  "r2_prefix": "sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP",
+  "model_dir": "/workspace/models/sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP",
+  "served_model_name": "carnice-v2-27b-nvfp4-text-mtp-pro6000ws-performance-256k-mtp3",
+  "quantization": "modelopt",
+  "expected_model_download_tb": 0.02,
+  "vllm": {
+    "dtype": "auto",
+    "max_model_len": 262144,
+    "gpu_memory_utilization": 0.9,
+    "kv_cache_dtype": "fp8",
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "max_num_seqs": 8,
+    "max_num_batched_tokens": 16384,
+    "max_new_tokens": 32768,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "qwen3_xml",
+    "reasoning_parser": "qwen3",
+    "enable_prefix_caching": true,
+    "language_model_only": true,
+    "speculative_config": {
+      "method": "qwen3_5_mtp",
+      "num_speculative_tokens": 3
+    },
+    "extra_args": [],
+    "force_quantization": "modelopt"
+  },
+  "notes": "Performance-session RTX PRO 6000 WS profile for Carnice/Qwen3.6 27B NVFP4 with MTP n=3. Based on observed PRO 6000 WS startup capacity and c=15 mixed-context testing, uses max_num_seqs=8 as the default throughput-oriented server cap while client/proxy admission control governs active context budgets. Keep max_model_len=262144 for max-context requests, and enforce context parallelism outside vLLM. Uses fp8 KV, prefix caching for repeated agent/tool-call prefixes, max_num_batched_tokens=16384 for better batched prefill without pushing to B200-scale settings, and max_new_tokens=32768 for long agentic responses.",
+  "provisioning": {
+    "r2_speed_test_warn_only": false,
+    "r2_speed_test_min_mbps": 16
+  }
+}

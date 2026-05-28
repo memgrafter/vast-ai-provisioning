@@ -1,7 +1,6 @@
 {
   "name": "qwen-27b-awq-48gb",
   "preferred_gpu_name": null,
-  "canonical_reference": "config/gpu-profiles/canonical-gpu-names.json#classes.current_qwen_27b_awq_candidates",
   "allowed_gpu_names": [
     "A100 PCIE",
     "A100 SXM4",

@@ -6,6 +6,5 @@
   ],
   "num_gpus": 2,
   "min_gpu_total_ram_mb": 47000,
-  "min_cuda_max_good": 13.0,
-  "canonical_reference": "config/gpu-profiles/canonical-gpu-names.json#classes.ampere_consumer_24gb_2gpu"
+  "min_cuda_max_good": 13.0
 }

@@ -1,6 +1,6 @@
 {
-  "name": "carnice-v2-27b-nvfp4-mtp-rtx5060ti-2gpu",
-  "preferred_gpu_name": null,
+  "name": "carnice-v2-27b-nvfp4-mtp-rtx5060ti-2gpu-30gb",
+  "preferred_gpu_name": "RTX 5060 Ti",
   "allowed_gpu_names": [
     "RTX 5060 Ti"
   ],

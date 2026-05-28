@@ -43,6 +43,8 @@ class ProvisioningScriptStaticTests(unittest.TestCase):
             "--kv-cache-dtype",
             "--speculative-config",
             "--api-key ${VLLM_API_KEY}",
+            "VLLM_TENSOR_PARALLEL_SIZE\" = \"auto",
+            "Resolved VLLM_TENSOR_PARALLEL_SIZE=auto",
         ]:
             self.assertIn(snippet, self.text)
 

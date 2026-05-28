@@ -1,7 +1,6 @@
 {
   "name": "carnice-v2-27b-nvfp4-mtp-rtx5090-1gpu",
   "preferred_gpu_name": null,
-  "canonical_reference": "config/gpu-profiles/canonical-gpu-names.json#classes.blackwell_consumer_32gb",
   "allowed_gpu_names": [
     "RTX 5090"
   ],

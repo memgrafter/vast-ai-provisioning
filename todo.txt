@@ -1,5 +1,20 @@
 # TODO
 
+- [ ] Expose SSH by default for all Vast vLLM templates and retrofit existing remote templates:
+  - Add `use_ssh: true` to `config/templates/vllm-r2-base.public.json`; `ssh_direct: true` is already present but rendered/remote templates can still show `use_ssh: false` when omitted.
+  - Confirm whether Vast requires `runtype` changes or explicit `22` port mapping for this template family; current evidence suggests the missing `use_ssh` flag is the likely gap.
+  - Add launcher support to attach a local public key after `create_instance` when configured, following the llama.cpp launcher's `create_ssh_key` / `attach_ssh` path.
+  - Generate a dedicated local key, e.g. `~/.ssh/vast_ai_provisioning_ed25519`, and never commit the private key. Public key can be distributed to Vast/account/template as needed.
+  - Retrofit active remote templates by re-rendering from launch profiles and applying `--hash-id` updates, then verify new instances expose either `ssh_host`/`ssh_port` or `ports["22/tcp"]`.
+
+- [ ] Add native fallback support for Vast instances whose direct mapped ports are present in `show_instance().ports` but unreachable externally:
+  - Parse Cloudflare quick-tunnel URLs from Vast logs, especially the `Default Tunnel started for vLLM API (http://localhost:8000) - https://...trycloudflare.com` line.
+  - Probe direct Vast mapped port first (`ports["8000/tcp"][0].HostPort`), then fallback to the tunnel URL when direct TCP/connect times out.
+  - Register the selected reachable base URL in `~/.pi/agent/models.json` and burn-in scripts.
+  - Note: Cloudflare quick-tunnel path currently shows significant inter-tool-call latency for coding-agent loops; treat tunnel fallback as functional but undesirable for sustained benchmark runs.
+  - Keep direct-port resolution via Vast API; do not guess random ports. Use remote `lsof` only to debug internal container listeners (for example `localhost:18000` vs portal/proxy `localhost:8000`), not to discover the external HostPort.
+  - Also fix local model-ui readiness checks to include the vLLM API key; repeated local `GET /v1/models` 401s can make the UI timeout even when vLLM is actually healthy.
+
 - [ ] P0: Use Vast's better verification strategy during offer selection.
   - Do not rely only on the SDK `verified` boolean; recent RTX PRO 6000 searches returned `verified=false` even when `verification` was `verified`.
   - Classify hosts from `verification` (`verified` / `unverified` / `deverified`) plus `is_vm_deverified` and `vericode`.
@@ -73,3 +88,4 @@
   - c=64 agentic sustained: ~77.2 tps/user, 4942 tok/s total. 4 sequential measured requests/user after 1 warmup, max_tokens=20000, shared 30K prefix (~30.5K prompt), max_waiting=12, max_kv=50.3%, latency avg/p95 ~129.7s/216.9s, TTFT avg ~1.22s. Recent windows held ~4.7k-5.7k tok/s at 52-60 running with ~82-88% draft acceptance.
   - c=128 agentic sustained: ~42.6 tps/user, 5450 tok/s total. 4 sequential measured requests/user after 1 warmup, max_tokens=20000, shared 30K prefix (~30.5K prompt), max_waiting=26, max_kv=100.0%, latency avg/p95 ~241.8s/417.2s, TTFT avg ~14.56s, queue avg ~13.02s. Saturated upper point and now lower aggregate than c=96; recent high-throughput windows ~6.0k-6.5k tok/s at 92-103 running with ~83-87% draft acceptance.
   - c=96 agentic sustained: ~58.1 tps/user, 5575 tok/s total. 4 sequential measured requests/user after 1 warmup, max_tokens=20000, shared 30K prefix (~30.5K prompt), max_waiting=2, max_kv=75.3%, latency avg/p95 ~173.9s/295.0s, TTFT avg ~1.34s, queue avg ~0.11s. Best current sweet spot: higher aggregate than c=128 without KV saturation; recent windows ~5.4k-5.9k tok/s at 71-85 running with ~81-87% draft acceptance.
+- Note: offer search currently needs a GPU-name query fix for profiles that set `allowed_gpu_names` without `preferred_gpu_name`; otherwise Vast returns other GPU types and policy filters them client-side.

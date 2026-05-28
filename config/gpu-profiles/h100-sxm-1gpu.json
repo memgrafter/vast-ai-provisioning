@@ -1,7 +1,6 @@
 {
   "name": "h100-sxm-1gpu",
   "preferred_gpu_name": "H100 SXM",
-  "canonical_reference": "Observed Vast gpu_name from 2026-05-05 price check",
   "allowed_gpu_names": [
     "H100 SXM"
   ],

@@ -1,25 +1,26 @@
 {
-  "gpu_profile": "config/gpu-profiles/qwen-27b-awq-96gb-rtx-pro-6000-ws.json",
+  "gpu_profile": "config/gpu-profiles/rtx-pro-6000-ws-1gpu-90gb.json",
   "market": "on-demand",
-  "model_profile": "config/models/carnice-v2-27b-nvfp4-text-mtp.json",
-  "name": "carnice-v2-27b-nvfp4-text-mtp.pro6000ws.on-demand",
+  "model_profile": "config/models/qwen3.6-27b-awq.pro6000ws-performance-256k-mtp2.json",
+  "name": "qwen3.6-27b-awq-bf16-int4.pro6000ws-performance-256k-mtp2.on-demand",
   "network": {
     "max_internet_down_cost_per_tb": 8.0,
     "max_internet_up_cost_per_tb": 10.0,
     "min_direct_port_count": 1,
-    "min_inet_down": 1000
+    "min_inet_down": 128
   },
   "pricing": {
-    "max_dph_total": 1.25,
+    "max_dph_total": 1.5,
     "target_first_test_minutes": 60
   },
-  "purpose": "On-demand coding-agent test for sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP from R2",
+  "purpose": "Performance-session on-demand RTX PRO 6000 WS profile for cyankiwi Qwen3.6 27B AWQ BF16 INT4 MTP n=2 using vLLM, awq_marlin, fp8 KV, 256K context, and c=8 throughput-oriented default concurrency",
   "reliability": {
-    "min_reliability2": 0.98,
+    "min_reliability2": 0.96,
     "require_verified": true
   },
   "selection": {
     "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
+    "geo_query": "geolocation not in [CN]",
     "greylisted_machine_ids": [
       8357,
       125312
@@ -27,6 +28,7 @@
     "preferred_machine_ids": [
       51218
     ],
+    "search_no_default": true,
     "sort": "preferred_machine_then_effective_cost_then_reliability"
   },
   "spot": {
@@ -40,7 +42,7 @@
     "min_disk_bw": 500
   },
   "template": {
-    "hash_id": "fa7b676dcc8b410adca262efec8c86d4",
-    "name": "vLLM_R2_Carnice_V2_27B_NVFP4_TEXT_MTP"
+    "hash_id": "6a8e188864913f102f61c35dec96666f",
+    "name": "vLLM_R2_Qwen3_6_27B_AWQ_BF16_INT4_PRO6000WS_PERF_256K_MTP2"
   }
 }

@@ -186,6 +186,43 @@ def fetch_metrics(endpoint: MetricsEndpoint, api_key: str | None, timeout: int) 
     raise RuntimeError(f"metrics fetch failed: {last_exc}")
 
 
+def spec_decode_position_deltas(before: Metrics, after: Metrics) -> list[tuple[str, float]]:
+    positions: set[str] = set()
+    metric_name = "vllm:spec_decode_num_accepted_tokens_per_pos_total"
+    for name, labels in before.labeled.keys() | after.labeled.keys():
+        if name != metric_name:
+            continue
+        label_dict = dict(labels)
+        if "position" in label_dict:
+            positions.add(label_dict["position"])
+    rows: list[tuple[str, float]] = []
+    for position in sorted(positions, key=lambda item: int(item) if item.isdigit() else item):
+        delta = after.label_value(metric_name, position=position) - before.label_value(metric_name, position=position)
+        if delta:
+            rows.append((position, delta))
+    return rows
+
+
+def print_spec_decode_interval(before: Metrics, after: Metrics, elapsed_s: float) -> None:
+    drafts_delta = after.get("vllm:spec_decode_num_drafts_total") - before.get("vllm:spec_decode_num_drafts_total")
+    draft_tokens_delta = after.get("vllm:spec_decode_num_draft_tokens_total") - before.get("vllm:spec_decode_num_draft_tokens_total")
+    accepted_delta = after.get("vllm:spec_decode_num_accepted_tokens_total") - before.get("vllm:spec_decode_num_accepted_tokens_total")
+    if not any((drafts_delta, draft_tokens_delta, accepted_delta)):
+        return
+    print("Spec decode / MTP:\n")
+    print("```text")
+    print(f"drafts_delta:          {fmt_num(drafts_delta)}")
+    print(f"draft_tokens_delta:    {fmt_num(draft_tokens_delta)}")
+    print(f"accepted_tokens_delta: {fmt_num(accepted_delta)}")
+    print(f"accepted_tps:          {accepted_delta / elapsed_s:.2f} tok/s")
+    print(f"acceptance_rate:       {pct(accepted_delta, draft_tokens_delta)}")
+    print(f"accepted_per_draft:    {avg(accepted_delta, drafts_delta)}")
+    for position, delta in spec_decode_position_deltas(before, after):
+        print(f"accepted_pos_{position}_delta: {fmt_num(delta)}")
+    print("```")
+    print()
+
+
 def print_gauge(before: Metrics, after: Metrics, elapsed_s: float) -> None:
     prompt_delta = after.get("vllm:prompt_tokens_total") - before.get("vllm:prompt_tokens_total")
     prompt_compute_delta = after.label_value("vllm:prompt_tokens_by_source_total", source="local_compute") - before.label_value(
@@ -226,6 +263,8 @@ def print_gauge(before: Metrics, after: Metrics, elapsed_s: float) -> None:
     print("```")
     print()
 
+    print_spec_decode_interval(before, after, elapsed_s)
+
     print("Completed in window:\n")
     print("```text")
     for reason in ("stop", "length", "error", "abort", "repetition"):
@@ -248,6 +287,9 @@ def print_gauge(before: Metrics, after: Metrics, elapsed_s: float) -> None:
 
 
 def current_metrics_payload(metrics: Metrics) -> dict[str, float]:
+    spec_drafts = metrics.get("vllm:spec_decode_num_drafts_total")
+    spec_draft_tokens = metrics.get("vllm:spec_decode_num_draft_tokens_total")
+    spec_accepted = metrics.get("vllm:spec_decode_num_accepted_tokens_total")
     return {
         "vllm.requests_running": metrics.get("vllm:num_requests_running"),
         "vllm.requests_waiting": metrics.get("vllm:num_requests_waiting"),
@@ -267,12 +309,20 @@ def current_metrics_payload(metrics: Metrics) -> dict[str, float]:
         "vllm.queue_sum_seconds": metrics.get("vllm:request_queue_time_seconds_sum"),
         "vllm.inference_count": metrics.get("vllm:request_inference_time_seconds_count"),
         "vllm.inference_sum_seconds": metrics.get("vllm:request_inference_time_seconds_sum"),
+        "vllm.spec_decode_drafts_total": spec_drafts,
+        "vllm.spec_decode_draft_tokens_total": spec_draft_tokens,
+        "vllm.spec_decode_accepted_tokens_total": spec_accepted,
+        "vllm.spec_decode_acceptance_rate": spec_accepted / spec_draft_tokens if spec_draft_tokens > 0 else 0.0,
+        "vllm.spec_decode_accepted_per_draft": spec_accepted / spec_drafts if spec_drafts > 0 else 0.0,
     }
 
 
 def interval_metrics_payload(before: Metrics, after: Metrics, elapsed_s: float) -> dict[str, float]:
     prompt_delta = after.get("vllm:prompt_tokens_total") - before.get("vllm:prompt_tokens_total")
     generation_delta = after.get("vllm:generation_tokens_total") - before.get("vllm:generation_tokens_total")
+    spec_drafts_delta = after.get("vllm:spec_decode_num_drafts_total") - before.get("vllm:spec_decode_num_drafts_total")
+    spec_draft_tokens_delta = after.get("vllm:spec_decode_num_draft_tokens_total") - before.get("vllm:spec_decode_num_draft_tokens_total")
+    spec_accepted_delta = after.get("vllm:spec_decode_num_accepted_tokens_total") - before.get("vllm:spec_decode_num_accepted_tokens_total")
     return {
         "vllm.window_seconds": elapsed_s,
         "vllm.prompt_tokens_delta": prompt_delta,
@@ -281,6 +331,12 @@ def interval_metrics_payload(before: Metrics, after: Metrics, elapsed_s: float) 
         "vllm.prompt_tokens_per_second": prompt_delta / elapsed_s if elapsed_s > 0 else 0.0,
         "vllm.generation_tokens_per_second": generation_delta / elapsed_s if elapsed_s > 0 else 0.0,
         "vllm.total_tokens_per_second": (prompt_delta + generation_delta) / elapsed_s if elapsed_s > 0 else 0.0,
+        "vllm.spec_decode_drafts_delta": spec_drafts_delta,
+        "vllm.spec_decode_draft_tokens_delta": spec_draft_tokens_delta,
+        "vllm.spec_decode_accepted_tokens_delta": spec_accepted_delta,
+        "vllm.spec_decode_accepted_tokens_per_second": spec_accepted_delta / elapsed_s if elapsed_s > 0 else 0.0,
+        "vllm.spec_decode_acceptance_rate_delta": spec_accepted_delta / spec_draft_tokens_delta if spec_draft_tokens_delta > 0 else 0.0,
+        "vllm.spec_decode_accepted_per_draft_delta": spec_accepted_delta / spec_drafts_delta if spec_drafts_delta > 0 else 0.0,
         **current_metrics_payload(after),
     }
 
@@ -315,6 +371,10 @@ def print_summary(metrics: Metrics) -> None:
     queue_sum = metrics.get("vllm:request_queue_time_seconds_sum")
     infer_count = metrics.get("vllm:request_inference_time_seconds_count")
     infer_sum = metrics.get("vllm:request_inference_time_seconds_sum")
+
+    spec_drafts = metrics.get("vllm:spec_decode_num_drafts_total")
+    spec_draft_tokens = metrics.get("vllm:spec_decode_num_draft_tokens_total")
+    spec_accepted = metrics.get("vllm:spec_decode_num_accepted_tokens_total")
 
     print("Current metrics:\n")
     print("```text")
@@ -363,6 +423,29 @@ def print_summary(metrics: Metrics) -> None:
     print(f"local_cache_hit: {fmt_num(local_hit)}")
     print(f"external_kv:     {fmt_num(external_kv)}")
     print("```\n")
+
+    if any((spec_drafts, spec_draft_tokens, spec_accepted)):
+        print("Spec decode / MTP:\n")
+        print("```text")
+        print(f"drafts_total:          {fmt_num(spec_drafts)}")
+        print(f"draft_tokens_total:    {fmt_num(spec_draft_tokens)}")
+        print(f"accepted_tokens_total: {fmt_num(spec_accepted)}")
+        print(f"acceptance_rate:       ~{pct(spec_accepted, spec_draft_tokens)}")
+        print(f"accepted_per_draft:    ~{avg(spec_accepted, spec_drafts)}")
+        positions = sorted(
+            {
+                dict(labels).get("position")
+                for name, labels in metrics.labeled.keys()
+                if name == "vllm:spec_decode_num_accepted_tokens_per_pos_total" and dict(labels).get("position") is not None
+            },
+            key=lambda item: int(item) if item and item.isdigit() else str(item),
+        )
+        for position in positions:
+            print(
+                f"accepted_pos_{position}_total: "
+                f"{fmt_num(metrics.label_value('vllm:spec_decode_num_accepted_tokens_per_pos_total', position=str(position)))}"
+            )
+        print("```\n")
 
     print("TTFT:\n")
     print("```text")

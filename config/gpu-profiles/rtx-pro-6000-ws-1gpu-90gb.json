@@ -1,6 +1,6 @@
 {
-  "name": "qwen-27b-awq-96gb-rtx-pro-6000-ws",
-  "preferred_gpu_name": null,
+  "name": "rtx-pro-6000-ws-1gpu-90gb",
+  "preferred_gpu_name": "RTX PRO 6000 WS",
   "allowed_gpu_names": [
     "RTX PRO 6000 WS"
   ],

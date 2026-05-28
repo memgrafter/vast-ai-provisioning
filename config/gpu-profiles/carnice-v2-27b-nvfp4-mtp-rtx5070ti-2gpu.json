@@ -1,7 +1,6 @@
 {
   "name": "carnice-v2-27b-nvfp4-mtp-rtx5070ti-2gpu",
   "preferred_gpu_name": null,
-  "canonical_reference": "config/gpu-profiles/canonical-gpu-names.json#classes.blackwell_consumer_16gb_2gpu",
   "allowed_gpu_names": [
     "RTX 5070 Ti"
   ],

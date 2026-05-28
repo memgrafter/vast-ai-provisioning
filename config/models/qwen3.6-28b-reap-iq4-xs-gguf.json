@@ -1,0 +1,21 @@
+{
+  "name": "qwen3.6-28b-reap-iq4-xs-gguf",
+  "hf_model_id": "mradermacher/Qwen3.6-28B-REAP-i1-GGUF",
+  "r2_prefix": "mradermacher/Qwen3.6-28B-REAP-i1-GGUF/Qwen3.6-28B-REAP.i1-IQ4_XS",
+  "model_dir": "/workspace/models/mradermacher/Qwen3.6-28B-REAP-i1-GGUF",
+  "served_model_name": "qwen3.6-28b-reap-iq4-xs",
+  "quantization": "gguf-iq4-xs",
+  "expected_model_download_tb": 0.016,
+  "gguf": {
+    "filename": "Qwen3.6-28B-REAP.i1-IQ4_XS.gguf",
+    "source_repo": "mradermacher/Qwen3.6-28B-REAP-i1-GGUF",
+    "source_revision": "main"
+  },
+  "llamacpp": {
+    "model_path": "/workspace/models/mradermacher/Qwen3.6-28B-REAP-i1-GGUF/Qwen3.6-28B-REAP.i1-IQ4_XS.gguf",
+    "ctx_size": 160000,
+    "n_gpu_layers": 999,
+    "cache_type_k": "turbo3",
+    "cache_type_v": "turbo3"
+  }
+}

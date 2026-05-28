@@ -1,28 +1,28 @@
 {
-  "gpu_profile": "config/gpu-profiles/qwen-27b-awq-96gb-rtx-pro-6000-ws.json",
+  "gpu_profile": "config/gpu-profiles/carnice-v2-27b-nvfp4-mtp-blackwell-1gpu.json",
   "market": "on-demand",
-  "model_profile": "config/models/carnice-v2-27b-nvfp4-text-mtp.json",
-  "name": "carnice-v2-27b-nvfp4-text-mtp.pro6000ws.on-demand",
+  "model_profile": "config/models/carnice-v2-27b-nvfp4-text-mtp.blackwell.json",
+  "name": "carnice-v2-27b-nvfp4-text-mtp.blackwell.on-demand",
   "network": {
     "max_internet_down_cost_per_tb": 8.0,
     "max_internet_up_cost_per_tb": 10.0,
     "min_direct_port_count": 1,
-    "min_inet_down": 1000
+    "min_inet_down": 128
   },
   "pricing": {
-    "max_dph_total": 1.25,
-    "target_first_test_minutes": 60
+    "max_dph_total": 1.0,
+    "target_first_test_minutes": 30
   },
-  "purpose": "On-demand coding-agent test for sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP from R2",
+  "purpose": "On-demand mixed Blackwell consumer/professional coding-agent test for sakamakismile/Carnice-V2-27b-NVFP4-TEXT-MTP from R2",
   "reliability": {
     "min_reliability2": 0.98,
-    "require_verified": true
+    "require_verified": false
   },
   "selection": {
     "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
     "greylisted_machine_ids": [
       8357,
-      125312
+      48112
     ],
     "preferred_machine_ids": [
       51218
@@ -40,7 +40,7 @@
     "min_disk_bw": 500
   },
   "template": {
-    "hash_id": "fa7b676dcc8b410adca262efec8c86d4",
-    "name": "vLLM_R2_Carnice_V2_27B_NVFP4_TEXT_MTP"
+    "hash_id": "f385c32943ed913788720cbf0b6f98a9",
+    "name": "vLLM_R2_Carnice_V2_27B_NVFP4_TEXT_MTP_BLACKWELL"
   }
 }

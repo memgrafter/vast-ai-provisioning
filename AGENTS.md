@@ -1,8 +1,41 @@
 # AGENTS.md
 
+## Quick reminders
+
+- Vast maps container ports to random external host ports. Do not assume external `:8000` exists.
+- Always read the instance `ports` mapping and use the mapped host port for API calls.
+- Example: container `8000/tcp` may map to `http://<public_ip>:<HostPort>/v1`.
+
 ## Purpose
 
 Provision Vast.ai vLLM instances that sync a private R2-hosted Hugging Face model repo before serving.
+
+## One-off Python deps with uv
+
+The project venv does not include every ad-hoc inspection dependency. For one-off R2/S3 inspection with `boto3`, prefer `uv run --with boto3` instead of modifying project dependencies.
+
+Example:
+
+```bash
+. env.modeltransfer
+uv run --quiet --with boto3 python - <<'PY'
+import os
+import boto3
+
+s3 = boto3.client(
+    "s3",
+    endpoint_url=os.environ["R2_ENDPOINT"],
+    aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+    aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+    region_name=os.environ.get("AWS_DEFAULT_REGION", "auto"),
+)
+for page in s3.get_paginator("list_objects_v2").paginate(Bucket=os.environ["R2_BUCKET"]):
+    for obj in page.get("Contents", []):
+        print(obj["Key"], obj["Size"])
+PY
+```
+
+Do not print secrets or commit generated R2 listings if they contain private identifiers.
 
 ## Secret rules
 

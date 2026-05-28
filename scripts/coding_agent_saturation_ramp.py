@@ -606,6 +606,7 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--step-gap", type=float, default=10.0, help="Seconds to sleep between concurrency steps")
     parser.add_argument("--pause", action="store_true", help="Pause for Enter between concurrency steps, after --step-gap")
+    parser.add_argument("--base-url", help="Fixed OpenAI-compatible base URL; use for Cloudflare tunnel or non-Vast endpoints")
     parser.add_argument("--instance-id", type=int, help="Vast instance id; enables dynamic port resolution and ledger writes")
     parser.add_argument("--container-port", default="8000/tcp", help="Container port to resolve when --instance-id is set")
     parser.add_argument("--metrics-sample-interval", type=float, default=2.0)
@@ -619,16 +620,17 @@ def main() -> int:
     api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("VLLM_API_KEY")
     if not api_key:
         raise SystemExit("set OPENAI_API_KEY or source env.vast-management so VLLM_API_KEY is set")
-    if args.instance_id is None:
-        raise SystemExit("provide --instance-id")
+    if args.instance_id is None and not args.base_url:
+        raise SystemExit("provide --instance-id or --base-url")
 
-    record_ledger = not args.no_record_ledger
+    record_ledger = bool(args.instance_id is not None and not args.no_record_ledger)
     run_started_at = now_utc()
     run_stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
 
     request_log_path = None if args.no_request_log else args.request_log
     if request_log_path is None and not args.no_request_log:
-        request_log_path = Path("state/burnin") / f"{args.instance_id}-{run_stamp}-coding-agent-saturation.requests.jsonl"
+        endpoint_slug = str(args.instance_id) if args.instance_id is not None else "external"
+        request_log_path = Path("state/burnin") / f"{endpoint_slug}-{run_stamp}-coding-agent-saturation.requests.jsonl"
     request_logger = RequestLogger(request_log_path)
 
     workload_config = {
@@ -653,7 +655,7 @@ def main() -> int:
                 details={"old": old, "new": new, "machine_id": info.get("machine_id")},
             )
 
-    endpoint = EndpointResolver(None, args.instance_id, args.container_port, on_endpoint_change)
+    endpoint = EndpointResolver(args.base_url, args.instance_id, args.container_port, on_endpoint_change)
     print(f"base_url={endpoint.refresh() if args.instance_id is not None else endpoint.base_url()}")
     if request_logger.path:
         print(f"request_log={request_logger.path}")

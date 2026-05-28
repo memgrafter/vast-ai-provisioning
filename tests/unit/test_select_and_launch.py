@@ -120,6 +120,27 @@ class SearchPolicyOffersTests(unittest.TestCase):
         self.assertEqual(call["type"], "interruptible")
         self.assertIn("gpu_total_ram>=21.0", call["query"])
         self.assertIn("verified=true", call["query"])
+        self.assertIn("verification!=deverified", call["query"])
+
+    def test_search_drops_deverified_before_policy_output(self):
+        context = load_context()
+        context["launch"]["reliability"]["require_verified"] = False
+
+        class FakeVast:
+            def __init__(self):
+                self.calls = []
+
+            def search_offers(self, **kwargs):
+                self.calls.append(kwargs)
+                return [
+                    good_offer(id=1, verification="deverified"),
+                    good_offer(id=2, verification="unverified"),
+                ]
+
+        fake = FakeVast()
+        offers = search_policy_offers(fake, context)
+        self.assertEqual([offer["id"] for offer in offers], [2])
+        self.assertIn("verification!=deverified", fake.calls[0]["query"])
 
     def test_on_demand_market_mapping(self):
         context = load_context()
@@ -136,6 +157,53 @@ class SearchPolicyOffersTests(unittest.TestCase):
         fake = FakeVast()
         search_policy_offers(fake, context)
         self.assertEqual(fake.calls[0]["type"], "on-demand")
+
+    def test_explicit_gpu_configs_allow_mixed_gpu_counts(self):
+        context = load_context()
+        context["gpu"] = {
+            "allowed_gpu_configs": [
+                {"gpu_name": "RTX 5060 Ti", "num_gpus": 2, "min_gpu_total_ram_mb": 30000},
+                {"gpu_name": "RTX 5090", "num_gpus": 1, "min_gpu_total_ram_mb": 30000},
+            ],
+            "min_gpu_total_ram_mb": 30000,
+            "min_cuda_max_good": 13.0,
+        }
+
+        ok, reasons = offer_passes_policy(good_offer(gpu_name="RTX 5060 Ti", num_gpus=2, gpu_total_ram=32000), context)
+        self.assertTrue(ok, reasons)
+
+        ok, reasons = offer_passes_policy(good_offer(gpu_name="RTX 5060 Ti", num_gpus=1, gpu_total_ram=16000), context)
+        self.assertFalse(ok)
+        self.assertIn("num_gpus", reasons)
+
+    def test_explicit_gpu_configs_search_each_gpu_count(self):
+        context = load_context()
+        context["launch"]["market"] = "on-demand"
+        context["gpu"] = {
+            "allowed_gpu_configs": [
+                {"gpu_name": "RTX 5060 Ti", "num_gpus": 2, "min_gpu_total_ram_mb": 30000},
+                {"gpu_name": "RTX 5090", "num_gpus": 1, "min_gpu_total_ram_mb": 30000},
+            ],
+            "min_gpu_total_ram_mb": 30000,
+            "min_cuda_max_good": 13.0,
+        }
+
+        class FakeVast:
+            def __init__(self):
+                self.calls = []
+
+            def search_offers(self, **kwargs):
+                self.calls.append(kwargs)
+                if 'gpu_name="RTX 5060 Ti"' in kwargs["query"]:
+                    return [good_offer(id=1, gpu_name="RTX 5060 Ti", num_gpus=2, gpu_total_ram=32000)]
+                return [good_offer(id=2, gpu_name="RTX 5090", num_gpus=1, gpu_total_ram=32000)]
+
+        fake = FakeVast()
+        offers = search_policy_offers(fake, context)
+        self.assertEqual(len(fake.calls), 2)
+        self.assertTrue(any("num_gpus=2" in call["query"] for call in fake.calls))
+        self.assertTrue(any("num_gpus=1" in call["query"] for call in fake.calls))
+        self.assertEqual({offer["id"] for offer in offers}, {1, 2})
 
 
 if __name__ == "__main__":

@@ -1,0 +1,38 @@
+{
+  "name": "qwopus3.6-27b-v2-nvfp4",
+  "hf_model_id": "mconcat/Qwopus3.6-27B-v2-NVFP4",
+  "r2_prefix": "mconcat/Qwopus3.6-27B-v2-NVFP4",
+  "model_dir": "/workspace/models/mconcat/Qwopus3.6-27B-v2-NVFP4",
+  "served_model_name": "qwopus3.6-27b-v2-nvfp4",
+  "quantization": "modelopt",
+  "expected_model_download_tb": 0.03,
+  "vllm": {
+    "dtype": "auto",
+    "max_model_len": 65536,
+    "gpu_memory_utilization": 0.9,
+    "kv_cache_dtype": "fp8",
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "max_num_seqs": 1,
+    "max_num_batched_tokens": 8192,
+    "max_new_tokens": 30000,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "qwen3_xml",
+    "reasoning_parser": "qwen3",
+    "enable_prefix_caching": true,
+    "language_model_only": true,
+    "speculative_config": {
+      "method": "qwen3_5_mtp",
+      "num_speculative_tokens": 1
+    },
+    "extra_args": [],
+    "force_quantization": "modelopt"
+  },
+  "notes": "Initial vLLM test profile for mconcat/Qwopus3.6-27B-v2-NVFP4. Repo notes say hybrid DeltaNet + softmax attention is preserved, 1-layer MTP head is included as BF16 sidecar, and multimodal processor metadata is intact. Treat as PRO 6000 WS / large Blackwell-class candidate first; not validated on budget 2-GPU hosts.",
+  "provisioning": {
+    "r2_speed_test_warn_only": false,
+    "r2_speed_test_min_mbps": 16
+  }
+}
