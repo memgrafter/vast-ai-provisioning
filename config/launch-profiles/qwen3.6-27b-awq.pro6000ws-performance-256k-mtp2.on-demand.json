@@ -13,7 +13,7 @@
     "max_dph_total": 1.5,
     "target_first_test_minutes": 60
   },
-  "purpose": "Performance-session on-demand RTX PRO 6000 WS profile for cyankiwi Qwen3.6 27B AWQ BF16 INT4 MTP n=2 using vLLM, compressed-tensors model config, bfloat16 KV, 256K context, and c=8 throughput-oriented default concurrency",
+  "purpose": "Performance-session on-demand RTX PRO 6000 WS profile for cyankiwi Qwen3.6 27B AWQ BF16 INT4 MTP n=2 using vLLM, compressed-tensors model config, bfloat16 model/KV cache dtype, 256K context, and c=8 throughput-oriented default concurrency",
   "reliability": {
     "min_reliability2": 0.96,
     "require_verified": true
@@ -26,7 +26,9 @@
       125312
     ],
     "preferred_machine_ids": [
-      51218
+      14398,
+      51218,
+      51703
     ],
     "search_no_default": true,
     "sort": "preferred_machine_then_effective_cost_then_reliability"
@@ -42,7 +44,7 @@
     "min_disk_bw": 500
   },
   "template": {
-    "hash_id": "c95df44b015bc811ef23c33b5e38916d",
+    "hash_id": "f74c8a95bfcacaff6dd73a685eeecbdb",
     "name": "vLLM_R2_Qwen3_6_27B_AWQ_BF16_INT4_PRO6000WS_PERF_256K_MTP2"
   }
 }

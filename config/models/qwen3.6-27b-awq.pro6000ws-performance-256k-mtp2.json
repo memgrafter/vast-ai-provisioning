@@ -7,7 +7,7 @@
   "quantization": "compressed-tensors",
   "expected_model_download_tb": 0.029,
   "vllm": {
-    "dtype": "half",
+    "dtype": "bfloat16",
     "max_model_len": 262144,
     "gpu_memory_utilization": 0.9,
     "kv_cache_dtype": "bfloat16",
@@ -30,7 +30,7 @@
     "extra_args": [],
     "force_quantization": null
   },
-  "notes": "Performance-session RTX PRO 6000 WS profile for cyankiwi/Qwen3.6-27B-AWQ-BF16-INT4 with MTP n=2. This model advertises compressed-tensors in config.json, so do not force awq_marlin; let vLLM select the compatible compressed-tensors loader. Keeps the same PRO6000WS throughput settings: max_num_seqs=8, max_model_len=262144, bfloat16 KV, prefix caching, max_num_batched_tokens=16384, and max_new_tokens=32768 so client/proxy admission control can govern active context budgets.",
+  "notes": "Performance-session RTX PRO 6000 WS profile for cyankiwi/Qwen3.6-27B-AWQ-BF16-INT4 with MTP n=2. This model advertises compressed-tensors in config.json, so do not force awq_marlin; let vLLM select the compatible compressed-tensors loader. Keeps the same PRO6000WS throughput settings: max_num_seqs=8, max_model_len=262144, bfloat16 model/KV cache dtype, prefix caching, max_num_batched_tokens=16384, and max_new_tokens=32768 so client/proxy admission control can govern active context budgets. The model dtype and KV cache dtype must stay aligned; half model dtype with bfloat16 KV hit a vLLM/FlashAttention startup failure: query and key must have the same dtype.",
   "provisioning": {
     "r2_speed_test_warn_only": false,
     "r2_speed_test_min_mbps": 16

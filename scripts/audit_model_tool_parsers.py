@@ -47,6 +47,13 @@ def main() -> int:
                 f"tool settings auto={auto!r} tool_call_parser={actual!r} expected={expected!r} reasoning_parser={reasoning!r}"
             )
 
+        dtype = vllm.get("dtype")
+        kv_cache_dtype = vllm.get("kv_cache_dtype")
+        if kv_cache_dtype == "bfloat16" and dtype not in {"bfloat16", "bf16"}:
+            errors.append(
+                f"kv_cache_dtype='bfloat16' requires dtype='bfloat16' to avoid FlashAttention query/key dtype mismatch; got dtype={dtype!r}"
+            )
+
         spec = vllm.get("speculative_config")
         if spec is not None:
             expected_method = "qwen3_5_mtp" if expected == "qwen3_xml" else "qwen3_next_mtp"

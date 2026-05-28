@@ -41,7 +41,7 @@ Profile summary:
   Model:   cyankiwi/Qwen3.6-27B-AWQ-BF16-INT4
   GPU:     1x RTX PRO 6000 WS, min 90GB VRAM
   Context: 256K / 262144
-  KV:      bfloat16
+  DType:   bfloat16 model + bfloat16 KV
   Quant:   compressed-tensors from model config; no forced --quantization
   MTP:     qwen3_next_mtp, 2 speculative tokens
   Seq cap: max_num_seqs=8; client/proxy should enforce active context budgets
