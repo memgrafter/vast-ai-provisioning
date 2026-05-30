@@ -44,7 +44,7 @@
     "min_disk_bw": 500
   },
   "template": {
-    "hash_id": "ed4523c83e72ddf1d16ccc8b2af219a5",
+    "hash_id": "4cb3ec7a6bb81ae9703aa9352f05a633",
     "name": "vLLM_R2_Qwen3_6_27B_AWQ_QUANTTRIO_PRO6000WS_PERF_256K_BF16KV_MTP2"
   }
 }

@@ -31,7 +31,7 @@ from scripts import launch_ledger
 from vastai import VastAI
 
 
-DEFAULT_MODEL = "vastai/vllm:v0.20.0-cuda-13.0"
+DEFAULT_MODEL = "vastai/vllm:v0.22.0-cuda-13.0"
 
 
 @dataclass(frozen=True)

@@ -349,11 +349,11 @@ def main() -> int:
                 info = vast.show_instance(id=instance_id)
                 try:
                     logs = str(vast.logs(instance_id=instance_id, tail=str(args.tail)))
-                    signals = analyze_logs(logs, launch.get("image", "vastai/vllm:v0.20.0-cuda-13.0"))
+                    signals = analyze_logs(logs, launch.get("image", "vastai/vllm:v0.22.0-cuda-13.0"))
                 except Exception as exc:
                     print(f"WARN log fetch failed; continuing readiness probes: {type(exc).__name__}: {exc}", flush=True)
                     logs = ""
-                    signals = analyze_logs(logs, launch.get("image", "vastai/vllm:v0.20.0-cuda-13.0"))
+                    signals = analyze_logs(logs, launch.get("image", "vastai/vllm:v0.22.0-cuda-13.0"))
                 url = port_url(info)
                 status = info.get("actual_status") or info.get("status")
                 print(

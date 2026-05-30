@@ -44,7 +44,7 @@
     "min_disk_bw": 500
   },
   "template": {
-    "hash_id": "f74c8a95bfcacaff6dd73a685eeecbdb",
+    "hash_id": "cdfc00a1eaccc2901550f34430f52cb2",
     "name": "vLLM_R2_Qwen3_6_27B_AWQ_BF16_INT4_PRO6000WS_PERF_256K_MTP2"
   }
 }

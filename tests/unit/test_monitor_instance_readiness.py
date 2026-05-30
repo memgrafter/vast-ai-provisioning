@@ -2,7 +2,7 @@ import unittest
 
 from scripts.monitor_instance_readiness import analyze_logs, build_arg_parser, port_url
 
-IMAGE = "vastai/vllm:v0.20.0-cuda-13.0"
+IMAGE = "vastai/vllm:v0.22.0-cuda-13.0"
 
 
 class AnalyzeLogsTests(unittest.TestCase):

@@ -42,7 +42,7 @@
     "min_disk_bw": 500
   },
   "template": {
-    "hash_id": "e2c0bccb923edd80f640883ba946b076",
+    "hash_id": "72c67f3ad2bda957bc721fb84428751e",
     "name": "vLLM_R2_Model_20260504"
   }
 }
