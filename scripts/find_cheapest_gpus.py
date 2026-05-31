@@ -28,6 +28,75 @@ POLICY = {
 }
 
 
+# Per-GPU max CUDA version based on compute capability.
+# The Vast API reports the host's CUDA driver version, not the GPU's limit.
+# A Tesla P40 host may have CUDA 13.x drivers but the card caps at CC 6.1 (CUDA 10.x).
+GPU_MAX_CUDA: dict[str, float] = {
+    # Pascal - dead for modern vLLM / llama.cpp
+    "Tesla P40": 10.0,
+    "P40": 10.0,
+    "Tesla P100": 10.0,
+    "GTX 1080 Ti": 10.0,
+    "Titan Xp": 10.0,
+    "Quadro P6000": 10.0,
+    # Volta
+    "Tesla V100": 11.0,
+    "Tesla V100S": 11.0,
+    "V100": 11.0,
+    # Turing
+    "Titan RTX": 11.8,
+    "Q RTX 4000": 11.8,
+    "Q RTX 5000": 11.8,
+    "Q RTX 6000": 11.8,
+    "Q RTX 8000": 11.8,
+    "RTX 2080 Ti": 11.8,
+    "T4": 11.8,
+    # Ampere
+    "A10": 12.8,
+    "A30": 12.8,
+    "A40": 12.8,
+    "A100": 12.8,
+    "A100 PCIE": 12.8,
+    "A100 SXM4": 12.8,
+    "A800 PCIE": 12.8,
+    "RTX 3090": 12.8,
+    "RTX 3090 Ti": 12.8,
+    "RTX A5000": 12.8,
+    "RTX A6000": 12.8,
+    # Ada Lovelace
+    "L4": 12.8,
+    "L40": 12.8,
+    "L40S": 12.8,
+    "RTX 4090": 12.8,
+    "RTX 4090D": 12.8,
+    "RTX 4080S": 12.8,
+    "RTX 4080": 12.8,
+    "RTX 4000Ada": 12.8,
+    "RTX 4500Ada": 12.8,
+    "RTX 5000Ada": 12.8,
+    "RTX 5880Ada": 12.8,
+    "RTX 6000Ada": 12.8,
+    "RTX PRO 4000": 12.8,
+    "RTX PRO 4500": 12.8,
+    "RTX PRO 5000": 12.8,
+    "RTX PRO 6000": 12.8,
+    # Blackwell
+    "RTX 5090": 13.0,
+    "RTX PRO 6000 S": 13.0,
+    "RTX PRO 6000 WS": 13.0,
+    "B200": 13.0,
+    "B100": 13.0,
+    "B300 SXM6 AC": 13.0,
+    # Hopper
+    "H100": 12.8,
+    "H100 NVL": 12.8,
+    "H100 PCIE": 12.8,
+    "H100 SXM": 12.8,
+    "H200": 12.8,
+    "H200 NVL": 12.8,
+}
+
+
 def money(value: Any) -> str:
     if not isinstance(value, (int, float)):
         return "n/a"
@@ -52,6 +121,8 @@ def offer_passes(offer: dict[str, Any], verified_only: bool) -> tuple[bool, list
         (float(offer.get("inet_down") or 0) >= POLICY["min_inet_down"], "inet"),
         (float(offer.get("internet_down_cost_per_tb") or 0) <= POLICY["max_internet_down_cost_per_tb"], "down_cost"),
         (float(offer.get("internet_up_cost_per_tb") or 0) <= POLICY["max_internet_up_cost_per_tb"], "up_cost"),
+        # GPU compute capability check: the card's max CUDA version must be >= what we need
+        (GPU_MAX_CUDA.get(str(offer.get("gpu_name", "")), 0.0) >= POLICY["min_cuda"], "cc"),
     ]
     loc = str(offer.get("geolocation") or "")
     geo_ok = not any(excl in loc for excl in POLICY["geo_exclude"])
