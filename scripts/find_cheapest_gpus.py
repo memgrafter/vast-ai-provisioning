@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Find the cheapest on-demand 1x GPU offers with >= 24GB VRAM.
+"""Find the cheapest on-demand GPU offers with >= 24GB per GPU.
 
-Shows cheapest passing offer per GPU type, split by verification status.
+Supports any GPU count. Shows cheapest passing offer per GPU type
+(pinned to 1x, 2x, etc.), split by verification status.
 Use --verified-only to show only verified (hide unverified and deverified).
 Use --sort-cost to sort all passing offers by cost (per GPU table is always sorted).
-Uses relaxed constraints from the PRO 6000 WS profile.
 """
 from __future__ import annotations
 
@@ -43,6 +43,7 @@ def offer_passes(offer: dict[str, Any], verified_only: bool) -> tuple[bool, list
         reasons.append("unverified")
 
     checks = [
+        (str(offer.get("rentable", "")) == "True" or offer.get("rentable") is True, "rentable"),
         (float(offer.get("cuda_max_good") or 0) >= POLICY["min_cuda"], "cuda"),
         (float(offer.get("reliability2") or 0) >= POLICY["min_reliability"], "rel"),
         (float(offer.get("dph_total") or math.inf) <= POLICY["max_dph_total"], "dph"),
@@ -62,50 +63,64 @@ def offer_passes(offer: dict[str, Any], verified_only: bool) -> tuple[bool, list
     return not bool(reasons), reasons
 
 
+def gpu_key(o: dict[str, Any]) -> str:
+    """Unique key per GPU type + count, e.g. 'RTX 3090-2x'."""
+    return f"{o.get('gpu_name', 'unknown')}-{int(o.get('num_gpus', 1))}x"
+
+
+def total_vram(o: dict[str, Any]) -> float:
+    return float(o.get("gpu_total_ram", 0)) * int(o.get("num_gpus", 1))
+
+
 def show_table(offers: list[dict[str, Any]], verified_only: bool, label: str, sort_cost: bool = False) -> None:
     passing = [o for o in offers if offer_passes(o, verified_only)[0]]
     if not passing:
         return
 
-    # Best per GPU (cheapest)
-    best_by_gpu: dict[str, dict[str, Any]] = {}
+    # Best per GPU type + count (cheapest)
+    best_by_key: dict[str, dict[str, Any]] = {}
     for o in passing:
-        gpu_name = str(o.get("gpu_name") or "unknown")
+        key = gpu_key(o)
         dph = float(o.get("dph_total", 0))
-        existing = best_by_gpu.get(gpu_name)
+        existing = best_by_key.get(key)
         if existing is None or dph < float(existing.get("dph_total", math.inf)):
-            best_by_gpu[gpu_name] = o
+            best_by_key[key] = o
 
-    # Sort best per GPU by cost
-    best_sorted = sorted(best_by_gpu.items(), key=lambda kv: float(kv[1].get("dph_total", 0)))
+    # Sort best per key by cost
+    best_sorted = sorted(best_by_key.items(), key=lambda kv: float(kv[1].get("dph_total", 0)))
 
-    print(f"\n=== {label} (cheapest per GPU, sorted by cost) ===\n")
-    print(f"{'GPU':35s} {'VRAM':>8s} {'DPH':>10s} {'Rel':>7s} {'Disk':>8s} {'Inet':>8s} {'Verif':>10s} {'Geo':20s}  Offer")
-    print("-" * 115)
-    for gpu_name, o in best_sorted:
+    print(f"\n=== {label} (cheapest per GPU type x count, sorted by cost) ===\n")
+    print(f"{'GPU':30s} {'xNum':>4s} {'TotRAM':>8s} {'DPH':>10s} {'$/GBhr':>7s} {'Rel':>7s} {'Disk':>8s} {'Inet':>8s} {'Verif':>10s} {'Geo':20s}  Offer")
+    print("-" * 125)
+    for key, o in best_sorted:
         dph = float(o.get("dph_total", 0))
-        ram = float(o.get("gpu_total_ram", 0))
+        n = int(o.get("num_gpus", 1))
+        per_gpu = float(o.get("gpu_total_ram", 0))
+        total = total_vram(o)
+        dph_per_gb = dph / (total / 1000) if total > 0 else 0.0
         rel = float(o.get("reliability2", 0))
         disk = float(o.get("disk_bw", 0) or 0)
         inet = float(o.get("inet_down", 0) or 0)
         ver = str(o.get("verification", ""))
         loc = str(o.get("geolocation", ""))
-        print(f"{gpu_name:35s} {ram:>8.0f}MB {money(dph):>10s} {rel:>7.4f} {disk:>8.0f} {inet:>8.0f}Mbps {ver:>10s} {loc:20s} id={o.get('id')}")
+        print(f"{o.get('gpu_name',''):30s} {n:>4d} {total:>8.0f}MB {money(dph):>10s} {dph_per_gb:>7.4f} {rel:>7.4f} {disk:>8.0f} {inet:>8.0f}Mbps {ver:>10s} {loc:20s} id={o.get('id')}")
 
     if sort_cost:
         passing.sort(key=lambda o: float(o.get("dph_total", 0)))
         print(f"\nAll {len(passing)} passing {label.lower()} ranked by cost (top 20):")
-        print("-" * 115)
+        print("-" * 125)
         for i, o in enumerate(passing[:20]):
             dph = float(o.get("dph_total", 0))
-            gpu = o.get("gpu_name")
-            ram = float(o.get("gpu_total_ram", 0))
+            n = int(o.get("num_gpus", 1))
+            total = total_vram(o)
+            dph_per_gb = dph / (total / 1000) if total > 0 else 0.0
+            gpu = str(o.get("gpu_name", ""))
             rel = float(o.get("reliability2", 0))
             disk = float(o.get("disk_bw", 0) or 0)
             inet = float(o.get("inet_down", 0) or 0)
             ver = str(o.get("verification", ""))
             loc = str(o.get("geolocation", ""))
-            print(f"  #{i+1:2d} {money(dph):>10s} {gpu:30s} {ram:>6.0f}MB rel={rel:.4f} disk={disk:>6.0f} inet={inet:>5.0f} {ver:>10s} {loc:20s} id={o.get('id')}")
+            print(f"  #{i+1:2d} {money(dph):>10s} {gpu:25s} {n}x {total:>6.0f}MB {dph_per_gb:>7.4f}/GBhr rel={rel:.4f} disk={disk:>6.0f} inet={inet:>5.0f} {ver:>10s} {loc:20s} id={o.get('id')}")
 
 
 def main() -> int:
@@ -118,14 +133,14 @@ def main() -> int:
 
     # no_default=True to disable SDK's built-in verified filter
     all_offers = vast.search_offers(
-        query="num_gpus=1 gpu_ram>23",
+        query="gpu_ram>23",
         type="on-demand",
         order="dph_total",
         limit=500,
         no_default=True,
     )
 
-    print(f"Total on-demand 1x >=24GB VRAM offers found: {len(all_offers)}")
+    print(f"Total on-demand >=24GB per-GPU offers found: {len(all_offers)}")
     print(f"Policy: rel>={POLICY['min_reliability']} cuda>={POLICY['min_cuda']} dph<={POLICY['max_dph_total']} disk>={POLICY['min_disk_bw']} inet>={POLICY['min_inet_down']} no-CN")
     print(f"Mode: {'verified only' if args.verified_only else 'all (excluding deverified)'}")
 
@@ -149,18 +164,20 @@ def main() -> int:
     merged.sort(key=lambda o: float(o.get("dph_total", 0)))
     if merged:
         print(f"\n\n=== Merged Verified + Unverified (all {len(merged)} passing, sorted by cost) ===\n")
-        print(f"{'GPU':35s} {'VRAM':>8s} {'DPH':>10s} {'Rel':>7s} {'Disk':>8s} {'Inet':>8s} {'Verif':>10s} {'Geo':20s}  Offer")
-        print("-" * 115)
+        print(f"{'GPU':30s} {'xNum':>4s} {'TotRAM':>8s} {'DPH':>10s} {'$/GBhr':>7s} {'Rel':>7s} {'Disk':>8s} {'Inet':>8s} {'Verif':>10s} {'Geo':20s}  Offer")
+        print("-" * 125)
         for i, o in enumerate(merged[:30]):
             dph = float(o.get("dph_total", 0))
-            gpu = o.get("gpu_name")
-            ram = float(o.get("gpu_total_ram", 0))
+            n = int(o.get("num_gpus", 1))
+            total = total_vram(o)
+            dph_per_gb = dph / (total / 1000) if total > 0 else 0.0
+            gpu = str(o.get("gpu_name", ""))
             rel = float(o.get("reliability2", 0))
             disk = float(o.get("disk_bw", 0) or 0)
             inet = float(o.get("inet_down", 0) or 0)
             ver = str(o.get("verification", ""))
             loc = str(o.get("geolocation", ""))
-            print(f"  #{i+1:2d} {money(dph):>10s} {gpu:30s} {ram:>6.0f}MB rel={rel:.4f} disk={disk:>6.0f} inet={inet:>5.0f} {ver:>10s} {loc:20s} id={o.get('id')}")
+            print(f"  #{i+1:2d} {money(dph):>10s} {gpu:25s} {n}x {total:>6.0f}MB {dph_per_gb:>7.4f}/GBhr rel={rel:.4f} disk={disk:>6.0f} inet={inet:>5.0f} {ver:>10s} {loc:20s} id={o.get('id')}")
 
     return 0
 
