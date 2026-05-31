@@ -116,11 +116,13 @@ def main() -> int:
 
     vast = VastAI()
 
+    # no_default=True to disable SDK's built-in verified filter
     all_offers = vast.search_offers(
         query="num_gpus=1 gpu_ram>23",
         type="on-demand",
         order="dph_total",
         limit=500,
+        no_default=True,
     )
 
     print(f"Total on-demand 1x >=24GB VRAM offers found: {len(all_offers)}")
@@ -141,6 +143,24 @@ def main() -> int:
             print(f"\n(Skipped {len(deverified)} deverified offers)")
         if other:
             print(f"\n(Skipped {len(other)} offers with unknown verification)")
+
+    # Merged view: verified + unverified (no deverified), sorted by cost
+    merged = [o for o in verified + unverified if offer_passes(o, verified_only=args.verified_only)[0]]
+    merged.sort(key=lambda o: float(o.get("dph_total", 0)))
+    if merged:
+        print(f"\n\n=== Merged Verified + Unverified (all {len(merged)} passing, sorted by cost) ===\n")
+        print(f"{'GPU':35s} {'VRAM':>8s} {'DPH':>10s} {'Rel':>7s} {'Disk':>8s} {'Inet':>8s} {'Verif':>10s} {'Geo':20s}  Offer")
+        print("-" * 115)
+        for i, o in enumerate(merged[:30]):
+            dph = float(o.get("dph_total", 0))
+            gpu = o.get("gpu_name")
+            ram = float(o.get("gpu_total_ram", 0))
+            rel = float(o.get("reliability2", 0))
+            disk = float(o.get("disk_bw", 0) or 0)
+            inet = float(o.get("inet_down", 0) or 0)
+            ver = str(o.get("verification", ""))
+            loc = str(o.get("geolocation", ""))
+            print(f"  #{i+1:2d} {money(dph):>10s} {gpu:30s} {ram:>6.0f}MB rel={rel:.4f} disk={disk:>6.0f} inet={inet:>5.0f} {ver:>10s} {loc:20s} id={o.get('id')}")
 
     return 0
 
