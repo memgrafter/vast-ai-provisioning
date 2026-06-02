@@ -1,0 +1,10 @@
+{
+  "name": "rtx-pro-6000-ws-2gpu-180gb",
+  "preferred_gpu_name": "RTX PRO 6000 WS",
+  "allowed_gpu_names": [
+    "RTX PRO 6000 WS"
+  ],
+  "num_gpus": 2,
+  "min_gpu_total_ram_mb": 180000,
+  "min_cuda_max_good": 13.0
+}

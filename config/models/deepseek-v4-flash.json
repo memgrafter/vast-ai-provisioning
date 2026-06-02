@@ -1,0 +1,50 @@
+{
+  "name": "deepseek-v4-flash-pro6000ws-384k",
+  "hf_model_id": "unsloth/DeepSeek-V4-Flash",
+  "r2_prefix": "unsloth/DeepSeek-V4-Flash",
+  "model_dir": "/workspace/models/unsloth/DeepSeek-V4-Flash",
+  "served_model_name": "deepseek-v4-flash-pro6000ws-384k",
+  "quantization": "fp8",
+  "expected_model_download_tb": 0.16,
+  "vllm": {
+    "dtype": "auto",
+    "max_model_len": 393216,
+    "gpu_memory_utilization": 0.9,
+    "kv_cache_dtype": "fp8",
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "tensor_parallel_size": 2,
+    "max_num_seqs": 8,
+    "max_num_batched_tokens": 16384,
+    "max_new_tokens": 32768,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "deepseek_v4",
+    "reasoning_parser": "deepseek_v4",
+    "enable_prefix_caching": true,
+    "language_model_only": false,
+    "speculative_config": {
+      "method": "mtp",
+      "num_speculative_tokens": 3
+    },
+    "extra_args": [
+      "--tokenizer-mode",
+      "deepseek_v4",
+      "--block-size",
+      "256",
+      "--attention_config.use_fp4_indexer_cache",
+      "True",
+      "--compilation-config",
+      "{\"cudagraph_mode\":\"FULL_AND_PIECEWISE\",\"custom_ops\":[\"all\"]}",
+      "--max-cudagraph-capture-size",
+      "128"
+    ],
+    "force_quantization": null
+  },
+  "notes": "RTX PRO 6000 WS 2-GPU dev profile for unsloth/DeepSeek-V4-Flash (284B total, 13B activated, FP4+FP8 mixed). Follows DeepSeek V4 serving guidance where applicable for non-disaggregated dev: tokenizer/tool/reasoning parser deepseek_v4, block-size 256, FP4 indexer cache, compilation config FULL_AND_PIECEWISE, and MTP speculative decoding with 3 tokens. Uses max_model_len=393216 to support Think Max without truncation per the model card. TP=2 is required to split the ~160GB checkpoint across two 90GB RTX PRO 6000 WS GPUs; this is dev-oriented and less optimal than the recommended 4-GPU DP/EP production topology.",
+  "provisioning": {
+    "r2_speed_test_warn_only": false,
+    "r2_speed_test_min_mbps": 16
+  }
+}
