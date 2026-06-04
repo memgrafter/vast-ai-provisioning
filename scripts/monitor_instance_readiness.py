@@ -125,6 +125,8 @@ def analyze_logs(logs: str, image: str) -> Signals:
             or "Provisioning script failed (exit 1)" in logs
             or "Quantization method specified in the model config" in logs
             or "ValidationError: 1 validation error for ModelConfig" in logs
+            or "The 'fastokens' package" in logs
+            or "No module named 'fastokens'" in logs
         ),
         errors=error_lines,
     )

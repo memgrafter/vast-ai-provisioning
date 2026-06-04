@@ -39,6 +39,7 @@ class AnalyzeLogsTests(unittest.TestCase):
             "/provisioning.sh: line 7: AWS_ACCESS_KEY_ID: missing AWS_ACCESS_KEY_ID",
             "Quantization method specified in the model config (compressed-tensors) does not match the quantization argument (awq)",
             "ValidationError: 1 validation error for ModelConfig",
+            "ImportError: The 'fastokens' package (>= 0.2.0) is required when VLLM_USE_FASTOKENS=1.",
         ])
         signals = analyze_logs(logs, IMAGE)
         self.assertTrue(signals.speed_test_failed)

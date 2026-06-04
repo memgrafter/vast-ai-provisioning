@@ -37,6 +37,8 @@ class ProvisioningScriptStaticTests(unittest.TestCase):
             "VLLM_MAX_NUM_BATCHED_TOKENS=",
             "VLLM_SPECULATIVE_CONFIG_B64=",
             "VLLM_EXTRA_ARGS=",
+            "VLLM_USE_FASTOKENS=",
+            "fastokens>=0.2.0",
             "--max-num-seqs",
             "--max-num-batched-tokens",
             "--tensor-parallel-size",

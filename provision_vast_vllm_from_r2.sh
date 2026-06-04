@@ -196,6 +196,7 @@ VLLM_ENABLE_PREFIX_CACHING="${VLLM_ENABLE_PREFIX_CACHING:-false}"
 VLLM_LANGUAGE_MODEL_ONLY="${VLLM_LANGUAGE_MODEL_ONLY:-false}"
 VLLM_SPECULATIVE_CONFIG_B64="${VLLM_SPECULATIVE_CONFIG_B64:-}"
 VLLM_EXTRA_ARGS="${VLLM_EXTRA_ARGS:-}"
+VLLM_USE_FASTOKENS="${VLLM_USE_FASTOKENS:-0}"
 
 if [ "$VLLM_TENSOR_PARALLEL_SIZE" = "auto" ]; then
   detected_gpu_count="$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | awk 'NF {count++} END {print count+0}')"
@@ -291,6 +292,17 @@ if ! command -v aws >/dev/null 2>&1; then
     python3 -m pip install --no-cache-dir awscli
   fi
 fi
+
+case "${VLLM_USE_FASTOKENS,,}" in
+  1|true|yes|on)
+    echo "VLLM_USE_FASTOKENS enabled; installing fastokens>=0.2.0"
+    python3 -m pip install --no-cache-dir --upgrade 'fastokens>=0.2.0'
+    python3 - <<'PY'
+import fastokens
+print("fastokens import ok")
+PY
+    ;;
+esac
 
 if [ "$R2_TRANSFER_TOOL" = "rclone" ] && ! command -v rclone >/dev/null 2>&1; then
   echo "Installing rclone for parallel R2 downloads"
