@@ -1,8 +1,11 @@
 import copy
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from scripts.select_and_launch import (
+    api_get_json,
+    api_post_json,
     effective_cost,
     is_preferred_machine,
     load_launch_context,
@@ -204,6 +207,27 @@ class SearchPolicyOffersTests(unittest.TestCase):
         self.assertTrue(any("num_gpus=2" in call["query"] for call in fake.calls))
         self.assertTrue(any("num_gpus=1" in call["query"] for call in fake.calls))
         self.assertEqual({offer["id"] for offer in offers}, {1, 2})
+
+
+class ApiJsonTests(unittest.TestCase):
+    def test_get_timeout_returns_error_tuple(self):
+        with patch("scripts.select_and_launch.urlopen", side_effect=TimeoutError("timed out")):
+            code, body = api_get_json("http://example.test/v1/models", "api-key", timeout=1)
+
+        self.assertEqual(code, 0)
+        self.assertIn("timeout", body)
+
+    def test_post_timeout_returns_error_tuple(self):
+        with patch("scripts.select_and_launch.urlopen", side_effect=TimeoutError("timed out")):
+            code, body = api_post_json(
+                "http://example.test/v1/chat/completions",
+                "api-key",
+                {"model": "test", "messages": []},
+                timeout=1,
+            )
+
+        self.assertEqual(code, 0)
+        self.assertIn("timeout", body)
 
 
 if __name__ == "__main__":

@@ -517,6 +517,8 @@ def api_get_json(url: str, api_key: str, timeout: int = 10) -> tuple[int, Any]:
         return exc.code, exc.read().decode(errors="replace")
     except URLError as exc:
         return 0, str(exc)
+    except TimeoutError as exc:
+        return 0, f"timeout: {exc}"
 
 
 def api_post_json(url: str, api_key: str, payload: dict[str, Any], timeout: int = 120) -> tuple[int, Any]:
@@ -534,6 +536,8 @@ def api_post_json(url: str, api_key: str, payload: dict[str, Any], timeout: int 
         return exc.code, exc.read().decode(errors="replace")
     except URLError as exc:
         return 0, str(exc)
+    except TimeoutError as exc:
+        return 0, f"timeout: {exc}"
 
 
 def print_api_config_and_smoke(
