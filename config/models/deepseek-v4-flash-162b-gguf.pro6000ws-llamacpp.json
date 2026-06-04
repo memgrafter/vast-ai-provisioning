@@ -1,0 +1,50 @@
+{
+  "name": "deepseek-v4-flash-spark-mini-162b-gguf-pro6000ws-llamacpp",
+  "hf_model_id": "0xSero/DeepSeek-V4-Flash-162B-GGUF",
+  "r2_prefix": "0xSero/DeepSeek-V4-Flash-162B-GGUF",
+  "model_dir": "/workspace/models/0xSero/DeepSeek-V4-Flash-162B-GGUF",
+  "served_model_name": "DeepSeek-V4-Flash-Spark-Mini",
+  "quantization": "gguf-q2-reap-ds4",
+  "expected_model_download_tb": 0.053,
+  "gguf": {
+    "filename": "DeepSeek-V4-Flash-Spark-Mini-Q2-REAP-ds4.gguf",
+    "source_repo": "0xSero/DeepSeek-V4-Flash-162B-GGUF",
+    "source_revision": "main",
+    "upstream_model_repo": "0xSero/DeepSeek-V4-Flash-162B",
+    "upstream_model_revision": "d663e8fb16809f6619000648b187b257249ed824"
+  },
+  "llamacpp": {
+    "model_path": "/workspace/models/DeepSeek-V4-Flash-Spark-Mini-Q2-REAP-ds4.gguf",
+    "ctx_size": 200000,
+    "n_predict": 4096,
+    "n_gpu_layers": 999,
+    "threads": 12,
+    "batch": 8192,
+    "ubatch": 512,
+    "parallel": 1,
+    "cache_type_k": "q8_0",
+    "cache_type_v": "q8_0",
+    "cache_ram": "14G",
+    "spec_type": "none",
+    "flash_attn": "auto",
+    "kv_offload": true,
+    "extra_flags": ""
+  },
+  "deepseek_requirements": {
+    "MODEL_REPO": "0xSero/DeepSeek-V4-Flash-162B",
+    "MODEL_REVISION": "d663e8fb16809f6619000648b187b257249ed824",
+    "SERVED_MODEL_NAME": "DeepSeek-V4-Flash-Spark-Mini",
+    "CONTEXT_LENGTH": 200000,
+    "KV_CACHE_MEMORY_BYTES": "14G",
+    "MAX_NUM_BATCHED_TOKENS": 8192,
+    "MAX_NUM_SEQS": 1,
+    "GPU_MEMORY_UTILIZATION": 0.88,
+    "WATCHDOG_MIN_AVAILABLE_KB": 8388608,
+    "KV_CACHE_DTYPE": "fp8",
+    "THINKING": true,
+    "SPECULATIVE_CONFIG": null,
+    "VLLM_ENABLE_DEEPSEEK_V4_SPARSE_MLA_WARMUP": "0",
+    "VLLM_TRITON_MLA_SPARSE_ALLOW_CUDAGRAPH": "1"
+  },
+  "notes": "llama.cpp RTX PRO 6000 WS profile for the R2-hosted 0xSero DeepSeek V4 Flash Spark Mini Q2 REAP GGUF. DeepSeek requirements are recorded verbatim. llama.cpp mappings: CONTEXT_LENGTH -> ctx_size=200000, MAX_NUM_BATCHED_TOKENS -> batch=8192, MAX_NUM_SEQS -> parallel=1, KV_CACHE_MEMORY_BYTES -> cache_ram=14G, SPECULATIVE_CONFIG empty -> spec_type=none. KV_CACHE_DTYPE=fp8 is approximated with q8_0 K/V cache types because llama.cpp does not use vLLM fp8 KV naming."
+}

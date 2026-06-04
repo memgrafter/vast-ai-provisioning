@@ -1,0 +1,13 @@
+{
+  "name": "deepseek-v4-flash-162b-gguf",
+  "hf_model_id": "0xSero/DeepSeek-V4-Flash-162B-GGUF",
+  "r2_prefix": "0xSero/DeepSeek-V4-Flash-162B-GGUF",
+  "model_dir": "/workspace/models/0xSero/DeepSeek-V4-Flash-162B-GGUF",
+  "served_model_name": "deepseek-v4-flash-162b-gguf",
+  "quantization": "gguf",
+  "expected_model_download_tb": 0.0,
+  "gguf": {
+    "source_repo": "0xSero/DeepSeek-V4-Flash-162B-GGUF",
+    "source_revision": "main"
+  }
+}

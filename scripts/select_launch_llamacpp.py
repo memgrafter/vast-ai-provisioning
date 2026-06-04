@@ -456,6 +456,7 @@ cd {remote_code_dir}
 export SERVER_BIN={server_bin}
 export MODEL={model_path}
 export ALIAS={alias_q}
+export PARALLEL=${{PARALLEL:-{args.parallel}}}
 export PUBLIC_HOST=0.0.0.0
 export PUBLIC_PORT={args.container_port}
 export BACKEND_HOST=127.0.0.1
@@ -474,6 +475,7 @@ export KV_OFFLOAD=${{KV_OFFLOAD:-{1 if args.kv_offload else 0}}}
 export EXTRA_FLAGS={extra_flags_q}
 export LOG_DIR=/workspace/logs
 export CACHE_DIR=/workspace/cache/llama.cpp-launch-scripts/slot-kv
+export CACHE_RAM=${{CACHE_RAM:-{shlex.quote(str(args.cache_ram))}}}
 export BACKEND_LOG=/workspace/logs/llamacpp-backend-${{STAMP:-$(date +%Y%m%d-%H%M%S)}}.log
 export BACKEND_PID_FILE=/tmp/llamacpp-backend.pid
 export STARTUP_TIMEOUT={args.startup_timeout}
@@ -572,6 +574,20 @@ def print_endpoint(info: dict[str, Any], host: str, port: int, args: argparse.Na
     print("tunnel_base_url=http://127.0.0.1:18081/v1")
 
 
+def llamacpp_instance_onstart_script() -> str:
+    return """(for i in $(seq 1 300); do
+  if [ -f /root/.ssh/authorized_keys ]; then
+    chown root:root /root/.ssh /root/.ssh/authorized_keys 2>/dev/null || true
+    chmod 700 /root/.ssh 2>/dev/null || true
+    chmod 600 /root/.ssh/authorized_keys 2>/dev/null || true
+  fi
+  sleep 1
+done) &
+mkdir -p /workspace
+echo llama.cpp-vast-ready > /workspace/onstart.txt
+"""
+
+
 def launch_instance(vast: VastAI, offer: dict[str, Any], args: argparse.Namespace) -> int:
     env = {f"-p {args.container_port}:{args.container_port}": "1"} if args.publish_port else {}
     candidate_ids: list[int] = []
@@ -593,7 +609,7 @@ def launch_instance(vast: VastAI, offer: dict[str, Any], args: argparse.Namespac
                 label=args.label,
                 runtype="ssh_direc ssh_proxy",
                 env=env,
-                onstart_cmd="mkdir -p /workspace && echo llama.cpp-vast-ready > /workspace/onstart.txt",
+                onstart_cmd=llamacpp_instance_onstart_script(),
                 force=not args.require_verified,
                 cancel_unavail=True,
             )
@@ -672,8 +688,10 @@ def apply_model_profile(args: argparse.Namespace, explicit: set[str], model: dic
         "threads": "threads",
         "batch": "batch",
         "ubatch": "ubatch",
+        "parallel": "parallel",
         "cache_type_k": "cache_k",
         "cache_type_v": "cache_v",
+        "cache_ram": "cache_ram",
         "spec_type": "spec_type",
         "flash_attn": "flash_attn",
         "kv_offload": "kv_offload",
@@ -708,11 +726,13 @@ def apply_llamacpp_launch_settings(args: argparse.Namespace, explicit: set[str],
         "threads": "threads",
         "batch": "batch",
         "ubatch": "ubatch",
+        "parallel": "parallel",
         "ctx": "ctx",
         "n_predict": "n_predict",
         "ngl": "ngl",
         "cache_k": "cache_k",
         "cache_v": "cache_v",
+        "cache_ram": "cache_ram",
         "spec_type": "spec_type",
         "flash_attn": "flash_attn",
         "kv_offload": "kv_offload",
@@ -828,8 +848,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--threads", type=int, default=12)
     parser.add_argument("--batch", type=int, default=64)
     parser.add_argument("--ubatch", type=int, default=16)
+    parser.add_argument("--parallel", type=int, default=1)
     parser.add_argument("--cache-k", default="turbo3")
     parser.add_argument("--cache-v", default="turbo3")
+    parser.add_argument("--cache-ram", default="0")
     parser.add_argument("--spec-type", default="ngram-mod")
     parser.add_argument("--flash-attn", default="auto")
     parser.add_argument("--kv-offload", action=argparse.BooleanOptionalAction, default=True)
