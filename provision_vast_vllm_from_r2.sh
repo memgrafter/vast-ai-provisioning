@@ -296,11 +296,21 @@ fi
 case "${VLLM_USE_FASTOKENS,,}" in
   1|true|yes|on)
     echo "VLLM_USE_FASTOKENS enabled; installing fastokens>=0.2.0"
+    if command -v uv >/dev/null 2>&1; then
+      uv pip install --system --upgrade 'fastokens>=0.2.0'
+    fi
+    if command -v pip >/dev/null 2>&1; then
+      pip install --no-cache-dir --upgrade 'fastokens>=0.2.0'
+    fi
     python3 -m pip install --no-cache-dir --upgrade 'fastokens>=0.2.0'
-    python3 - <<'PY'
+    for python_bin in python3 /usr/local/bin/python3 /usr/bin/python3; do
+      if command -v "$python_bin" >/dev/null 2>&1; then
+        "$python_bin" - <<'PY'
 import fastokens
 print("fastokens import ok")
 PY
+      fi
+    done
     ;;
 esac
 
