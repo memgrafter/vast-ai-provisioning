@@ -25,5 +25,9 @@
     "language_model_only": true,
     "extra_args": [],
     "force_quantization": "awq_marlin"
+  },
+  "provisioning": {
+    "r2_speed_test_warn_only": false,
+    "r2_speed_test_min_mbps": 16
   }
 }
