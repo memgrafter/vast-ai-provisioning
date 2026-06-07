@@ -10,13 +10,13 @@
     "min_inet_down": 128
   },
   "pricing": {
-    "max_dph_total": 0.5,
+    "max_dph_total": 0.6,
     "target_first_test_minutes": 60
   },
   "purpose": "On-demand 2x RTX 3090 experimental 160K full-context multi-stream profile for cyankiwi Qwen3.6 35B A3B AWQ 4bit with awq_marlin, bfloat16 KV, concurrency 8, and Qwen3 Next MTP n=2",
   "reliability": {
     "min_reliability2": 0.96,
-    "require_verified": false
+    "require_verified": true
   },
   "selection": {
     "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
