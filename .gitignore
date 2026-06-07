@@ -30,6 +30,7 @@ vllm_log*.md
 logs/
 benchmark/runs/
 solutions/
+.tickets/
 
 # Python/cache noise
 __pycache__/
