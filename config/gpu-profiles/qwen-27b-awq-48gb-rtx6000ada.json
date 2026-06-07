@@ -1,0 +1,10 @@
+{
+  "name": "qwen-27b-awq-48gb-rtx6000ada",
+  "preferred_gpu_name": "RTX 6000Ada",
+  "allowed_gpu_names": [
+    "RTX 6000Ada"
+  ],
+  "num_gpus": 1,
+  "min_gpu_total_ram_mb": 45000,
+  "min_cuda_max_good": 13.0
+}

@@ -7,18 +7,23 @@
   "quantization": "awq",
   "expected_model_download_tb": 0.025,
   "vllm": {
-    "dtype": "half",
-    "max_model_len": 160000,
+    "dtype": "bfloat16",
+    "max_model_len": 262144,
     "gpu_memory_utilization": 0.9,
+    "kv_cache_dtype": "bfloat16",
     "trust_remote_code": true,
     "host": "127.0.0.1",
     "port": 18000,
     "download_dir": "/workspace/models",
-    "max_num_seqs": 64,
+    "max_num_seqs": 8,
+    "max_num_batched_tokens": 8192,
+    "max_new_tokens": 32000,
     "enable_auto_tool_choice": true,
     "tool_call_parser": "qwen3_coder",
     "reasoning_parser": "qwen3",
+    "enable_prefix_caching": true,
+    "language_model_only": true,
     "extra_args": [],
-    "force_quantization": null
+    "force_quantization": "awq_marlin"
   }
 }

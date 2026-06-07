@@ -1,5 +1,5 @@
 {
-  "gpu_profile": "config/gpu-profiles/qwen-27b-awq-48gb.json",
+  "gpu_profile": "config/gpu-profiles/qwen-27b-awq-48gb-rtx6000ada.json",
   "market": "on-demand",
   "model_profile": "config/models/qwen3.6-27b-awq.json",
   "name": "qwen3.6-27b-awq.stable",
@@ -13,7 +13,7 @@
     "max_dph_total": 2.5,
     "target_first_test_minutes": 20
   },
-  "purpose": "Stable/on-demand vLLM launch for QuantTrio/Qwen3.6-27B-AWQ from R2",
+  "purpose": "Stable/on-demand RTX 6000Ada vLLM launch for QuantTrio/Qwen3.6-27B-AWQ from R2",
   "reliability": {
     "min_reliability2": 0.98,
     "require_verified": true
@@ -24,8 +24,10 @@
       8357
     ],
     "preferred_machine_ids": [
-      1569,
-      68063
+      "100231"
+    ],
+    "preferred_machine_notes": [
+      "68063 # remove this comment for l40s priority machine"
     ],
     "sort": "preferred_machine_then_effective_cost_then_reliability"
   },
