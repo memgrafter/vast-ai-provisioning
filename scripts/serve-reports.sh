@@ -16,4 +16,4 @@ echo ""
 
 cd "$DIR"
 echo $$ > /tmp/reports-serve.pid
-exec python3 -m http.server "$PORT"
+python3 -m http.server "$PORT"
