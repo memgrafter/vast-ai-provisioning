@@ -89,8 +89,8 @@ Plotly.newPlot('chart-gbhr',tr('dph_per_gbhr'),{...th(),height:500,margin:{t:30,
 // Violin
 const vg={};D.forEach(r=>{if(r.dph_total!=null){const k=r.profile_name;if(!vg[k])vg[k]=[];vg[k].push(r.dph_total)}});
 const sk=Object.keys(vg).sort((a,b)=>{const ma=vg[a].reduce((s,v)=>s+v,0)/vg[a].length;const mb=vg[b].reduce((s,v)=>s+v,0)/vg[b].length;return ma-mb});
-const vt=sk.map((p,i)=>{const label=p.length>35?p.slice(0,32)+'...':p;return{x:vg[p].map(()=>label),y:vg[p],type:'violin',name:label,box:{visible:true},meanline:{visible:true},line:{color:P[i%P.length]},fillcolor:P[i%P.length]+'44'}});
-Plotly.newPlot('chart-violin',vt,{...th(),height:500,margin:{t:30,r:20,b:180,l:60},xaxis:{title:'Profile',tickangle:-45,automargin:true},yaxis:{title:'dph_total ($/hr)',tickprefix:'$'}},def);
+const vt=sk.map((p,i)=>({y:vg[p],type:'violin',name:p.length>35?p.slice(0,32)+'...':p,box:{visible:true},meanline:{visible:true},line:{color:P[i%P.length]},fillcolor:P[i%P.length]+'44'}));
+Plotly.newPlot('chart-violin',vt,{...th(),height:500,margin:{t:30,r:20,b:100,l:60},yaxis:{title:'dph_total ($/hr)',tickprefix:'$'}},def);
 </script>
 </body>
 </html>
