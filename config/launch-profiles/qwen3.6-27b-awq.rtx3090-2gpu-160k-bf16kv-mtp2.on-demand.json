@@ -1,8 +1,8 @@
 {
   "gpu_profile": "config/gpu-profiles/qwen-27b-awq-rtx3090-2gpu.json",
   "market": "on-demand",
-  "model_profile": "config/models/qwen3.6-27b-awq.rtx3090-2gpu-160k-fp8kv-mtp2.json",
-  "name": "qwen3.6-27b-awq.rtx3090-2gpu-160k-fp8kv-mtp2.on-demand",
+  "model_profile": "config/models/qwen3.6-27b-awq.rtx3090-2gpu-160k-bf16kv-mtp2.json",
+  "name": "qwen3.6-27b-awq.rtx3090-2gpu-160k-bf16kv-mtp2.on-demand",
   "network": {
     "max_internet_down_cost_per_tb": 8.0,
     "max_internet_up_cost_per_tb": 10.0,
@@ -13,7 +13,7 @@
     "max_dph_total": 0.6,
     "target_first_test_minutes": 60
   },
-  "purpose": "On-demand 2x RTX 3090 experimental single-user 160K profile for Qwen3.6 27B AWQ with awq_marlin, fp8 KV, and Qwen3 Next MTP n=2",
+  "purpose": "On-demand 2x RTX 3090 experimental single-user 160K profile for Qwen3.6 27B AWQ with awq_marlin, bfloat16 KV, and Qwen3 Next MTP n=2",
   "reliability": {
     "min_reliability2": 0.96,
     "require_verified": true
@@ -52,6 +52,6 @@
   },
   "template": {
     "hash_id": "4a43cd3e9c367b0f84abd182abbcf506",
-    "name": "vLLM_R2_Qwen3_6_27B_AWQ_RTX3090_2GPU_160K_FP8KV_MTP2_V2"
+    "name": "vLLM_R2_Qwen3_6_27B_AWQ_RTX3090_2GPU_160K_BF16KV_MTP2_V2"
   }
 }
