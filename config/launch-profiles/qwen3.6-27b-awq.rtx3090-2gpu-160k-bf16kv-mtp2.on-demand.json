@@ -35,7 +35,8 @@
       70185,
       104433,
       95152,
-      42967
+      42967,
+      125042
     ],
     "search_no_default": true,
     "sort": "preferred_machine_then_effective_cost_then_reliability"
@@ -51,7 +52,7 @@
     "min_disk_bw": 180
   },
   "template": {
-    "hash_id": "4a43cd3e9c367b0f84abd182abbcf506",
+    "hash_id": "ff24aaed85cd36253fd4aedf15c241dd",
     "name": "vLLM_R2_Qwen3_6_27B_AWQ_RTX3090_2GPU_160K_BF16KV_MTP2_V2"
   }
 }
