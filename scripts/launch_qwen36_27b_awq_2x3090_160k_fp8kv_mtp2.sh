@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch the validated Qwen3.6 35B A3B AWQ vLLM profile on Vast 2x RTX 3090.
+# Launch the validated Qwen3.6 27B AWQ vLLM profile on Vast 2x RTX 3090.
 #
 # Defaults are intentionally prompt-guarded by scripts/select_and_launch.py:
 #   - prints current infra/cost first
@@ -7,9 +7,9 @@
 #   - asks again before launch
 #
 # Common usage:
-#   scripts/launch_qwen36_27b_awq_2x3090_160k_mtp2.sh --check-only --top 3
-#   scripts/launch_qwen36_27b_awq_2x3090_160k_mtp2.sh
-#   scripts/launch_qwen36_27b_awq_2x3090_160k_mtp2.sh --yes
+#   scripts/launch_qwen36_27b_awq_2x3090_160k_fp8kv_mtp2.sh --check-only --top 3
+#   scripts/launch_qwen36_27b_awq_2x3090_160k_fp8kv_mtp2.sh
+#   scripts/launch_qwen36_27b_awq_2x3090_160k_fp8kv_mtp2.sh --yes
 #
 # Pass any extra scripts/select_and_launch.py flags after these wrapper options.
 
@@ -19,11 +19,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
-PROFILE="config/launch-profiles/qwen3.6-35b-a3b-awq-cyankiwi.rtx3090-2gpu-160k-bf16kv-mtp2-c8.on-demand.json"
+PROFILE="config/launch-profiles/qwen3.6-27b-awq.rtx3090-2gpu-160k-fp8kv-mtp2.on-demand.json"
 
 usage() {
   cat <<'EOF'
-Usage: scripts/launch_qwen36_27b_awq_2x3090_160k_mtp2.sh [wrapper-options] [-- select_and_launch.py options]
+Usage: scripts/launch_qwen36_27b_awq_2x3090_160k_fp8kv_mtp2.sh [wrapper-options] [-- select_and_launch.py options]
 
 Wrapper options:
   --check-only                  Read-only offer/cost check; do not launch.
@@ -41,24 +41,25 @@ Wrapper options:
   --help                        Show this help.
 
 Profile:
-  config/launch-profiles/qwen3.6-35b-a3b-awq-cyankiwi.rtx3090-2gpu-160k-bf16kv-mtp2-c8.on-demand.json
+  config/launch-profiles/qwen3.6-27b-awq.rtx3090-2gpu-160k-fp8kv-mtp2.on-demand.json
 
 Profile summary:
   Runtime: vLLM
-  Model:   cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit
+  Model:   QuantTrio/Qwen3.6-27B-AWQ
   GPUs:    2x RTX 3090
   Context: 160k
   TP:      2
-  KV:      bfloat16
+  Quant:   awq_marlin
+  KV:      fp8
   MTP:     qwen3_next_mtp, 2 speculative tokens
   Verified: required
   Cost cap from profile: max_dph_total <= 0.60
 
 Examples:
-  scripts/launch_qwen36_27b_awq_2x3090_160k_mtp2.sh --check-only --top 3
-  scripts/launch_qwen36_27b_awq_2x3090_160k_mtp2.sh --check-only --relax-policy '{"storage":{"min_disk_bw":300}}'
-  scripts/launch_qwen36_27b_awq_2x3090_160k_mtp2.sh
-  scripts/launch_qwen36_27b_awq_2x3090_160k_mtp2.sh --yes --monitor-timeout 2400
+  scripts/launch_qwen36_27b_awq_2x3090_160k_fp8kv_mtp2.sh --check-only --top 3
+  scripts/launch_qwen36_27b_awq_2x3090_160k_fp8kv_mtp2.sh --check-only --relax-policy '{"storage":{"min_disk_bw":300}}'
+  scripts/launch_qwen36_27b_awq_2x3090_160k_fp8kv_mtp2.sh
+  scripts/launch_qwen36_27b_awq_2x3090_160k_fp8kv_mtp2.sh --yes --monitor-timeout 2400
 EOF
 }
 
