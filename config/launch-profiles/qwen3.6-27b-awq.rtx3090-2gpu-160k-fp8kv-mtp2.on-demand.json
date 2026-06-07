@@ -10,13 +10,13 @@
     "min_inet_down": 128
   },
   "pricing": {
-    "max_dph_total": 0.5,
+    "max_dph_total": 0.6,
     "target_first_test_minutes": 60
   },
   "purpose": "On-demand 2x RTX 3090 experimental single-user 160K profile for Qwen3.6 27B AWQ with awq_marlin, fp8 KV, and Qwen3 Next MTP n=2",
   "reliability": {
     "min_reliability2": 0.96,
-    "require_verified": false
+    "require_verified": true
   },
   "selection": {
     "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
@@ -27,7 +27,9 @@
       103173,
       55942,
       57625,
-      128017
+      126690,
+      128017,
+      136750
     ],
     "preferred_machine_ids": [
       70185,
@@ -49,7 +51,7 @@
     "min_disk_bw": 180
   },
   "template": {
-    "hash_id": "904d1d91aeda4e32575a3263744aa9d4",
-    "name": "vLLM_R2_Qwen3_6_27B_AWQ_RTX3090_2GPU_160K_FP8KV_MTP2"
+    "hash_id": "4a43cd3e9c367b0f84abd182abbcf506",
+    "name": "vLLM_R2_Qwen3_6_27B_AWQ_RTX3090_2GPU_160K_FP8KV_MTP2_V2"
   }
 }
