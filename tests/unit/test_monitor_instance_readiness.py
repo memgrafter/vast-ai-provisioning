@@ -1,6 +1,6 @@
 import unittest
 
-from scripts.monitor_instance_readiness import analyze_logs, build_arg_parser, port_url
+from scripts.monitor_instance_readiness import analyze_logs, build_arg_parser, direct_port_gate_ready, parse_container_ports, port_url
 
 IMAGE = "vastai/vllm:v0.22.0-cuda-13.0"
 
@@ -76,6 +76,22 @@ class ParserTests(unittest.TestCase):
     def test_container_port_can_be_overridden(self):
         args = build_arg_parser().parse_args(["123", "--container-port", "8080/tcp"])
         self.assertEqual(args.container_port, "8080/tcp")
+
+    def test_early_port_check_defaults_to_portal_and_vllm_ports(self):
+        args = build_arg_parser().parse_args(["123"])
+        self.assertEqual(args.early_port_container_ports, "1111/tcp,8000/tcp,8080/tcp")
+        self.assertFalse(args.no_early_port_check)
+
+
+class DirectPortGateTests(unittest.TestCase):
+    def test_direct_port_gate_waits_for_caddy_or_tunnel_start(self):
+        self.assertFalse(direct_port_gate_ready("Provisioning model from R2"))
+        self.assertTrue(direct_port_gate_ready("Starting Caddy..."))
+        self.assertTrue(direct_port_gate_ready("caddy entered RUNNING state"))
+        self.assertTrue(direct_port_gate_ready("Default Tunnel started for vLLM API (http://localhost:8000) - https://example.trycloudflare.com"))
+
+    def test_parse_container_ports_normalizes_tcp_suffix(self):
+        self.assertEqual(parse_container_ports("1111,8000/tcp"), ["1111/tcp", "8000/tcp"])
 
 
 class PortUrlTests(unittest.TestCase):

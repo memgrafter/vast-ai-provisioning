@@ -1,0 +1,10 @@
+{
+  "name": "qwen-35b-a3b-awq-cyankiwi-rtx3090-2gpu",
+  "preferred_gpu_name": "RTX 3090",
+  "allowed_gpu_names": [
+    "RTX 3090"
+  ],
+  "num_gpus": 2,
+  "min_gpu_total_ram_mb": 47000,
+  "min_cuda_max_good": 13.0
+}

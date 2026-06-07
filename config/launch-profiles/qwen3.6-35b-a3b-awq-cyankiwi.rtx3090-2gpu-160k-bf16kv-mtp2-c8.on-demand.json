@@ -1,0 +1,58 @@
+{
+  "gpu_profile": "config/gpu-profiles/qwen-35b-a3b-awq-cyankiwi-rtx3090-2gpu.json",
+  "market": "on-demand",
+  "model_profile": "config/models/qwen3.6-35b-a3b-awq-cyankiwi.rtx3090-2gpu-160k-bf16kv-mtp2-c8.json",
+  "name": "qwen3.6-35b-a3b-awq-cyankiwi.rtx3090-2gpu-160k-bf16kv-mtp2-c8.on-demand",
+  "network": {
+    "max_internet_down_cost_per_tb": 8.0,
+    "max_internet_up_cost_per_tb": 10.0,
+    "min_direct_port_count": 1,
+    "min_inet_down": 128
+  },
+  "pricing": {
+    "max_dph_total": 0.5,
+    "target_first_test_minutes": 60
+  },
+  "purpose": "On-demand 2x RTX 3090 experimental 160K full-context multi-stream profile for cyankiwi Qwen3.6 35B A3B AWQ 4bit with awq_marlin, bfloat16 KV, concurrency 8, and Qwen3 Next MTP n=2",
+  "reliability": {
+    "min_reliability2": 0.96,
+    "require_verified": false
+  },
+  "selection": {
+    "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
+    "geo_query": "geolocation not in [CN]",
+    "greylisted_machine_ids": [
+      28229,
+      92165,
+      103173,
+      55942,
+      57625,
+      128017,
+      136750,
+      126690,
+      53477
+    ],
+    "preferred_machine_ids": [
+      70185,
+      104433,
+      95152,
+      42967
+    ],
+    "search_no_default": true,
+    "sort": "preferred_machine_then_effective_cost_then_reliability"
+  },
+  "spot": {
+    "enabled_after_smoke_test": false,
+    "max_bid_dph": 0
+  },
+  "storage": {
+    "disk_gb": 40,
+    "max_storage_cost_per_gb_hour": 0.0003,
+    "max_storage_total_cost_per_hour": 0.06,
+    "min_disk_bw": 180
+  },
+  "template": {
+    "hash_id": "216d715d58be58c70e4006df72b772f5",
+    "name": "vLLM_R2_Qwen3_6_35B_A3B_AWQ_Cyankiwi_RTX3090_2GPU_160K_BF16KV_MTP2_C8"
+  }
+}

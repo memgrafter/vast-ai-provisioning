@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -141,6 +142,40 @@ def port_url(info: dict[str, Any], container_port: str = "8000/tcp") -> str | No
     return None
 
 
+def direct_port_gate_ready(logs: str) -> bool:
+    """Return true once the image's portal/Caddy layer should be listening.
+
+    vLLM can take many minutes to sync/load. The Vast direct mapped ports should
+    become reachable much earlier, once Caddy/portal starts. Testing here catches
+    broken host port forwarding before spending time on R2 speed tests/model sync.
+    """
+    return any(
+        marker in logs
+        for marker in (
+            "Starting Caddy...",
+            "caddy entered RUNNING state",
+            "Automatic login is enabled via the 'Open' button",
+            "Default Tunnel started for vLLM API",
+        )
+    )
+
+
+def normalize_container_port(value: str) -> str:
+    value = value.strip()
+    if not value:
+        raise ValueError("empty container port")
+    if "/" not in value:
+        return f"{value}/tcp"
+    return value
+
+
+def parse_container_ports(value: str) -> list[str]:
+    ports = [normalize_container_port(item) for item in value.split(",") if item.strip()]
+    if not ports:
+        raise ValueError("at least one container port is required")
+    return ports
+
+
 def api_status(url: str, api_key: str | None, timeout: int) -> tuple[int, str]:
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     request = Request(url, headers=headers)
@@ -157,6 +192,55 @@ def api_status(url: str, api_key: str | None, timeout: int) -> tuple[int, str]:
         return 0, str(exc.reason)
     except Exception as exc:
         return 0, f"{type(exc).__name__}: {exc}"
+
+
+def direct_port_mapping_probe(info: dict[str, Any], container_ports: list[str], timeout: int) -> dict[str, Any]:
+    results = []
+    for container_port in container_ports:
+        base_url = port_url(info, container_port)
+        if not base_url:
+            results.append(
+                {
+                    "container_port": container_port,
+                    "base_url": None,
+                    "reachable": False,
+                    "status": None,
+                    "body": "no public port mapping",
+                }
+            )
+            continue
+        path = "/health" if container_port == "8000/tcp" else "/"
+        status, body = api_status(f"{base_url}{path}", api_key=None, timeout=timeout)
+        results.append(
+            {
+                "container_port": container_port,
+                "base_url": base_url,
+                "path": path,
+                "reachable": status > 0,
+                "status": status,
+                "body": body[:200],
+            }
+        )
+    return {
+        "reachable": any(result["reachable"] for result in results),
+        "results": results,
+    }
+
+
+def compact_direct_port_probe(probe: dict[str, Any]) -> str:
+    parts = []
+    for result in probe.get("results") or []:
+        base_url = result.get("base_url") or "n/a"
+        host_port = "n/a"
+        try:
+            parsed = urlparse(base_url)
+            host_port = str(parsed.port or "n/a")
+        except Exception:
+            pass
+        status = result.get("status")
+        status_text = str(status) if status is not None else "none"
+        parts.append(f"{result.get('container_port')}->{host_port}:http={status_text}")
+    return ", ".join(parts)
 
 
 def external_api_probe(info: dict[str, Any], api_key: str | None, container_port: str, timeout: int) -> dict[str, Any]:
@@ -248,6 +332,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--external-api-timeout", type=int, default=5, help="seconds for each external API probe request")
     parser.add_argument("--external-api-deadline", type=int, default=240, help="seconds to allow public API to respond after local vLLM readiness")
     parser.add_argument("--container-port", default="8000/tcp", help="container port mapping to probe for the public vLLM API")
+    parser.add_argument(
+        "--early-port-container-ports",
+        default="1111/tcp,8000/tcp,8080/tcp",
+        help="comma-separated container ports to probe once Caddy/portal starts; any HTTP response proves direct Vast port mapping works",
+    )
+    parser.add_argument("--early-port-timeout", type=int, default=2, help="seconds for each early direct-port probe request")
+    parser.add_argument(
+        "--early-port-deadline",
+        type=int,
+        default=60,
+        help="seconds to allow direct mapped ports to respond after Caddy/portal readiness before recommending termination",
+    )
+    parser.add_argument("--no-early-port-check", action="store_true", help="disable early direct mapped-port reachability checks")
     parser.add_argument("--skip-external-api-check", action="store_true", help="old behavior: exit once logs indicate local vLLM readiness")
     return parser
 
@@ -258,6 +355,9 @@ def main() -> int:
     vast = VastAI()
     api_key = None if args.no_auth else os.environ.get(args.api_key_env)
     start = time.time()
+    early_port_container_ports = parse_container_ports(args.early_port_container_ports)
+    early_port_ready_since: float | None = None
+    last_direct_port_probe: dict[str, Any] | None = None
     local_api_ready_since: float | None = None
     last_external_probe: dict[str, Any] | None = None
     last_recommendation = "WAIT"
@@ -296,6 +396,21 @@ def main() -> int:
                 args.image_deadline,
                 args.provisioning_deadline,
             )
+            if not args.no_early_port_check and not signals.api_ready and direct_port_gate_ready(logs):
+                if early_port_ready_since is None:
+                    early_port_ready_since = time.time()
+                last_direct_port_probe = direct_port_mapping_probe(info, early_port_container_ports, args.early_port_timeout)
+                age = time.time() - early_port_ready_since
+                print(
+                    "  direct_ports: "
+                    f"reachable={str(bool(last_direct_port_probe.get('reachable'))).lower()} "
+                    f"caddy_ready_age={age:.0f}s "
+                    f"{compact_direct_port_probe(last_direct_port_probe)}",
+                    flush=True,
+                )
+                if not last_direct_port_probe.get("reachable") and age >= args.early_port_deadline:
+                    last_recommendation = "TERMINATE_DIRECT_PORTS_UNREACHABLE"
+                    print(f"  recommendation: {last_recommendation}", flush=True)
             if signals.api_ready:
                 if local_api_ready_since is None:
                     local_api_ready_since = time.time()
@@ -318,6 +433,8 @@ def main() -> int:
                         last_recommendation = "TERMINATE_EXTERNAL_API_UNREACHABLE"
             try:
                 details = {"signals": signals.__dict__}
+                if last_direct_port_probe is not None:
+                    details["direct_port_probe"] = last_direct_port_probe
                 if last_external_probe is not None:
                     details["external_api_probe"] = last_external_probe
                 launch_ledger.update_instance_snapshot(
