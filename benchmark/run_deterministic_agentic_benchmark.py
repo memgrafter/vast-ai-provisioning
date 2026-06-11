@@ -571,14 +571,33 @@ def resolve_model_settings(models_config: Path, model_id: str) -> dict[str, Any]
     return None
 
 
-def apply_reasoning_payload_settings(payload: dict[str, Any], model_settings: dict[str, Any] | None) -> None:
-    if not model_settings or not model_settings.get("reasoning"):
+def thinking_enabled_for_request(model_settings: dict[str, Any] | None, thinking: str) -> bool:
+    if thinking == "on":
+        return True
+    if thinking == "off":
+        return False
+    return bool(model_settings and model_settings.get("reasoning"))
+
+
+def apply_reasoning_payload_settings(payload: dict[str, Any], model_settings: dict[str, Any] | None, thinking: str) -> None:
+    if not model_settings:
         return
     thinking_format = (model_settings.get("compat") or {}).get("thinkingFormat")
+    enabled = thinking_enabled_for_request(model_settings, thinking)
     if thinking_format == "qwen-chat-template":
-        payload.setdefault("chat_template_kwargs", {})["enable_thinking"] = True
+        kwargs = payload.setdefault("chat_template_kwargs", {})
+        kwargs["enable_thinking"] = enabled
+        # Qwen3.x templates emit an assistant `<think>...</think>` preamble at
+        # generation time. Preserve it when replaying assistant turns so
+        # llama.cpp's rendered prompt remains token-identical to saved KV.
+        kwargs["preserve_thinking"] = True
     elif thinking_format == "qwen":
-        payload["enable_thinking"] = True
+        payload["enable_thinking"] = enabled
+    elif enabled:
+        if thinking_format == "deepseek":
+            payload["thinking"] = {"type": "enabled"}
+        # Other provider-specific thinking formats are intentionally left to
+        # the client/model config used outside this direct HTTP benchmark.
 
 
 
@@ -880,7 +899,7 @@ def run(args: argparse.Namespace) -> int:
             "stream": False,
             "metadata": {"run_id": run_id, "request_id": request_id, "task_id": problem["id"]},
         }
-        apply_reasoning_payload_settings(payload, model_settings)
+        apply_reasoning_payload_settings(payload, model_settings, args.thinking)
         if args.dry_run:
             content = ""
             status = 0
@@ -975,6 +994,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--pi-models-config", default=".pi/models.json", help="Pi models config used to resolve maxTokens when --max-tokens is omitted")
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--top-p", type=float, default=1.0)
+    parser.add_argument("--thinking", choices=["auto", "on", "off"], default="auto", help="Thinking mode for direct requests. auto follows model config; qwen-chat-template also preserves replayed thinking wrappers.")
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--backend-log", default=None, help="Optional local llama.cpp backend log to correlate after each request")
     parser.add_argument("--proxy-log", default=None, help="Optional local proxy log to summarize in the report")
