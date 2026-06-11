@@ -224,6 +224,30 @@ def extract_content(response_body: bytes) -> tuple[str, dict[str, Any] | None, d
     return content, usage, data
 
 
+def assistant_replay_message(response_data: dict[str, Any]) -> dict[str, str] | None:
+    choices = response_data.get("choices") if isinstance(response_data, dict) else None
+    if not choices:
+        return None
+    choice = choices[0]
+    if not isinstance(choice, dict):
+        return None
+    message = choice.get("message") or {}
+    if not isinstance(message, dict):
+        return None
+    replay: dict[str, str] = {"role": "assistant"}
+    content = stringify_response_part(message.get("content") or choice.get("text") or "")
+    reasoning = stringify_response_part(message.get("reasoning_content") or message.get("reasoning") or "")
+    if content:
+        replay["content"] = content
+    else:
+        replay["content"] = ""
+    if reasoning:
+        replay["reasoning_content"] = reasoning
+    if not content and not reasoning:
+        return None
+    return replay
+
+
 def usage_token_count(usage: dict[str, Any] | None, key: str) -> int | None:
     if not isinstance(usage, dict):
         return None
@@ -900,6 +924,7 @@ def run(args: argparse.Namespace) -> int:
             "metadata": {"run_id": run_id, "request_id": request_id, "task_id": problem["id"]},
         }
         apply_reasoning_payload_settings(payload, model_settings, args.thinking)
+        assistant_message_for_replay: dict[str, str] | None = None
         if args.dry_run:
             content = ""
             status = 0
@@ -916,6 +941,7 @@ def run(args: argparse.Namespace) -> int:
             response_path.write_bytes(raw)
             try:
                 content, usage, _data = extract_content(raw)
+                assistant_message_for_replay = assistant_replay_message(_data)
             except Exception as exc:
                 content = ""
                 usage = None
@@ -951,9 +977,9 @@ def run(args: argparse.Namespace) -> int:
             completion_tokens=completion_tokens,
             backend=backend,
         )
-        if args.accumulate_context and status == 200 and content:
+        if args.accumulate_context and status == 200 and assistant_message_for_replay is not None:
             conversation_history.append(current_user_message)
-            conversation_history.append({"role": "assistant", "content": content})
+            conversation_history.append(assistant_message_for_replay)
         results.append(result)
         with jsonl_path.open("a", encoding="utf-8") as handle:
             row = asdict(result)
