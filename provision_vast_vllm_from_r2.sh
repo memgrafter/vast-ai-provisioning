@@ -197,6 +197,15 @@ VLLM_LANGUAGE_MODEL_ONLY="${VLLM_LANGUAGE_MODEL_ONLY:-false}"
 VLLM_SPECULATIVE_CONFIG_B64="${VLLM_SPECULATIVE_CONFIG_B64:-}"
 VLLM_EXTRA_ARGS="${VLLM_EXTRA_ARGS:-}"
 VLLM_USE_FASTOKENS="${VLLM_USE_FASTOKENS:-0}"
+# Optional DFlash2 speculative-decoding drafter (block-diffusion, external drafter).
+# When set, the drafter repo is synced from R2 to DRAFTER_DIR and the vLLM install
+# is patched in place with the DFlash2 backport (vLLM PR #52816) before serve.
+# The template must also pass --speculative-config '{"method":"dflash",...}' via
+# VLLM_SPECULATIVE_CONFIG_B64 and --attention-backend FLASH_ATTN via VLLM_EXTRA_ARGS.
+# DFlash2 requires a bf16 target lm_head and bfloat16 KV cache.
+PATCH_DFLASH2="${PATCH_DFLASH2:-0}"
+DRAFTER_DIR="${DRAFTER_DIR:-}"
+DRAFTER_PREFIX="${DRAFTER_PREFIX:-}"
 
 if [ "$VLLM_TENSOR_PARALLEL_SIZE" = "auto" ]; then
   detected_gpu_count="$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | awk 'NF {count++} END {print count+0}')"
@@ -478,6 +487,71 @@ else
   fi
   echo "Sync finished at: $(date -Is)"
   echo "Synced bytes: $(du -sh "$MODEL_DIR" | awk '{print $1}')"
+fi
+
+# Optional DFlash2 drafter sync (only when PATCH_DFLASH2=1). Mirrors the main model
+# sync: rclone when available, aws s3 sync fallback, cheap readiness check first.
+if [ "$PATCH_DFLASH2" = "1" ]; then
+  if [ -z "$DRAFTER_DIR" ] || [ -z "$DRAFTER_PREFIX" ]; then
+    echo "ERROR: PATCH_DFLASH2=1 requires DRAFTER_DIR and DRAFTER_PREFIX" >&2
+    exit 1
+  fi
+  mkdir -p "$DRAFTER_DIR"
+  if [ -f "$DRAFTER_DIR/config.json" ] && find "$DRAFTER_DIR" -maxdepth 1 -name '*.safetensors' | grep -q .; then
+    echo "Drafter appears present at $DRAFTER_DIR; skipping R2 sync"
+  else
+    echo "Syncing drafter s3://$R2_BUCKET/$DRAFTER_PREFIX -> $DRAFTER_DIR"
+    if [ "$R2_TRANSFER_TOOL" = "rclone" ] && command -v rclone >/dev/null 2>&1; then
+      rclone copy "r2:$R2_BUCKET/$DRAFTER_PREFIX" "$DRAFTER_DIR" \
+        --config "$rclone_config" \
+        --transfers "$RCLONE_TRANSFERS" \
+        --checkers "$RCLONE_CHECKERS" \
+        --multi-thread-cutoff 1M \
+        --multi-thread-streams "$RCLONE_MULTI_THREAD_STREAMS" \
+        --stats "$RCLONE_STATS_INTERVAL" \
+        --stats-one-line
+    else
+      aws s3 sync "s3://$R2_BUCKET/$DRAFTER_PREFIX" "$DRAFTER_DIR" \
+        --endpoint-url "$R2_ENDPOINT"
+    fi
+    echo "Drafter synced: $(du -sh "$DRAFTER_DIR" | awk '{print $1}')"
+  fi
+
+  # Apply the DFlash2 backport to the installed vLLM in place. Idempotent: skips
+  # when the new model file already exists (cached-container restarts). Refuses to
+  # boot on patch failure so a drifted image cannot silently serve unpatched.
+  # Patch provenance: vLLM PR #52816 (merged 2026-08-21), backported to v0.27.1 by
+  # syv-ai, vendored by noonghunna/club-3090 (models/qwen3.8-27b/vllm/patches/
+  # vllm-dflash2-backport). Verified clean against vllm/vllm-openai:v0.27.1.
+  vllm_pkg="$(python3 -c 'import vllm, os; print(os.path.dirname(vllm.__file__))')"
+  if [ -f "$vllm_pkg/model_executor/models/qwen3_dflash2.py" ]; then
+    echo "DFlash2 backport already present in $vllm_pkg; skipping"
+  else
+    echo "Applying DFlash2 backport (vLLM PR #52816) to $vllm_pkg"
+    # This script is fetched standalone from the public repo, so the patch files
+    # live in the repo, not next to the script. Derive the base URL from
+    # PROVISIONING_SCRIPT (same branch the script came from); fall back to main.
+    patch_base="${PROVISIONING_SCRIPT%/provision_vast_vllm_from_r2.sh}scripts/patches"
+    patch_base="${patch_base:-https://raw.githubusercontent.com/memgrafter/vast-ai-provisioning/main/scripts/patches}"
+    patch_dir="/tmp/dflash2-patches"
+    mkdir -p "$patch_dir"
+    for f in dflash2-backport.patch dflash2_topk_compat.py _check_applied.py; do
+      curl -fsSL "$patch_base/$f" -o "$patch_dir/$f" || {
+        echo "ERROR: failed to fetch DFlash2 patch file $f from $patch_base" >&2
+        exit 1
+      }
+    done
+    python3 "$patch_dir/dflash2_topk_compat.py" "$vllm_pkg" || exit 1
+    if ! ( cd "$vllm_pkg" && patch -p1 --forward --batch < "$patch_dir/dflash2-backport.patch" ); then
+      echo "ERROR: DFlash2 backport failed to apply to $vllm_pkg — refusing to boot" >&2
+      exit 1
+    fi
+    if ! python3 "$patch_dir/_check_applied.py" "$patch_dir/dflash2-backport.patch" "$vllm_pkg"; then
+      echo "ERROR: DFlash2 backport content check failed in $vllm_pkg — refusing to boot" >&2
+      exit 1
+    fi
+    echo "DFlash2 backport applied and verified"
+  fi
 fi
 
 # Ensure vLLM will use the local model path even if the template forgot to set it.
