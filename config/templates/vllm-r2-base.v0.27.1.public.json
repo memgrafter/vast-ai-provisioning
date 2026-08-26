@@ -1,0 +1,59 @@
+{
+  "name": "vLLM_R2_Model_PUBLIC_TEMPLATE_V0_27_1",
+  "image": "vastai/vllm",
+  "tag": "v0.27.1-cuda-13.0",
+  "private": true,
+  "runtype": "args",
+  "onstart": "entrypoint.sh",
+  "ssh_direct": true,
+  "jup_direct": true,
+  "readme_visible": false,
+  "recommended_disk_space": 32.0,
+  "desc": "Public-safe vLLM R2 template skeleton pinned to vLLM v0.27.1 (latest). Build model-specific templates from profiles; do not add secrets.",
+  "env_map": {
+    "OPEN_BUTTON_PORT": "1111",
+    "JUPYTER_DIR": "/",
+    "DATA_DIRECTORY": "/workspace/",
+    "PORTAL_CONFIG": "localhost:1111:11111:/:Instance Portal|localhost:7860:17860:/:Model UI|localhost:8000:18000:/docs:vLLM API|localhost:8265:28265:/:Ray Dashboard|localhost:8080:18080:/:Jupyter|localhost:8080:8080:/terminals/1:Jupyter Terminal",
+    "VLLM_ARGS": "",
+    "VLLM_USE_FASTOKENS": "1",
+    "AUTO_PARALLEL": "false",
+    "AUTH_EXCLUDE": "8000",
+    "RAY_ADDRESS": "127.0.0.1",
+    "RAY_ARGS": "--head --port 6379  --dashboard-host 127.0.0.1 --dashboard-port 28265",
+    "R2_BUCKET": "<your-r2-bucket>",
+    "R2_ENDPOINT": "https://<account-id>.r2.cloudflarestorage.com",
+    "AWS_DEFAULT_REGION": "auto",
+    "R2_SPEED_TEST_WARN_ONLY": "false",
+    "PROVISIONING_SCRIPT": "https://raw.githubusercontent.com/memgrafter/vast-ai-provisioning/main/provision_vast_vllm_from_r2.sh"
+  },
+  "ports": {
+    "1111": "1111",
+    "7860": "7860",
+    "8080": "8080",
+    "8000": "8000",
+    "8265": "8265"
+  },
+  "extra_filters": {
+    "compute_cap": {
+      "gte": 750
+    },
+    "cuda_max_good": {
+      "gte": 13
+    },
+    "gpu_total_ram": {
+      "gt": 21000
+    },
+    "num_gpus": {
+      "in": [
+        "1",
+        "2",
+        "4",
+        "8",
+        "16",
+        "32",
+        "64"
+      ]
+    }
+  }
+}

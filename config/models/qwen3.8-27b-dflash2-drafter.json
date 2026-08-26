@@ -1,0 +1,10 @@
+{
+  "name": "qwen3.8-27b-dflash2-drafter",
+  "hf_model_id": "incoai/Qwen3.8-27B-DFlash2",
+  "r2_prefix": "incoai/Qwen3.8-27B-DFlash2",
+  "model_dir": "/workspace/models/incoai/Qwen3.8-27B-DFlash2",
+  "served_model_name": null,
+  "quantization": "bf16",
+  "expected_model_download_tb": 0.004,
+  "notes": "DFlash2 block-diffusion draft model for Qwen/Qwen3.8-27B (z-lab/Inco AI). NOT a served model — transfer profile only, used to mirror the drafter to R2 for speculative decoding (--speculative-config method=dflash). 1.92B params BF16, single ~3.9 GB safetensors. Shares the target's embeddings/lm_head; target lm_head must be bf16. Pairs with the vllm#52816 DFlash2 backport on vLLM v0.27.1."
+}

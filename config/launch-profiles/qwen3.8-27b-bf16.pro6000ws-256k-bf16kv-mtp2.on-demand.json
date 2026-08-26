@@ -1,0 +1,50 @@
+{
+  "gpu_profile": "config/gpu-profiles/rtx-pro-6000-ws-1gpu-90gb.json",
+  "market": "on-demand",
+  "model_profile": "config/models/qwen3.8-27b-bf16.pro6000ws-256k-bf16kv-mtp2.json",
+  "name": "qwen3.8-27b-bf16.pro6000ws-256k-bf16kv-mtp2.on-demand",
+  "network": {
+    "max_internet_down_cost_per_tb": 8.0,
+    "max_internet_up_cost_per_tb": 10.0,
+    "min_direct_port_count": 1,
+    "min_inet_down": 128
+  },
+  "pricing": {
+    "max_dph_total": 1.5,
+    "target_first_test_minutes": 60
+  },
+  "purpose": "On-demand RTX PRO 6000 WS profile for full-precision Qwen3.8 27B (bfloat16 model + bfloat16 KV cache), 256K context, MTP n=2, vLLM v0.27.1",
+  "reliability": {
+    "min_reliability2": 0.96,
+    "require_verified": true
+  },
+  "selection": {
+    "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
+    "geo_query": "geolocation not in [CN]",
+    "greylisted_machine_ids": [
+      8357,
+      125312
+    ],
+    "preferred_machine_ids": [
+      14398,
+      51218,
+      51703
+    ],
+    "search_no_default": true,
+    "sort": "preferred_machine_then_effective_cost_then_reliability"
+  },
+  "spot": {
+    "enabled_after_smoke_test": false,
+    "max_bid_dph": 0
+  },
+  "storage": {
+    "disk_gb": 100,
+    "max_storage_cost_per_gb_hour": 0.0003,
+    "max_storage_total_cost_per_hour": 0.03,
+    "min_disk_bw": 500
+  },
+  "template": {
+    "hash_id": "c2f7de79afbc499ce9e1326d01d8db61",
+    "name": "vLLM_R2_Qwen3_8_27B_BF16_PRO6000WS_256K_BF16KV_MTP2"
+  }
+}

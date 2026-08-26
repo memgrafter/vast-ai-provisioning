@@ -1,0 +1,38 @@
+{
+  "name": "qwen3.8-27b-bf16-pro6000ws-256k-bf16kv-mtp2",
+  "hf_model_id": "Qwen/Qwen3.8-27B",
+  "r2_prefix": "Qwen/Qwen3.8-27B",
+  "model_dir": "/workspace/models/Qwen/Qwen3.8-27B",
+  "served_model_name": "qwen3.8-27b-bf16-pro6000ws-256k-bf16kv-mtp2",
+  "quantization": "bf16",
+  "expected_model_download_tb": 0.056,
+  "vllm": {
+    "dtype": "bfloat16",
+    "max_model_len": 262144,
+    "gpu_memory_utilization": 0.92,
+    "kv_cache_dtype": "bfloat16",
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "max_num_seqs": 8,
+    "max_num_batched_tokens": 16384,
+    "max_new_tokens": 32768,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "qwen3_coder",
+    "reasoning_parser": "qwen3",
+    "enable_prefix_caching": true,
+    "language_model_only": true,
+    "speculative_config": {
+      "method": "mtp",
+      "num_speculative_tokens": 2
+    },
+    "extra_args": [],
+    "force_quantization": null
+  },
+  "notes": "Full-precision RTX PRO 6000 WS profile for Qwen/Qwen3.8-27B: bfloat16 model weights and bfloat16 KV cache (no quantization), 256K context, MTP n=2 (method 'mtp' per vLLM >=0.21 naming), copied from the tested qwen3.6 pro6000ws bf16kv method (max_num_seqs=8, max_num_batched_tokens=16384, max_new_tokens=32768, prefix caching). gpu_memory_utilization 0.92 matches the 2026-08-15 RTX PRO 6000 benchmark stack. Known tradeoff (measured on this GPU): MTP gives ~2.3x decode at short context but collapses to ~16-19 t/s at 200K context vs ~40-44 t/s without MTP. max_num_seqs=8 keeps the GDN linear-attention state cache well under bounds (default 1024 overflows). Repo is ~55.6 GB BF16 (18 shards) and must be transferred with --stream; do not stage locally. Runs on vLLM v0.27.1 image; requires transformers >= 5.8.0 (verify at smoke test).",
+  "provisioning": {
+    "r2_speed_test_warn_only": false,
+    "r2_speed_test_min_mbps": 16
+  }
+}
