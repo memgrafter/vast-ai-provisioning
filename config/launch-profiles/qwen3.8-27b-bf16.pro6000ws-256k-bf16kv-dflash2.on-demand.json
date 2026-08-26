@@ -23,7 +23,8 @@
     "geo_query": "geolocation not in [CN]",
     "greylisted_machine_ids": [
       8357,
-      125312
+      125312,
+      111175
     ],
     "preferred_machine_ids": [
       14398,
