@@ -523,7 +523,38 @@ if [ "$PATCH_DFLASH2" = "1" ]; then
   # Patch provenance: vLLM PR #52816 (merged 2026-08-21), backported to v0.27.1 by
   # syv-ai, vendored by noonghunna/club-3090 (models/qwen3.8-27b/vllm/patches/
   # vllm-dflash2-backport). Verified clean against vllm/vllm-openai:v0.27.1.
-  vllm_pkg="$(python3 -c 'import vllm, os; print(os.path.dirname(vllm.__file__))')"
+  # Resolve the installed vllm package dir. The vastai image's default python3
+  # may not be the interpreter carrying vllm (conda/venv layouts), so probe a
+  # list of candidate interpreters first, then fall back to a filesystem search.
+  # Any python3 works for the shim/content-check (pure file ops); only the
+  # package location matters for the patch.
+  vllm_pkg=""
+  for cand in python3 python /usr/local/bin/python3 /usr/local/bin/python /usr/bin/python3 /opt/conda/bin/python /opt/venv/bin/python python3.12 python3.11 python3.10; do
+    if command -v "$cand" >/dev/null 2>&1; then
+      candidate_pkg="$("$cand" -c 'import vllm, os; print(os.path.dirname(vllm.__file__))' 2>/dev/null)" || candidate_pkg=""
+      if [ -n "$candidate_pkg" ]; then
+        vllm_pkg="$candidate_pkg"
+        echo "Resolved vllm package via $cand: $vllm_pkg"
+        break
+      fi
+    fi
+  done
+  if [ -z "$vllm_pkg" ]; then
+    echo "No candidate interpreter imports vllm; searching filesystem"
+    vllm_pkg="$(find / -maxdepth 8 -type d -name vllm \
+      \( -path "*site-packages*" -o -path "*dist-packages*" \) 2>/dev/null | head -1)"
+  fi
+  if [ -z "$vllm_pkg" ] || [ ! -d "$vllm_pkg" ]; then
+    echo "ERROR: could not locate an installed vllm package to patch" >&2
+    exit 1
+  fi
+  if ! command -v patch >/dev/null 2>&1; then
+    echo "patch not found; installing via apt-get"
+    if ! (apt-get update -qq && apt-get install -y -qq patch); then
+      echo "ERROR: patch is not installed and apt-get install failed" >&2
+      exit 1
+    fi
+  fi
   if [ -f "$vllm_pkg/model_executor/models/qwen3_dflash2.py" ]; then
     echo "DFlash2 backport already present in $vllm_pkg; skipping"
   else
