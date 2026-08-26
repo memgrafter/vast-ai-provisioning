@@ -302,7 +302,12 @@ def print_status(instance_id: int, info: dict[str, Any], signals: Signals, elaps
         recommendation = "WAIT_VLLM_LOADING"
     elif signals.r2_sync_started or signals.provisioning_started:
         recommendation = "WAIT_R2_OR_PROVISIONING"
-    elif elapsed >= provisioning_deadline and not signals.provisioning_started:
+    # NO_PROVISIONING is gated on the image being CACHED: when the image had to be
+    # pulled (the common cold-start case), "no provisioning" is expected until the
+    # pull finishes, so that phase is budgeted by SLOW_IMAGE_PULL instead. The vLLM
+    # image is ~9.8GB, so a cold pull + container boot + provisioning start can take
+    # many minutes; the pull budget must cover all of that, not just the script.
+    elif signals.image_cached and elapsed >= provisioning_deadline and not signals.provisioning_started:
         recommendation = "CONSIDER_TERMINATE_NO_PROVISIONING"
     elif elapsed >= image_deadline and effective_image_pull_seen and not signals.image_cached:
         recommendation = "CONSIDER_TERMINATE_SLOW_IMAGE_PULL"
@@ -322,8 +327,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tail", type=int, default=1000, help="log tail lines")
     parser.add_argument("--timeout", type=int, default=1800, help="overall monitor timeout seconds")
     parser.add_argument("--image", default=DEFAULT_MODEL, help="image tag to detect cached-image line")
-    parser.add_argument("--image-deadline", type=int, default=180, help="seconds before warning on slow image pull")
-    parser.add_argument("--provisioning-deadline", type=int, default=300, help="seconds before warning if provisioning has not started")
+    parser.add_argument("--image-deadline", type=int, default=900,
+                        help="seconds before terminating on slow image pull; sized for the ~9.8GB vLLM image cold pull + container boot + provisioning start")
+    parser.add_argument("--provisioning-deadline", type=int, default=600,
+                        help="seconds before terminating if provisioning has not started (cached-image case, where the pull is not the constraint)")
     parser.add_argument("--once", action="store_true", help="single poll then exit")
     parser.add_argument("--destroy-on-fail", action="store_true", help="destroy instance when a terminate recommendation is reached")
     parser.add_argument("--yes-destroy", action="store_true", help="required with --destroy-on-fail to actually destroy without prompting")

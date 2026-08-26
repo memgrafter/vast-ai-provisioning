@@ -640,6 +640,9 @@ def main() -> None:
     parser.add_argument("--no-destroy-on-monitor-fail", action="store_true", help="leave failed monitored launches running")
     parser.add_argument("--monitor-timeout", type=int, default=1800, help="readiness monitor timeout seconds")
     parser.add_argument("--monitor-interval", type=int, default=15, help="readiness monitor poll interval seconds")
+    parser.add_argument("--monitor-image", default=None,
+                        help="image:tag for the readiness monitor's cached-image detection; "
+                             "defaults to the rendered template's image if present")
     parser.add_argument("--no-smoke-chat", action="store_true", help="do not print endpoint and run one chat completion after readiness")
     parser.add_argument("--smoke-message", default="Say hello in one short sentence.", help="message for post-launch chat smoke")
     parser.add_argument("--smoke-timeout", type=int, default=60, help="max seconds for post-launch models/chat smoke polling")
@@ -758,6 +761,20 @@ def main() -> None:
             "--interval",
             str(args.monitor_interval),
         ]
+        # Pass the real image:tag so the monitor's cached-image detection (and the
+        # pull-phase vs no-provisioning deadline split) works for this launch.
+        monitor_image = args.monitor_image
+        if not monitor_image:
+            rendered = Path("state/templates") / f"{args.launch_profile.stem}.rendered.json"
+            if rendered.exists():
+                try:
+                    rt = load_json(rendered)
+                    if rt.get("image") and rt.get("tag"):
+                        monitor_image = f"{rt['image']}:{rt['tag']}"
+                except Exception as exc:
+                    print(f"WARN: could not read rendered template for monitor image: {exc}", file=sys.stderr)
+        if monitor_image:
+            monitor_cmd += ["--image", monitor_image]
         if not args.no_destroy_on_monitor_fail:
             monitor_cmd += ["--destroy-on-fail", "--yes-destroy"]
         print("Starting readiness monitor:")
