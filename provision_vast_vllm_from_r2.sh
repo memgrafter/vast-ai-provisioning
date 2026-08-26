@@ -529,7 +529,7 @@ if [ "$PATCH_DFLASH2" = "1" ]; then
   # Any python3 works for the shim/content-check (pure file ops); only the
   # package location matters for the patch.
   vllm_pkg=""
-  for cand in python3 python /usr/local/bin/python3 /usr/local/bin/python /usr/bin/python3 /opt/conda/bin/python /opt/venv/bin/python python3.12 python3.11 python3.10; do
+  for cand in python3 python /usr/local/bin/python3 /usr/local/bin/python /usr/bin/python3 /opt/conda/bin/python /opt/venv/bin/python /venv/main/bin/python python3.12 python3.11 python3.10; do
     if command -v "$cand" >/dev/null 2>&1; then
       candidate_pkg="$("$cand" -c 'import vllm, os; print(os.path.dirname(vllm.__file__))' 2>/dev/null)" || candidate_pkg=""
       if [ -n "$candidate_pkg" ]; then
