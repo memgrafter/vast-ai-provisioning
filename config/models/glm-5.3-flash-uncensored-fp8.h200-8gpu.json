@@ -1,0 +1,35 @@
+{
+  "name": "glm-5.3-flash-uncensored-fp8.h200-8gpu",
+  "hf_model_id": "orcarouter/GLM-5.3-Flash-Uncensored-FP8",
+  "r2_prefix": "orcarouter/GLM-5.3-Flash-Uncensored-FP8",
+  "model_dir": "/workspace/models/orcarouter/GLM-5.3-Flash-Uncensored-FP8",
+  "served_model_name": "glm-5.3-flash-uncensored-fp8",
+  "quantization": "fp8",
+  "expected_model_download_tb": 0.328,
+  "vllm": {
+    "dtype": "auto",
+    "max_model_len": 524288,
+    "gpu_memory_utilization": 0.95,
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "tensor_parallel_size": 8,
+    "kv_cache_dtype": "fp8",
+    "max_num_seqs": 64,
+    "max_num_batched_tokens": 8192,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "glm47",
+    "reasoning_parser": "glm45",
+    "enable_prefix_caching": true,
+    "speculative_config": {
+      "method": "mtp",
+      "num_speculative_tokens": 5
+    },
+    "extra_args": [
+      "--no-enable-flashinfer-autotune"
+    ],
+    "force_quantization": null
+  },
+  "notes": "8x H200 (1.13 TB) TP8 — official vLLM recipe target for GLM-5.3-Flash. FP8 abliterated GLM-5.3-Flash (glm5_next, 321B/18B-active MoE, multimodal, 1M native ctx). 305.8 GiB weights leave ~800 GB for KV cache; 512K context at 64 concurrent seqs (raise max_num_seqs / max_model_len toward 1M as headroom allows). Requires vllm/vllm-openai:glm53-flash image (vLLM 0.29+, FlashInfer >=0.6.17)."
+}

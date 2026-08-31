@@ -1,0 +1,35 @@
+{
+  "name": "glm-5.3-flash-uncensored-fp8.h200-4gpu",
+  "hf_model_id": "orcarouter/GLM-5.3-Flash-Uncensored-FP8",
+  "r2_prefix": "orcarouter/GLM-5.3-Flash-Uncensored-FP8",
+  "model_dir": "/workspace/models/orcarouter/GLM-5.3-Flash-Uncensored-FP8",
+  "served_model_name": "glm-5.3-flash-uncensored-fp8",
+  "quantization": "fp8",
+  "expected_model_download_tb": 0.328,
+  "vllm": {
+    "dtype": "auto",
+    "max_model_len": 262144,
+    "gpu_memory_utilization": 0.95,
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "tensor_parallel_size": 4,
+    "kv_cache_dtype": "fp8",
+    "max_num_seqs": 128,
+    "max_num_batched_tokens": 8192,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "glm47",
+    "reasoning_parser": "glm45",
+    "enable_prefix_caching": true,
+    "speculative_config": {
+      "method": "mtp",
+      "num_speculative_tokens": 5
+    },
+    "extra_args": [
+      "--no-enable-flashinfer-autotune"
+    ],
+    "force_quantization": null
+  },
+  "notes": "4x H200 (564 GB) TP4. FP8 abliterated GLM-5.3-Flash (glm5_next, 321B/18B-active MoE, multimodal, 1M native ctx). 305.8 GiB weights leave ~236 GB for KV cache; 262K context at 128 concurrent seqs. Requires vllm/vllm-openai:glm53-flash image (vLLM 0.29+, FlashInfer >=0.6.17)."
+}

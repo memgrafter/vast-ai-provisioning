@@ -1,0 +1,10 @@
+{
+  "name": "b200-4gpu-720gb",
+  "preferred_gpu_name": "B200",
+  "allowed_gpu_names": [
+    "B200"
+  ],
+  "num_gpus": 4,
+  "min_gpu_total_ram_mb": 170000,
+  "min_cuda_max_good": 13.0
+}

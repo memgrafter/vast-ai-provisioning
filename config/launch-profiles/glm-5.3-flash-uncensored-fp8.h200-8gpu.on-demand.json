@@ -1,0 +1,40 @@
+{
+  "gpu_profile": "config/gpu-profiles/h200-8gpu-1128gb.json",
+  "market": "on-demand",
+  "model_profile": "config/models/glm-5.3-flash-uncensored-fp8.h200-8gpu.json",
+  "name": "glm-5.3-flash-uncensored-fp8.h200-8gpu.on-demand",
+  "network": {
+    "max_internet_down_cost_per_tb": 10.0,
+    "max_internet_up_cost_per_tb": 12.0,
+    "min_direct_port_count": 1,
+    "min_inet_down": 700
+  },
+  "pricing": {
+    "max_dph_total": 24.0,
+    "target_first_test_minutes": 90
+  },
+  "purpose": "GLM-5.3-Flash FP8 (321B/18B-active MoE, multimodal) on 8x H200, TP8, 512K context (1M feasible with tuning), MTP spec decode, glm47 tools + glm45 reasoning. Official vLLM recipe target. vllm/vllm-openai:glm53-flash image.",
+  "reliability": {
+    "min_reliability2": 0.96,
+    "require_verified": true
+  },
+  "selection": {
+    "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
+    "geo_query": "geolocation not in [CN]",
+    "search_no_default": true
+  },
+  "spot": {
+    "enabled_after_smoke_test": false,
+    "max_bid_dph": 0
+  },
+  "storage": {
+    "disk_gb": 500,
+    "max_storage_cost_per_gb_hour": 0.0003,
+    "max_storage_total_cost_per_hour": 0.15,
+    "min_disk_bw": 500
+  },
+  "template": {
+    "hash_id": "",
+    "name": "vLLM_GLM53_Flash_Uncensored_FP8_H200_8GPU"
+  }
+}

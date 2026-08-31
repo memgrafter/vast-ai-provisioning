@@ -1,0 +1,28 @@
+{
+  "name": "vLLM_GLM53_Flash_PUBLIC_TEMPLATE",
+  "image": "vllm/vllm-openai",
+  "tag": "glm53-flash",
+  "private": true,
+  "runtype": "ssh",
+  "onstart": "#!/bin/bash\nset -euo pipefail\necho \"[glm53] onstart: provisioning model from R2, then vllm serve\"\nPROV=\"${PROVISIONING_SCRIPT:?PROVISIONING_SCRIPT env is required}\"\ncurl -fsSL \"$PROV\" -o /opt/glm53-provision.sh\nchmod +x /opt/glm53-provision.sh\nexec /opt/glm53-provision.sh\n",
+  "ssh_direct": true,
+  "jup_direct": false,
+  "readme_visible": false,
+  "recommended_disk_space": 500.0,
+  "desc": "GLM-5.3-Flash (glm5_next, 321B/18B-active MoE, multimodal) FP8 on vllm/vllm-openai:glm53-flash. R2-synced model, TP sized per launch profile. Requires vLLM 0.29+ / FlashInfer >=0.6.17 (bundled in the image).",
+  "env_map": {
+    "R2_BUCKET": "<your-r2-bucket>",
+    "R2_ENDPOINT": "https://<account-id>.r2.cloudflarestorage.com",
+    "AWS_DEFAULT_REGION": "auto",
+    "PROVISIONING_SCRIPT": "https://raw.githubusercontent.com/memgrafter/vast-ai-provisioning/main/provision_glm53_flash_from_r2.sh"
+  },
+  "ports": {
+    "8000": "8000"
+  },
+  "extra_filters": {
+    "compute_cap": {"gte": 900},
+    "cuda_max_good": {"gte": 13},
+    "gpu_total_ram": {"gt": 21000},
+    "num_gpus": {"in": ["4", "8"]}
+  }
+}
