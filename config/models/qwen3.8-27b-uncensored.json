@@ -1,0 +1,25 @@
+{
+  "name": "qwen3.8-27b-uncensored",
+  "hf_model_id": "orcarouter/Qwen3.8-27B-Uncensored",
+  "r2_prefix": "orcarouter/Qwen3.8-27B-Uncensored",
+  "model_dir": "/workspace/models/orcarouter/Qwen3.8-27B-Uncensored",
+  "served_model_name": "qwen3.8-27b-uncensored",
+  "quantization": "bf16",
+  "expected_model_download_tb": 0.056,
+  "vllm": {
+    "dtype": "bfloat16",
+    "max_model_len": 160000,
+    "gpu_memory_utilization": 0.9,
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "max_num_seqs": 64,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "qwen3_coder",
+    "reasoning_parser": "qwen3",
+    "extra_args": [],
+    "force_quantization": null
+  },
+  "notes": "Full-precision (bf16) uncensored checkpoint from orcarouter (18 safetensors shards, ~51.8 GiB). Gated repo; HF_TOKEN in env.modeltransfer has access. Mirrored to R2 with the parallel streaming transfer (no local staging). The FP8 variant is orcarouter/Qwen3.8-27B-Uncensored-FP8 (see qwen3.8-27b-uncensored-fp8.json)."
+}

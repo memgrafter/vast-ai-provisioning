@@ -1,0 +1,25 @@
+{
+  "name": "qwen3.8-27b-obliterated",
+  "hf_model_id": "OBLITERATUS/Qwen3.8-27B-OBLITERATED",
+  "r2_prefix": "OBLITERATUS/Qwen3.8-27B-OBLITERATED",
+  "model_dir": "/workspace/models/OBLITERATUS/Qwen3.8-27B-OBLITERATED",
+  "served_model_name": "qwen3.8-27b-obliterated",
+  "quantization": "bf16",
+  "expected_model_download_tb": 0.056,
+  "vllm": {
+    "dtype": "bfloat16",
+    "max_model_len": 160000,
+    "gpu_memory_utilization": 0.9,
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "max_num_seqs": 64,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "qwen3_coder",
+    "reasoning_parser": "qwen3",
+    "extra_args": [],
+    "force_quantization": null
+  },
+  "notes": "Abliterated bf16 checkpoint from OBLITERATUS (18 root safetensors shards, ~55.7 GB). Only the root safetensors + metadata are mirrored to R2; the repo's GGUF quantizations and mlx-4bit/mlx-8bit variants are intentionally excluded (transfer with --exclude '*.gguf' --exclude 'mlx-4bit/*' --exclude 'mlx-8bit/*')."
+}
