@@ -562,7 +562,7 @@ if [ "$PATCH_DFLASH2" = "1" ]; then
     # This script is fetched standalone from the public repo, so the patch files
     # live in the repo, not next to the script. Derive the base URL from
     # PROVISIONING_SCRIPT (same branch the script came from); fall back to main.
-    patch_base="${PROVISIONING_SCRIPT%/provision_vast_vllm_from_r2.sh}scripts/patches"
+    patch_base="${PROVISIONING_SCRIPT%/provision_vast_vllm_from_r2.sh}/scripts/patches"
     patch_base="${patch_base:-https://raw.githubusercontent.com/memgrafter/vast-ai-provisioning/main/scripts/patches}"
     patch_dir="/tmp/dflash2-patches"
     mkdir -p "$patch_dir"
