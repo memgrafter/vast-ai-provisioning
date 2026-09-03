@@ -34,7 +34,7 @@ Example (20k-step burnin against a 256k-ctx vLLM):
     python3 context_ladder_bench.py --base http://HOST:PORT --model qwen3.8-27b \
         --tok-per-round 20000 --target-ctx 262144 --out ladder-20k.jsonl
 """
-import argparse, json, re, sys, time, urllib.request
+import argparse, json, os, re, sys, time, urllib.request
 
 DEFAULT_BASE  = "http://127.0.0.1:8095"
 DEFAULT_MODEL = "qwen3.8-27b"
@@ -106,12 +106,15 @@ def settled_snapshot(base, label, settle=0.25, tries=3):
         time.sleep(settle)
     raise RuntimeError(f"{label}: counters never settled after {tries} reads — engine busy or another writer")
 
-def call_decode(base, model, messages, max_tokens=12000, timeout=1800):
+def call_decode(base, model, messages, max_tokens=12000, timeout=1800, api_key=None):
     body = {"model": model, "messages": messages, "max_tokens": max_tokens,
             "temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0.0, "stream": False}
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
     req = urllib.request.Request(base.rstrip("/") + "/v1/chat/completions",
                                  data=json.dumps(body).encode(),
-                                 headers={"Content-Type": "application/json"})
+                                 headers=headers)
     t0 = time.time()
     payload = json.loads(urllib.request.urlopen(req, timeout=timeout).read().decode())
     wall = time.time() - t0
@@ -120,13 +123,13 @@ def call_decode(base, model, messages, max_tokens=12000, timeout=1800):
             "prompt_tokens": u.get("prompt_tokens", 0),
             "wall": wall}
 
-def measured_round(base, model, system, user_content, rnd, max_tokens=12000):
+def measured_round(base, model, system, user_content, rnd, max_tokens=12000, api_key=None):
     """Single request with BOTH prefill and generation windows measured independently.
     user_content should already include the TOK*n history + decode prompt."""
     c_start, s_start = settled_snapshot(base, f"r{rnd}.start")
     messages = [{"role": "system", "content": system}] + [{"role": "user", "content": user_content}]
     try:
-        r = call_decode(base, model, messages, max_tokens=max_tokens)
+        r = call_decode(base, model, messages, max_tokens=max_tokens, api_key=api_key)
     except Exception as e:
         return {"round": rnd, "skip": f"request failed: {repr(e)}"}
     c_end, s_end = settled_snapshot(base, f"r{rnd}.end")
@@ -164,7 +167,7 @@ def measured_round(base, model, system, user_content, rnd, max_tokens=12000):
     }
 
 def run_ladder(base, model, n_solutions, min_tokens, max_tokens,
-               tok_per_round, target_ctx, rounds, out):
+               tok_per_round, target_ctx, rounds, out, api_key=None):
     out_fh = open(out, "a") if out else sys.stdout
 
     nonce = f"anchor-{int(time.time())}"
@@ -175,7 +178,7 @@ def run_ladder(base, model, n_solutions, min_tokens, max_tokens,
     results = []
 
     r0_user = decode.format(round=0)
-    r0 = measured_round(base, model, system, r0_user, rnd="P0", max_tokens=max_tokens)
+    r0 = measured_round(base, model, system, r0_user, rnd="P0", max_tokens=max_tokens, api_key=api_key)
     results.append(r0)
     out_fh.write(json.dumps(r0) + "\n"); out_fh.flush()
 
@@ -190,7 +193,7 @@ def run_ladder(base, model, n_solutions, min_tokens, max_tokens,
         hist = hist + "TOK " * tok_per_round
         rnd += 1
         user = hist + decode.format(round=ctx_target)
-        rr = measured_round(base, model, system, user, rnd=f"P{ctx_target}", max_tokens=max_tokens)
+        rr = measured_round(base, model, system, user, rnd=f"P{ctx_target}", max_tokens=max_tokens, api_key=api_key)
         results.append(rr)
         out_fh.write(json.dumps(rr) + "\n"); out_fh.flush()
         if rr.get("skip"):
@@ -215,10 +218,12 @@ def main():
     ap.add_argument("--target-ctx", type=int, default=262144, help="max_model_len ceiling")
     ap.add_argument("--rounds", type=int, default=10, help="max ladder rounds")
     ap.add_argument("--out", default=None, help="append JSON lines to file (default stdout)")
+    ap.add_argument("--api-key", default=os.environ.get("VLLM_API_KEY", ""),
+                    help="API key for the endpoint (default: $VLLM_API_KEY)")
     args = ap.parse_args()
 
     run_ladder(args.base, args.model, args.n_sol, args.min_tokens, args.max_tokens,
-               args.tok_per_round, args.target_ctx, args.rounds, args.out)
+               args.tok_per_round, args.target_ctx, args.rounds, args.out, api_key=args.api_key)
 
 if __name__ == "__main__":
     main()
