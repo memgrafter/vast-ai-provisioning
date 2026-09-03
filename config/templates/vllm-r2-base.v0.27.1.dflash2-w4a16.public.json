@@ -1,0 +1,62 @@
+{
+  "desc": "Public-safe vLLM R2 template skeleton pinned to vLLM v0.27.1 (latest) with the DFlash2 backport applied at boot by the provisioning script (PATCH_DFLASH2=1) and the syvai W4A16 DFlash2 drafter (syvai/Qwen3.8-27B-DFlash2-W4A16, ~1.28 GB). Build model-specific templates from profiles; do not add secrets.",
+  "env_map": {
+    "AUTH_EXCLUDE": "8000",
+    "AUTO_PARALLEL": "false",
+    "AWS_DEFAULT_REGION": "auto",
+    "DATA_DIRECTORY": "/workspace/",
+    "DRAFTER_DIR": "/workspace/models/syvai/Qwen3.8-27B-DFlash2-W4A16",
+    "DRAFTER_PREFIX": "syvai/Qwen3.8-27B-DFlash2-W4A16",
+    "JUPYTER_DIR": "/",
+    "OPEN_BUTTON_PORT": "1111",
+    "PATCH_DFLASH2": "1",
+    "PORTAL_CONFIG": "localhost:1111:11111:/:Instance Portal|localhost:7860:17860:/:Model UI|localhost:8000:18000:/docs:vLLM API|localhost:8265:28265:/:Ray Dashboard|localhost:8080:18080:/:Jupyter|localhost:8080:8080:/terminals/1:Jupyter Terminal",
+    "PROVISIONING_SCRIPT": "https://raw.githubusercontent.com/memgrafter/vast-ai-provisioning/main/provision_vast_vllm_from_r2.sh",
+    "R2_BUCKET": "<your-r2-bucket>",
+    "R2_ENDPOINT": "https://<account-id>.r2.cloudflarestorage.com",
+    "R2_SPEED_TEST_WARN_ONLY": "false",
+    "RAY_ADDRESS": "127.0.0.1",
+    "RAY_ARGS": "--head --port 6379  --dashboard-host 127.0.0.1 --dashboard-port 28265",
+    "VLLM_ARGS": "",
+    "VLLM_USE_FASTOKENS": "1"
+  },
+  "extra_filters": {
+    "compute_cap": {
+      "gte": 750
+    },
+    "cuda_max_good": {
+      "gte": 13
+    },
+    "gpu_total_ram": {
+      "gt": 21000
+    },
+    "num_gpus": {
+      "in": [
+        "1",
+        "2",
+        "4",
+        "8",
+        "16",
+        "32",
+        "64"
+      ]
+    }
+  },
+  "image": "vastai/vllm",
+  "jup_direct": true,
+  "name": "vLLM_R2_Model_PUBLIC_TEMPLATE_V0_27_1_DFLASH2_W4A16",
+  "onstart": "entrypoint.sh",
+  "ports": {
+    "1111": "1111",
+    "7860": "7860",
+    "8000": "8000",
+    "8080": "8080",
+    "8265": "8265"
+  },
+  "private": true,
+  "readme_visible": false,
+  "recommended_disk_space": 32.0,
+  "runtype": "args",
+  "ssh_direct": true,
+  "tag": "v0.27.1-cuda-13.0"
+}

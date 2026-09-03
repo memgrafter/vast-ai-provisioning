@@ -1,0 +1,45 @@
+{
+  "name": "qwen3.8-27b-fp8-pro6000ws-256k-bf16kv-dflash2",
+  "hf_model_id": "Qwen/Qwen3.8-27B-FP8",
+  "r2_prefix": "Qwen/Qwen3.8-27B-FP8",
+  "model_dir": "/workspace/models/Qwen/Qwen3.8-27B-FP8",
+  "served_model_name": "qwen3.8-27b-fp8-pro6000ws-256k-bf16kv-dflash2",
+  "quantization": "fp8",
+  "expected_model_download_tb": 0.031,
+  "vllm": {
+    "dtype": "auto",
+    "max_model_len": 262144,
+    "gpu_memory_utilization": 0.92,
+    "kv_cache_dtype": "bfloat16",
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "max_num_seqs": 8,
+    "max_num_batched_tokens": 16384,
+    "max_new_tokens": 32768,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "qwen3_coder",
+    "reasoning_parser": "qwen3",
+    "enable_prefix_caching": true,
+    "language_model_only": true,
+    "speculative_config": {
+      "method": "dflash",
+      "model": "/workspace/models/syvai/Qwen3.8-27B-DFlash2-W4A16",
+      "num_speculative_tokens": 7
+    },
+    "extra_args": [
+      "--attention-backend",
+      "FLASH_ATTN",
+      "--no-async-scheduling",
+      "--long-prefill-token-threshold",
+      "4096"
+    ],
+    "force_quantization": null
+  },
+  "notes": "FP8-weights RTX PRO 6000 WS profile for Qwen/Qwen3.8-27B-FP8 (official Qwen FP8, ~29 GiB; lm_head + embed bf16): official FP8 weights (dtype=auto, vLLM auto-detects fp8 from the checkpoint) with bfloat16 KV cache (DFlash2's non-causal block attention REQUIRES bf16 KV + FLASH_ATTN — NOT fp8 KV), 256K context, DFlash2 external block-diffusion drafter n=7. Drafter = syvai/Qwen3.8-27B-DFlash2-W4A16 (club-3090 ULTRAFAST/SUPERMAX drafter, ~1.28 GB W4A16 — ~2.7 GB less read/step than the bf16 incoai drafter). vLLM v0.27.1 with the DFlash2 backport (PR #52816) applied at boot. --no-async-scheduling mitigates the open vllm#50021 GDN spec-decode crash; --long-prefill-token-threshold 4096 is the club-3090 HOL flag. Rationale vs the bf16 sibling: fp8 weights halve the per-step weight read on the bandwidth-bound single GPU (the decode ceiling), which is the lever the 4x3090-fp8 ~100 TPS reference exploits. DFlash2 requirements met: bf16 target lm_head, bfloat16 KV, FLASH_ATTN backend. Repo is ~30.9 GB FP8 (81 objects) + 1.28 GB W4A16 drafter, both on R2. Requires transformers >= 5.8.0 (verify at smoke test).",
+  "provisioning": {
+    "r2_speed_test_warn_only": false,
+    "r2_speed_test_min_mbps": 16
+  }
+}

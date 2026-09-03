@@ -1,0 +1,10 @@
+{
+  "name": "qwen3.8-27b-dflash2-w4a16-drafter",
+  "hf_model_id": "syvai/Qwen3.8-27B-DFlash2-W4A16",
+  "r2_prefix": "syvai/Qwen3.8-27B-DFlash2-W4A16",
+  "model_dir": "/workspace/models/syvai/Qwen3.8-27B-DFlash2-W4A16",
+  "served_model_name": null,
+  "quantization": "w4a16",
+  "expected_model_download_tb": 0.0013,
+  "notes": "DFlash2 block-diffusion draft model for Qwen3.8-27B, requantized W4A16 by syv-ai (the club-3090 ULTRAFAST/SUPERMAX drafter). NOT a served model — transfer profile only, used to mirror the drafter to R2 for speculative decoding (--speculative-config method=dflash). ~1.28 GB single safetensors (vs the bf16 incoai drafter's ~3.9 GB) — ~2.7 GB less read/step. Shares the target's embeddings/lm_head; target lm_head must be bf16. Pairs with the vllm#52816 DFlash2 backport on vLLM v0.27.1."
+}
