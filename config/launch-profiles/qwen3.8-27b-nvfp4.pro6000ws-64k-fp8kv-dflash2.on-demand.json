@@ -1,0 +1,51 @@
+{
+  "gpu_profile": "config/gpu-profiles/rtx-pro-6000-ws-1gpu-90gb.json",
+  "market": "on-demand",
+  "model_profile": "config/models/qwen3.8-27b-nvfp4.pro6000ws-64k-fp8kv-dflash2.json",
+  "name": "qwen3.8-27b-nvfp4.pro6000ws-64k-fp8kv-dflash2.on-demand",
+  "network": {
+    "max_internet_down_cost_per_tb": 8.0,
+    "max_internet_up_cost_per_tb": 10.0,
+    "min_direct_port_count": 1,
+    "min_inet_down": 128
+  },
+  "pricing": {
+    "max_dph_total": 1.5,
+    "target_first_test_minutes": 60
+  },
+  "purpose": "On-demand RTX PRO 6000 WS profile for Qwen3.8 27B NVFP4 (RadixArk/Qwen3.8-27B-NVFP4, modelopt MIXED W4A4/W8A8, ~20.4 GiB) + fp8_e4m3 KV cache, 64K context, built-in MTP drafter n=3. The club-3090 'ultrafast' tier \u2014 its real case is Blackwell sm_120+ where the 4-bit-activation groups run on FP4 tensor cores. NVFP4 KV is not usable on consumer Blackwell (trtllm-gen FP4 FMHA is sm_100/103 only), so KV stays fp8. MTP (not DFlash2) => plain v0.27.1 template, no DFlash2 backport. The last remaining decode lever vs the 4x3090-fp8 ~100 TPS reference.",
+  "reliability": {
+    "min_reliability2": 0.96,
+    "require_verified": true
+  },
+  "selection": {
+    "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
+    "geo_query": "geolocation not in [CN]",
+    "greylisted_machine_ids": [
+      8357,
+      125312,
+      111175
+    ],
+    "preferred_machine_ids": [
+      14398,
+      51218,
+      51703
+    ],
+    "search_no_default": true,
+    "sort": "preferred_machine_then_effective_cost_then_reliability"
+  },
+  "spot": {
+    "enabled_after_smoke_test": false,
+    "max_bid_dph": 0
+  },
+  "storage": {
+    "disk_gb": 100,
+    "max_storage_cost_per_gb_hour": 0.0003,
+    "max_storage_total_cost_per_hour": 0.03,
+    "min_disk_bw": 500
+  },
+  "template": {
+    "hash_id": "745fd5d91ff7764ba0b6cd76cbd52b4f",
+    "name": "vLLM_R2_Qwen3_8_27B_NVFP4_PRO6000WS_64K_FP8KV_DFLASH2"
+  }
+}

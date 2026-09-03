@@ -1,0 +1,43 @@
+{
+  "name": "qwen3.8-27b-nvfp4.pro6000ws-64k-fp8kv-dflash2",
+  "hf_model_id": "RadixArk/Qwen3.8-27B-NVFP4",
+  "r2_prefix": "RadixArk/Qwen3.8-27B-NVFP4",
+  "model_dir": "/workspace/models/RadixArk/Qwen3.8-27B-NVFP4",
+  "served_model_name": "qwen3.8-27b-nvfp4-pro6000ws-64k-fp8kv-dflash2",
+  "quantization": "nvfp4",
+  "expected_model_download_tb": 0.022,
+  "vllm": {
+    "dtype": "bfloat16",
+    "max_model_len": 65536,
+    "gpu_memory_utilization": 0.85,
+    "kv_cache_dtype": "fp8_e4m3",
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "max_num_seqs": 8,
+    "max_num_batched_tokens": 16384,
+    "max_new_tokens": 32768,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "qwen3_coder",
+    "reasoning_parser": "qwen3",
+    "enable_prefix_caching": true,
+    "language_model_only": true,
+    "speculative_config": {
+      "method": "dflash",
+      "model": "/workspace/models/syvai/Qwen3.8-27B-DFlash2-W4A16",
+      "num_speculative_tokens": 7
+    },
+    "extra_args": [
+      "--no-async-scheduling",
+      "--long-prefill-token-threshold",
+      "4096"
+    ],
+    "force_quantization": "modelopt"
+  },
+  "notes": "NVFP4 'ultrafast' RTX PRO 6000 WS profile for RadixArk/Qwen3.8-27B-NVFP4 (modelopt MIXED: 193 module groups W4-float/A4-float + 208 W8-float/A8-float; 20.44 GiB / 21.95 GB, 22 files). The club-3090 single/dual NVFP4 tier, whose real case is Blackwell sm_120+ \u2014 the A4 4-bit-activation groups execute on FP4 tensor cores (on Ampere it is only a Marlin W4A16 compatibility path). Served with --quantization modelopt (force_quantization), dtype bfloat16, KV fp8_e4m3 (NVFP4 KV is NOT usable on consumer Blackwell \u2014 trtllm-gen FP4 FMHA is sm_100/103 only, vLLM #43562 \u2014 so KV stays fp8). DFlash2 W4A16 drafter n=7 (syvai, method=dflash) \u2014 the drafter shares the target lm_head, which MUST be bf16. RISK: the RadixArk checkpoint has lm_head quantized to NVFP4 (ignore list only covers the MTP head), so DFlash2 may fail at boot; if so, revert speculative_config to {method:mtp,num_speculative_tokens:3} (the MTP head IS bf16) \u2014 that is the club-3090 pairing. max_model_len 65536 + gpu_memory_utilization 0.85 match the club-3090 single-card NVFP4 VRAM floor; 96 GB leaves headroom. --no-async-scheduling mitigates the open vllm#50021 GDN spec-decode crash. Checkpoint on R2 at RadixArk/Qwen3.8-27B-NVFP4 (transfer profile qwen3.8-27b-nvfp4-radixark.json).",
+  "provisioning": {
+    "r2_speed_test_warn_only": false,
+    "r2_speed_test_min_mbps": 16
+  }
+}

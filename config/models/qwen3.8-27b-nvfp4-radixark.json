@@ -1,0 +1,10 @@
+{
+  "name": "qwen3.8-27b-nvfp4-radixark",
+  "hf_model_id": "RadixArk/Qwen3.8-27B-NVFP4",
+  "r2_prefix": "RadixArk/Qwen3.8-27B-NVFP4",
+  "model_dir": "/workspace/models/RadixArk/Qwen3.8-27B-NVFP4",
+  "served_model_name": null,
+  "quantization": "nvfp4",
+  "expected_model_download_tb": 0.022,
+  "notes": "RadixArk NVFP4 (modelopt MIXED precision: 193 module groups W4-float/A4-float + 208 W8-float/A8-float, ignore=2; built-in MTP head mtp_num_hidden_layers=1). 20.44 GiB / 21.95 GB decimal, 22 files. The club-3090 single/dual NVFP4 'ultrafast' tier. Its real case is Blackwell sm_120+ (the A4 4-bit-activation groups execute on FP4 tensor cores; on Ampere it is only a Marlin W4A16 compatibility path). Served with --quantization modelopt, dtype bfloat16, KV fp8_e4m3 (NVFP4 KV is NOT usable on consumer Blackwell — trtllm-gen FP4 FMHA is sm_100/103 only, vLLM #43562), built-in MTP drafter n=3. Transfer profile only (mirrors the checkpoint to R2); see qwen3.8-27b-nvfp4.pro6000ws-*.json for the serving profile."
+}
