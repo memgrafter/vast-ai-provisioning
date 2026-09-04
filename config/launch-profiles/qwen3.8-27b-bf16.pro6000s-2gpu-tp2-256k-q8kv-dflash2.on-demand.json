@@ -1,0 +1,46 @@
+{
+  "gpu_profile": "config/gpu-profiles/rtx-pro-6000-2gpu-180gb.json",
+  "market": "on-demand",
+  "model_profile": "config/models/qwen3.8-27b-bf16.pro6000s-2gpu-tp2-256k-q8kv-dflash2.json",
+  "name": "qwen3.8-27b-bf16.pro6000s-2gpu-tp2-256k-q8kv-dflash2.on-demand",
+  "network": {
+    "max_internet_down_cost_per_tb": 40.0,
+    "max_internet_up_cost_per_tb": 30.0,
+    "min_direct_port_count": 1,
+    "min_inet_down": 128
+  },
+  "pricing": {
+    "max_dph_total": 4.5,
+    "target_first_test_minutes": 60
+  },
+  "purpose": "On-demand 2x RTX PRO 6000 WS (sm_120) at TP=2 for Qwen3.8 27B NVFP4 **BF16-LMHead** checkpoint (RadixArk/Qwen3.8-27B-NVFP4-BF16-LMHead, 23.77 GB, 16-bit lm_head variant of the main NVFP4 repo) + fp8_e4m3 KV, 256K context, DFlash2 W4A16 drafter n=7. Validates the bf16-lm-head checkpoint on the proven vLLM flow and sets up SGLang DFlash2 testing (z-lab/Qwen3.8-27B-DFlash2 BF16 drafter seeded at R2 z-lab/Qwen3.8-27B-DFlash2). No machine pin \u2014 clean cost/reliability selection. gpu profile rtx-pro-6000-2gpu-180gb (all 3 PRO 6000 SKUs, 2-GPU, >=180 GB).",
+  "reliability": {
+    "min_reliability2": 0.85,
+    "require_verified": true
+  },
+  "selection": {
+    "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
+    "geo_query": "geolocation not in [CN]",
+    "greylisted_machine_ids": [
+      8357,
+      125312,
+      111175
+    ],
+    "search_no_default": true,
+    "sort": "effective_cost_then_reliability"
+  },
+  "spot": {
+    "enabled_after_smoke_test": false,
+    "max_bid_dph": 0
+  },
+  "storage": {
+    "disk_gb": 100,
+    "max_storage_cost_per_gb_hour": 0.0008,
+    "max_storage_total_cost_per_hour": 0.1,
+    "min_disk_bw": 500
+  },
+  "template": {
+    "hash_id": "399461057b490fa40a36a86083566ab3",
+    "name": "vLLM_R2_Qwen3_8_27B_BF16_PRO6000S_2GPU_TP2_256K_Q8KV_DFLASH2"
+  }
+}

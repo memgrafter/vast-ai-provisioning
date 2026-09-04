@@ -1,0 +1,41 @@
+{
+  "name": "qwen3.8-27b-bf16.pro6000s-2gpu-tp2-256k-q8kv-dflash2",
+  "hf_model_id": "Qwen/Qwen3.8-27B",
+  "r2_prefix": "Qwen/Qwen3.8-27B",
+  "model_dir": "/workspace/models/Qwen/Qwen3.8-27B",
+  "served_model_name": "qwen3.8-27b-bf16.pro6000s-2gpu-tp2-256k-q8kv-dflash2",
+  "quantization": "bf16",
+  "expected_model_download_tb": 0.055,
+  "vllm": {
+    "dtype": "bfloat16",
+    "max_model_len": 262144,
+    "gpu_memory_utilization": 0.85,
+    "kv_cache_dtype": "q8_0",
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "max_num_seqs": 8,
+    "max_num_batched_tokens": 16384,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "qwen3_coder",
+    "reasoning_parser": "qwen3",
+    "enable_prefix_caching": true,
+    "speculative_config": {
+      "method": "dflash",
+      "model": "/workspace/models/syvai/Qwen3.8-27B-DFlash2-W4A16",
+      "num_speculative_tokens": 7
+    },
+    "extra_args": [
+      "--no-async-scheduling",
+      "--long-prefill-token-threshold",
+      "4096"
+    ],
+    "tensor_parallel_size": 2
+  },
+  "notes": "Full-BF16 Qwen/Qwen3.8-27B (~55 GB) on 2x RTX PRO 6000 S (sm_120) at TP=2 with q8_0 (int8) KV cache — first q8-KV data point in this project. Copied from qwen3.8-27b-nvfp4-bf16lmhead.pro6000ws-2gpu-tp2-256k-fp8kv-dflash2 and edited: main model -> full bf16 checkpoint (no modelopt/NVFP4 quantization, force_quantization dropped), kv_cache_dtype -> q8_0 (never tested in this project; fp8_e4m3 was the standard). DFlash2 backport + syvai W4A16 drafter n=7 kept. Created 2026-09-04; hotfixed onto test instance 49876722 rather than a fresh launch.",
+  "provisioning": {
+    "r2_speed_test_warn_only": false,
+    "r2_speed_test_min_mbps": 16
+  }
+}
