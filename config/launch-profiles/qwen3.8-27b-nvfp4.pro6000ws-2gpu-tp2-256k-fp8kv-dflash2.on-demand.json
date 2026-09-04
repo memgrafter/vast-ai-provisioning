@@ -1,0 +1,49 @@
+{
+  "gpu_profile": "config/gpu-profiles/rtx-pro-6000-2gpu-180gb.json",
+  "market": "on-demand",
+  "model_profile": "config/models/qwen3.8-27b-nvfp4.pro6000ws-2gpu-tp2-256k-fp8kv-dflash2.json",
+  "name": "qwen3.8-27b-nvfp4.pro6000ws-2gpu-tp2-256k-fp8kv-dflash2.on-demand",
+  "network": {
+    "max_internet_down_cost_per_tb": 40.0,
+    "max_internet_up_cost_per_tb": 30.0,
+    "min_direct_port_count": 1,
+    "min_inet_down": 128
+  },
+  "pricing": {
+    "max_dph_total": 4.5,
+    "target_first_test_minutes": 60
+  },
+  "purpose": "On-demand 2x RTX PRO 6000 WS (sm_120) at TP=2 for Qwen3.8 27B NVFP4 (RadixArk/Qwen3.8-27B-NVFP4, modelopt MIXED W4A4/W8A8, ~20.4 GiB) + fp8_e4m3 KV, 256K context, DFlash2 W4A16 drafter n=7. Target ~2x single-GPU 220 decode TPS -> ~400 TPS (TP=2 halves the per-GPU weight read; all-reduce ~1 MB/step over PCIe <1% overhead). DFlash2 backport is TP-aware (all-gathers draft candidates across ranks); if TP+DFlash2 fails at boot, fall back to method=mtp n=3. Jupyter left enabled (only root-exec channel, no container SSH). gpu profile rtx-pro-6000-ws-2gpu-180gb.",
+  "reliability": {
+    "min_reliability2": 0.85,
+    "require_verified": true
+  },
+  "selection": {
+    "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
+    "geo_query": "geolocation not in [CN]",
+    "greylisted_machine_ids": [
+      8357,
+      125312,
+      111175
+    ],
+    "preferred_machine_ids": [
+      148522
+    ],
+    "search_no_default": true,
+    "sort": "preferred_machine_then_effective_cost_then_reliability"
+  },
+  "spot": {
+    "enabled_after_smoke_test": false,
+    "max_bid_dph": 0
+  },
+  "storage": {
+    "disk_gb": 100,
+    "max_storage_cost_per_gb_hour": 0.0008,
+    "max_storage_total_cost_per_hour": 0.1,
+    "min_disk_bw": 500
+  },
+  "template": {
+    "hash_id": "52b50e0fc752bfc5d91ed1efc4d69d32",
+    "name": "vLLM_R2_Qwen3_8_27B_NVFP4_PRO6000WS_2GPU_TP2_256K_FP8KV_DFLASH2"
+  }
+}
