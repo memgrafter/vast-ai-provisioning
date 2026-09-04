@@ -36,8 +36,8 @@
   },
   "storage": {
     "disk_gb": 100,
-    "max_storage_cost_per_gb_hour": 0.0003,
-    "max_storage_total_cost_per_hour": 0.03,
+    "max_storage_cost_per_gb_hour": 0.0008,
+    "max_storage_total_cost_per_hour": 0.1,
     "min_disk_bw": 500
   },
   "template": {
