@@ -171,6 +171,16 @@ def run_ladder(base, model, n_solutions, min_tokens, max_tokens,
     out_fh = open(out, "a") if out else sys.stdout
 
     nonce = f"anchor-{int(time.time())}"
+    if out:  # self-describing header so bench_markdown_report.py can fill metadata
+        out_fh.write(json.dumps({"run_header": {"bench": "context-ladder-v1",
+                                                "ts": time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()),
+                                                "base": base, "model": model,
+                                                "n_solutions": n_solutions,
+                                                "max_tokens": max_tokens,
+                                                "tok_per_round": tok_per_round,
+                                                "target_ctx": target_ctx,
+                                                "rounds": rounds, "nonce": nonce}}) + "\n")
+        out_fh.flush()
     system = f"You are a coding challenge generator. Session nonce: {nonce}. Keep a running conversation."
     decode = DECODE_PROMPT_TEMPLATE.format(n=n_solutions, min_tokens=min_tokens, round="{round}")
 
