@@ -55,7 +55,7 @@ PROBE = r"""
 echo '===PROBE:SUMMARY==='
 nvidia-smi 2>&1 | head -40
 echo '===PROBE:CSV==='
-nvidia-smi --query-gpu=index,name,serial,uuid,pci.bus_id,driver_version,cuda_version,temperature.gpu,power.draw,power.limit,clocks.sm,clocks.max.sm,clocks.mem,clocks.max.mem,clocks_throttle_reasons.active,utilization.gpu,utilization.memory,memory.used,memory.total,ecc.errors.correctable.volatile.total,ecc.errors.uncorrectable.volatile.total --format=csv,noheader 2>&1
+nvidia-smi --query-gpu=index,name,serial,uuid,pci.bus_id,driver_version,temperature.gpu,power.draw,power.limit,clocks.sm,clocks.max.sm,clocks.mem,clocks.max.mem,clocks_throttle_reasons.active,utilization.gpu,utilization.memory,memory.used,memory.total --format=csv,noheader 2>&1
 echo '===PROBE:DETAIL==='
 nvidia-smi -q 2>&1 | head -400
 echo '===PROBE:LIST==='
@@ -195,20 +195,26 @@ def parse_probe(raw: str) -> dict:
     return {k: "\n".join(v).strip() for k, v in sections.items()}
 
 
+# Fixed column order for the PROBE CSV query (--format=csv,noheader has no header row).
+CSV_COLUMNS = ["index", "name", "serial", "uuid", "pci.bus_id", "driver_version",
+               "temperature.gpu", "power.draw", "power.limit", "clocks.sm", "clocks.max.sm",
+               "clocks.mem", "clocks.max.mem", "clocks_throttle_reasons.active",
+               "utilization.gpu", "utilization.memory", "memory.used", "memory.total"]
+
+
 def parse_csv(text: str) -> list:
+    # A failed nvidia-smi query prints an error line (e.g. 'Field "x" is not a
+    # valid field to query.') — do not misread that as a GPU row.
+    if not text or "not a valid field" in text or "Invalid" in text or "could not be parsed" in text:
+        return []
     lines = [l for l in text.splitlines() if l.strip()]
     if not lines:
         return []
-    header, rows = None, []
+    rows = []
     for l in lines:
         parts = [p.strip() for p in l.split(",")]
-        if header is None:
-            header = parts if parts and parts[0].lower() == "index" else [f"f{j}" for j in range(len(parts))]
-            if parts and parts[0].lower() != "index":
-                rows.append(dict(zip(header, parts)))
-            continue
-        if len(parts) == len(header):
-            rows.append(dict(zip(header, parts)))
+        if len(parts) == len(CSV_COLUMNS):
+            rows.append(dict(zip(CSV_COLUMNS, parts)))
     return rows
 
 
@@ -291,7 +297,7 @@ def workup(gpus_csv, detail, topo, dmesg, driver, numa, expected_gpus, detail_te
 
     # ---- global: driver authenticity ----
     drv0 = gpus_csv[0].get("driver_version", "")
-    if drv0 and re.match(r"^\d+\.\d+\.\d+$", drv0):
+    if drv0 and re.match(r"^\d+\.\d+(\.\d+)?$", drv0):
         w.add("driver-version-format", "PASS", f"{drv0} (normal NVIDIA version)")
     else:
         w.add("driver-version-format", "FAIL", f"'{drv0}' is not a normal NVIDIA version string",
@@ -417,17 +423,23 @@ def workup(gpus_csv, detail, topo, dmesg, driver, numa, expected_gpus, detail_te
         if mu and mt:
             w.add("memory", "PASS", f"{mu:.0f}/{mt:.0f} MiB ({100*mu/mt:.0f}%)", scope=scope)
 
-        # ECC
-        ecc_u = _fnum(g.get("ecc.errors.uncorrectable.volatile.total")) or 0
-        ecc_c = _fnum(g.get("ecc.errors.correctable.volatile.total")) or 0
+        # ECC — parsed from the `nvidia-smi -q` detail block (the --query-gpu ecc
+        # fields are not valid on all drivers). Look for Volatile SRAM/DRAM counters.
+        ecc_u, ecc_c = 0, 0
+        for em in re.finditer(r"GPU\s+" + re.escape(str(idx)) + r":.*?(?=GPU\s+\d+:|\Z)", detail_text, re.S):
+            block = em.group(0)
+            for pm in re.finditer(r"(SRAM|DRAM)\s+Uncorrectable\s{2,}:(\d+)", block):
+                ecc_u += int(pm.group(2))
+            for pm in re.finditer(r"(SRAM|DRAM)\s+Correctable\s{2,}:(\d+)", block):
+                ecc_c += int(pm.group(2))
         if ecc_u > 0:
-            w.add("ecc-uncorrectable", "FAIL", f"{ecc_u:.0f} uncorrectable volatile ECC errors", scope=scope, sev="critical")
+            w.add("ecc-uncorrectable", "FAIL", f"{ecc_u} uncorrectable ECC errors", scope=scope, sev="critical")
         else:
             w.add("ecc-uncorrectable", "PASS", "0 uncorrectable ECC errors", scope=scope)
         if ecc_c > 1000:
-            w.add("ecc-correctable", "WARN", f"{ecc_c:.0f} correctable volatile ECC errors (high)", scope=scope)
+            w.add("ecc-correctable", "WARN", f"{ecc_c} correctable ECC errors (high)", scope=scope)
         else:
-            w.add("ecc-correctable", "PASS", f"{ecc_c:.0f} correctable ECC errors", scope=scope)
+            w.add("ecc-correctable", "PASS", f"{ecc_c} correctable ECC errors", scope=scope)
 
     # ---- per-GPU detail: power limit lowered, MIG, compute mode, retired pages ----
     for d in detail:
@@ -490,7 +502,7 @@ def render_log(report) -> str:
     for g in report["gpus"]:
         L.append(f"  GPU {g.get('index')}: {g.get('name')}")
         L.append(f"      serial={g.get('serial')}  uuid={g.get('uuid')}  pci={g.get('pci.bus_id')}")
-        L.append(f"      driver={g.get('driver_version')}  cuda={g.get('cuda_version')}  "
+        L.append(f"      driver={g.get('driver_version')}  "
                  f"temp={g.get('temperature.gpu')}C  util={g.get('utilization.gpu')}%")
         L.append(f"      power={g.get('power.draw')} / {g.get('power.limit')}  "
                  f"sm={g.get('clocks.sm')} / {g.get('clocks.max.sm')}")
@@ -582,12 +594,16 @@ def main():
     out_path = args.out or f"logs/gpu-risk-scan-{label}-{ts}.json"
     log_path = os.path.splitext(out_path)[0] + ".log"
 
+    # topology links use tuple keys (a, b) — not JSON-serializable; stringify them
+    topo_json = {"links": {f"{a}->{b}": c for (a, b), c in topo.get("links", {}).items()},
+                 "legend": topo.get("legend", {})}
+
     report = {
         "instance": inst_id, "base": base, "ts": ts,
         "expected_gpus": args.expected_gpus, "gpus_found": len(gpus_csv),
         "overall": overall, "critical": n_crit, "warning": n_warn,
         "pass": n_pass, "na": n_na,
-        "gpus": gpus_csv, "topology": topo, "driver": driver, "numa": numa,
+        "gpus": gpus_csv, "topology": topo_json, "driver": driver, "numa": numa,
         "checks": w.checks, "findings": w.findings,
         "raw": {k: sections.get(k, "") for k in ("SUMMARY", "CSV", "TOPO", "NVLINK", "DMESG", "NUMA", "DRIVER")},
     }
