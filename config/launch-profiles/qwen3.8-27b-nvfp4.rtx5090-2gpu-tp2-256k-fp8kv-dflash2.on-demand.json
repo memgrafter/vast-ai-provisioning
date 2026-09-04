@@ -13,7 +13,7 @@
     "max_dph_total": 2.0,
     "target_first_test_minutes": 60
   },
-  "purpose": "On-demand 2x RTX 5090 TP2 cost-efficiency and 256k-context validation for Qwen3.8-27B w4a4 + fp8_e4m3 KV + the same syvai W4A16 DFlash2 drafter n=7 used by the proven 2x RTX PRO 6000 runs. Expected KV pool ~600k tokens. Mandatory risk scan before benchmarking: reject cross-NUMA SYS topology or failed fresh CUDA GEMM; inspect both GPU power caps. Current benchmark pin: machine 148842 (Threadripper 9970X single-socket, 64 GB RAM, driver 595.84).",
+  "purpose": "On-demand 2x RTX 5090 TP2 cost-efficiency and 256k-context validation for Qwen3.8-27B w4a4 + fp8_e4m3 KV + the same syvai W4A16 DFlash2 drafter n=7 used by the proven 2x RTX PRO 6000 runs. Expected KV pool ~600k tokens. Mandatory risk scan before benchmarking: reject cross-NUMA SYS topology or failed fresh CUDA GEMM; inspect both GPU power caps. Current benchmark pin: machine 41821 (Threadripper PRO 3945WX, single-socket, 257 GB RAM, driver 590.48.01).",
   "reliability": {
     "min_reliability2": 0.97,
     "require_verified": false
@@ -30,7 +30,7 @@
       148842
     ],
     "preferred_machine_ids": [
-      148842
+      41821
     ],
     "search_no_default": true,
     "sort": "preferred_machine_then_effective_cost_then_reliability"
