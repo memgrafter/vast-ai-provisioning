@@ -45,7 +45,7 @@
     "min_disk_bw": 500
   },
   "template": {
-    "hash_id": "28962c0d6742d81ad1d1ce99d44819e1",
+    "hash_id": "fd0d0a2545ff12bdcc1b8518709bced5",
     "name": "vLLM_R2_Qwen3_8_27B_NVFP4_PRO6000WS_256K_FP8KV_DFLASH2"
   }
 }
