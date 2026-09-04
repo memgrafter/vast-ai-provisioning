@@ -174,7 +174,7 @@ def run_ladder(base, model, n_solutions, min_tokens, max_tokens,
     system = f"You are a coding challenge generator. Session nonce: {nonce}. Keep a running conversation."
     decode = DECODE_PROMPT_TEMPLATE.format(n=n_solutions, min_tokens=min_tokens, round="{round}")
 
-    hist = "TOK " * tok_per_round
+    hist = ""
     results = []
 
     r0_user = decode.format(round=0)
@@ -184,14 +184,13 @@ def run_ladder(base, model, n_solutions, min_tokens, max_tokens,
 
     rnd = 1
     while rnd <= rounds:
-        ctx_target = tok_per_round + rnd * tok_per_round
+        ctx_target = rnd * tok_per_round
         if ctx_target >= target_ctx:
             print(json.dumps({"done": True, "rounds_run": len(results),
                               "note": f"stopped: next target {ctx_target} >= target_ctx {target_ctx}",
                               "nonce": nonce}))
             break
         hist = hist + "TOK " * tok_per_round
-        rnd += 1
         user = hist + decode.format(round=ctx_target)
         rr = measured_round(base, model, system, user, rnd=f"P{ctx_target}", max_tokens=max_tokens, api_key=api_key)
         results.append(rr)
@@ -200,6 +199,7 @@ def run_ladder(base, model, n_solutions, min_tokens, max_tokens,
             print(json.dumps({"done": True, "rounds_run": len(results),
                               "stopped": rr["skip"], "nonce": nonce}))
             break
+        rnd += 1
         time.sleep(1)
 
     print(json.dumps({"done": True, "rounds_run": len(results), "nonce": nonce}))
