@@ -10,7 +10,7 @@
     "dtype": "bfloat16",
     "max_model_len": 262144,
     "gpu_memory_utilization": 0.85,
-    "kv_cache_dtype": "q8_0",
+    "kv_cache_dtype": "int8_per_token_head",
     "trust_remote_code": true,
     "host": "127.0.0.1",
     "port": 18000,
@@ -33,7 +33,7 @@
     ],
     "tensor_parallel_size": 2
   },
-  "notes": "Full-BF16 Qwen/Qwen3.8-27B (~55 GB) on 2x RTX PRO 6000 S (sm_120) at TP=2 with q8_0 (int8) KV cache — first q8-KV data point in this project. Copied from qwen3.8-27b-nvfp4-bf16lmhead.pro6000ws-2gpu-tp2-256k-fp8kv-dflash2 and edited: main model -> full bf16 checkpoint (no modelopt/NVFP4 quantization, force_quantization dropped), kv_cache_dtype -> q8_0 (never tested in this project; fp8_e4m3 was the standard). DFlash2 backport + syvai W4A16 drafter n=7 kept. Created 2026-09-04; hotfixed onto test instance 49876722 rather than a fresh launch.",
+  "notes": "Full-BF16 Qwen/Qwen3.8-27B (~55 GB) on 2x RTX PRO 6000 S (sm_120) at TP=2 with q8_0 (int8) KV cache \u2014 first q8-KV data point in this project. Copied from qwen3.8-27b-nvfp4-bf16lmhead.pro6000ws-2gpu-tp2-256k-fp8kv-dflash2 and edited: main model -> full bf16 checkpoint (no modelopt/NVFP4 quantization, force_quantization dropped), kv_cache_dtype -> int8_per_token_head (the vLLM 0.27.1 name for q8_0-style int8 KV; never tested in this project, fp8_e4m3 was the standard). DFlash2 backport + syvai W4A16 drafter n=7 kept. Created 2026-09-04; hotfixed onto test instance 49876722 rather than a fresh launch.",
   "provisioning": {
     "r2_speed_test_warn_only": false,
     "r2_speed_test_min_mbps": 16

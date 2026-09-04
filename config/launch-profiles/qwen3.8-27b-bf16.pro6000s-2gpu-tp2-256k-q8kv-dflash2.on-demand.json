@@ -40,7 +40,7 @@
     "min_disk_bw": 500
   },
   "template": {
-    "hash_id": "399461057b490fa40a36a86083566ab3",
+    "hash_id": "207d355aafa9ab6ba2e10dd9fb3bf781",
     "name": "vLLM_R2_Qwen3_8_27B_BF16_PRO6000S_2GPU_TP2_256K_Q8KV_DFLASH2"
   }
 }
