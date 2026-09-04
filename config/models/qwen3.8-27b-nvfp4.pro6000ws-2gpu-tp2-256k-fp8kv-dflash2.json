@@ -17,7 +17,6 @@
     "download_dir": "/workspace/models",
     "max_num_seqs": 8,
     "max_num_batched_tokens": 16384,
-    "max_new_tokens": 32768,
     "enable_auto_tool_choice": true,
     "tool_call_parser": "qwen3_coder",
     "reasoning_parser": "qwen3",
@@ -35,7 +34,7 @@
     "force_quantization": "modelopt",
     "tensor_parallel_size": 2
   },
-  "notes": "NVFP4 'ultrafast' 2x RTX PRO 6000 WS (sm_120) at TP=2 for RadixArk/Qwen3.8-27B-NVFP4 (modelopt MIXED W4A4/W8A8, 20.44 GiB). Target: ~2x the single-GPU 220 decode TPS -> ~400 TPS. TP=2 halves the per-GPU weight read (~11->5.5 GiB); all-reduce per step is ~1 MB (hidden 4096 bf16 x128) over PCIe Gen5 -> <1% overhead, so expect ~380-440 decode TPS. DFlash2 W4A16 drafter n=7 KEPT (the vendored backport is TP-aware: compute_candidates all-gathers candidate values/ids across TP ranks for the vocab-parallel shared lm_head). RISK: TP=2+DFlash2 is not a tested combo; if it fails at boot, fall back to method=mtp n=3 (TP-friendly) or drop spec decode. KV fp8_e4m3 (NVFP4 KV is sm_100/103-only, vLLM #43562). max_model_len 262144. Jupyter LEFT ENABLED (jup_direct=true) \u2014 it is the only root-exec channel (no container SSH). gpu profile rtx-pro-6000-ws-2gpu-180gb.json (num_gpus=2). Checkpoint on R2 RadixArk/Qwen3.8-27B-NVFP4. Multimodal: the RadixArk NVFP4 checkpoint ships the full Qwen3.5 vision stack (333 model.visual.* tensors, ViT left unquantized) \u2014 language_model_only was removed so the instance serves text+image+video. Verified end-to-end with an image chat completion on 2026-09-04.",
+  "notes": "NVFP4 'ultrafast' 2x RTX PRO 6000 WS (sm_120) at TP=2 for RadixArk/Qwen3.8-27B-NVFP4 (modelopt MIXED W4A4/W8A8, 20.44 GiB). Target: ~2x the single-GPU 220 decode TPS -> ~400 TPS. TP=2 halves the per-GPU weight read (~11->5.5 GiB); all-reduce per step is ~1 MB (hidden 4096 bf16 x128) over PCIe Gen5 -> <1% overhead, so expect ~380-440 decode TPS. DFlash2 W4A16 drafter n=7 KEPT (the vendored backport is TP-aware: compute_candidates all-gathers candidate values/ids across TP ranks for the vocab-parallel shared lm_head). RISK: TP=2+DFlash2 is not a tested combo; if it fails at boot, fall back to method=mtp n=3 (TP-friendly) or drop spec decode. KV fp8_e4m3 (NVFP4 KV is sm_100/103-only, vLLM #43562). max_model_len 262144. Jupyter LEFT ENABLED (jup_direct=true) — it is the only root-exec channel (no container SSH). gpu profile rtx-pro-6000-ws-2gpu-180gb.json (num_gpus=2). Checkpoint on R2 RadixArk/Qwen3.8-27B-NVFP4. Multimodal: the RadixArk NVFP4 checkpoint ships the full Qwen3.5 vision stack (333 model.visual.* tensors, ViT left unquantized) — language_model_only was removed so the instance serves text+image+video. Verified end-to-end with an image chat completion on 2026-09-04.",
   "provisioning": {
     "r2_speed_test_warn_only": false,
     "r2_speed_test_min_mbps": 16
