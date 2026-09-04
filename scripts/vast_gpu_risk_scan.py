@@ -172,7 +172,7 @@ def resolve_instance(instance_id: int) -> tuple:
     token = d.get("jupyter_token")
     ports = d.get("ports", {})
     jup = (ports.get("8080/tcp") or [{}])[0].get("HostPort")
-    ip = d.get("ip")
+    ip = d.get("ip") or d.get("public_ipaddr")
     if not (token and jup and ip):
         raise SystemExit(f"could not resolve jupyter access for instance {instance_id}: "
                          f"token={bool(token)} jup_port={jup} ip={ip}")
@@ -234,6 +234,10 @@ def parse_detail(text: str) -> list:
 
 
 def parse_topo(text: str) -> dict:
+    # nvidia-smi bolds the header row with ANSI escapes (\x1b[4m ... \x1b[0m);
+    # strip them or the header cells no longer match ^GPU\d+$ and the
+    # CPU-affinity columns leak in as fake GPU links.
+    text = re.sub(r"\x1b\[[0-9;]*m", "", text)
     legend = {}
     for m in re.finditer(r"^\s{2}([A-Z0-9_]+)\s{2,}=\s*(.+)$", text, re.M):
         legend[m.group(1)] = m.group(2).strip()
