@@ -13,7 +13,7 @@
     "max_dph_total": 4.5,
     "target_first_test_minutes": 60
   },
-  "purpose": "On-demand 2x RTX PRO 6000 WS (sm_120) at TP=2 for Qwen3.8 27B NVFP4 **BF16-LMHead** checkpoint (RadixArk/Qwen3.8-27B-NVFP4-BF16-LMHead, 23.77 GB, 16-bit lm_head variant of the main NVFP4 repo) + fp8_e4m3 KV, 256K context, DFlash2 W4A16 drafter n=7. Validates the bf16-lm-head checkpoint on the proven vLLM flow and sets up SGLang DFlash2 testing (z-lab/Qwen3.8-27B-DFlash2 BF16 drafter seeded at R2 z-lab/Qwen3.8-27B-DFlash2). No machine pin — clean cost/reliability selection. gpu profile rtx-pro-6000-2gpu-180gb (all 3 PRO 6000 SKUs, 2-GPU, >=180 GB).",
+  "purpose": "On-demand 2x RTX PRO 6000 WS (sm_120) at TP=2 for Qwen3.8 27B NVFP4 **BF16-LMHead** checkpoint (RadixArk/Qwen3.8-27B-NVFP4-BF16-LMHead, 23.77 GB, 16-bit lm_head variant of the main NVFP4 repo) + fp8_e4m3 KV, 256K context, DFlash2 W4A16 drafter n=7. Validates the bf16-lm-head checkpoint on the proven vLLM flow and sets up SGLang DFlash2 testing (z-lab/Qwen3.8-27B-DFlash2 BF16 drafter seeded at R2 z-lab/Qwen3.8-27B-DFlash2). No machine pin \u2014 clean cost/reliability selection. gpu profile rtx-pro-6000-2gpu-180gb (all 3 PRO 6000 SKUs, 2-GPU, >=180 GB).",
   "reliability": {
     "min_reliability2": 0.85,
     "require_verified": true
@@ -40,7 +40,7 @@
     "min_disk_bw": 500
   },
   "template": {
-    "hash_id": "52b50e0fc752bfc5d91ed1efc4d69d32",
+    "hash_id": "c44a6cc87f42575403b1322a27992436",
     "name": "vLLM_R2_Qwen3_8_27B_NVFP4_PRO6000WS_2GPU_TP2_256K_FP8KV_DFLASH2"
   }
 }
