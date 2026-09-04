@@ -22,7 +22,6 @@
     "tool_call_parser": "qwen3_coder",
     "reasoning_parser": "qwen3",
     "enable_prefix_caching": true,
-    "language_model_only": true,
     "speculative_config": {
       "method": "dflash",
       "model": "/workspace/models/incoai/Qwen3.8-27B-DFlash2",
@@ -37,7 +36,7 @@
     ],
     "force_quantization": null
   },
-  "notes": "Full-precision RTX PRO 6000 WS profile for Qwen/Qwen3.8-27B: bfloat16 model weights and bfloat16 KV cache (no quantization), 256K context, DFlash2 external block-diffusion drafter (incoai/Qwen3.8-27B-DFlash2, n=7) instead of the built-in MTP head. DFlash2 requirements met: bf16 target lm_head, bfloat16 KV, FLASH_ATTN backend. The provisioner (PATCH_DFLASH2=1) syncs the drafter from R2 and applies the DFlash2 backport (vLLM PR #52816, syv-ai v0.27.1 backport vendored from noonghunna/club-3090) to the in-image vLLM at boot. --no-async-scheduling mitigates the open vllm#50021 GDN spec-decode crash exposure (shared by all spec decode on this hybrid arch); --long-prefill-token-threshold 4096 is the club-3090 HOL flag for concurrency. Measured reference (2x3090, v0.27.1+backport, 2026-08-21): DFlash2 bf16-KV/FA2 = 231 code TPS, +131% vs MTP n=4. Repo is ~55.6 GB BF16 (18 shards) + 3.85 GB drafter, both must be on R2; transfer with --stream. Runs on vastai/vllm v0.27.1-cuda-13.0; requires transformers >= 5.8.0 (verify at smoke test).",
+  "notes": "Full-precision RTX PRO 6000 WS profile for Qwen/Qwen3.8-27B: bfloat16 model weights and bfloat16 KV cache (no quantization), 256K context, DFlash2 external block-diffusion drafter (incoai/Qwen3.8-27B-DFlash2, n=7) instead of the built-in MTP head. DFlash2 requirements met: bf16 target lm_head, bfloat16 KV, FLASH_ATTN backend. The provisioner (PATCH_DFLASH2=1) syncs the drafter from R2 and applies the DFlash2 backport (vLLM PR #52816, syv-ai v0.27.1 backport vendored from noonghunna/club-3090) to the in-image vLLM at boot. --no-async-scheduling mitigates the open vllm#50021 GDN spec-decode crash exposure (shared by all spec decode on this hybrid arch); --long-prefill-token-threshold 4096 is the club-3090 HOL flag for concurrency. Measured reference (2x3090, v0.27.1+backport, 2026-08-21): DFlash2 bf16-KV/FA2 = 231 code TPS, +131% vs MTP n=4. Repo is ~55.6 GB BF16 (18 shards) + 3.85 GB drafter, both must be on R2; transfer with --stream. Runs on vastai/vllm v0.27.1-cuda-13.0; requires transformers >= 5.8.0 (verify at smoke test). language_model_only removed: checkpoint ships the full Qwen3.5 vision stack (333 model.visual.* tensors) \u2014 serves text+image+video.",
   "provisioning": {
     "r2_speed_test_warn_only": false,
     "r2_speed_test_min_mbps": 16
