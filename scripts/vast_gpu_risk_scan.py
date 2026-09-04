@@ -237,6 +237,15 @@ def parse_topo(text: str) -> dict:
     legend = {}
     for m in re.finditer(r"^\s{2}([A-Z0-9_]+)\s{2,}=\s*(.+)$", text, re.M):
         legend[m.group(1)] = m.group(2).strip()
+    # The table has N GPU columns followed by 'CPU Affinity', 'NUMA Affinity',
+    # 'GPU NUMA ID' columns — only the first N cells of each row are GPU links.
+    # Detect N from the header row (GPU0 GPU1 ... CPU Affinity ...).
+    n_gpu_cols = 0
+    for line in text.splitlines():
+        cells = line.split()
+        if len(cells) >= 2 and cells[0] == "GPU0" and re.match(r"^GPU\d+$", cells[1]):
+            n_gpu_cols = sum(1 for c in cells if re.match(r"^GPU\d+$", c))
+            break
     links = {}
     for line in text.splitlines():
         m = re.match(r"^\s*GPU(\d+)\s+(.+)$", line)
@@ -244,8 +253,10 @@ def parse_topo(text: str) -> dict:
             continue
         src = f"GPU{m.group(1)}"
         cells = m.group(2).split()
-        if any(c.startswith("GPU") for c in cells):
+        if any(re.match(r"^GPU\d+$", c) for c in cells):
             continue  # header row
+        if n_gpu_cols:
+            cells = cells[:n_gpu_cols]
         for j, cell in enumerate(cells):
             if cell != "X":
                 links[(src, f"GPU{j}")] = cell
