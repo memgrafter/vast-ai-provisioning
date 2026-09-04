@@ -1,0 +1,42 @@
+{
+  "name": "qwen3.8-27b-nvfp4-bf16lmhead.pro6000ws-2gpu-tp2-256k-fp8kv-dflash2",
+  "hf_model_id": "RadixArk/Qwen3.8-27B-NVFP4-BF16-LMHead",
+  "r2_prefix": "RadixArk/Qwen3.8-27B-NVFP4-BF16-LMHead",
+  "model_dir": "/workspace/models/RadixArk/Qwen3.8-27B-NVFP4-BF16-LMHead",
+  "served_model_name": "qwen3.8-27b-nvfp4-bf16lmhead-pro6000ws-2gpu-tp2-256k-fp8kv-dflash2",
+  "quantization": "nvfp4",
+  "expected_model_download_tb": 0.024,
+  "vllm": {
+    "dtype": "bfloat16",
+    "max_model_len": 262144,
+    "gpu_memory_utilization": 0.85,
+    "kv_cache_dtype": "fp8_e4m3",
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "max_num_seqs": 8,
+    "max_num_batched_tokens": 16384,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "qwen3_coder",
+    "reasoning_parser": "qwen3",
+    "enable_prefix_caching": true,
+    "speculative_config": {
+      "method": "dflash",
+      "model": "/workspace/models/syvai/Qwen3.8-27B-DFlash2-W4A16",
+      "num_speculative_tokens": 7
+    },
+    "extra_args": [
+      "--no-async-scheduling",
+      "--long-prefill-token-threshold",
+      "4096"
+    ],
+    "force_quantization": "modelopt",
+    "tensor_parallel_size": 2
+  },
+  "notes": "NVFP4 + BF16 lm_head export for 2x RTX PRO 6000 WS (sm_120) at TP=2. Checkpoint = RadixArk/Qwen3.8-27B-NVFP4-BF16-LMHead (rev 009632f, 2026-08-24, 23.77 GB): the 16-bit-lm-head variant of RadixArk/Qwen3.8-27B-NVFP4 — safetensors chunks 1-2 share the same LFS objects as the main repo; chunk 3 is +1.83 GB carrying a bf16 lm_head instead of the packed-FP4 one (main repo HEAD 319f741 still ships the packed-FP4 lm_head, so the dedicated repo is the 16-bit version). Seeded to R2 2026-09-04 (RadixArk/Qwen3.8-27B-NVFP4-BF16-LMHead). Same engine setup as qwen3.8-27b-nvfp4.pro6000ws-2gpu-tp2-256k-fp8kv-dflash2 (fp8_e4m3 KV, 256K ctx, DFlash2 backport n=7, multimodal). Purpose: validate the bf16-lm-head checkpoint on the existing vLLM flow and support SGLang DFlash2 testing; the SGLang DFlash2 BF16 drafter z-lab/Qwen3.8-27B-DFlash2 (~3.85 GB) is seeded at R2 z-lab/Qwen3.8-27B-DFlash2 (assets/ figure omitted).",
+  "provisioning": {
+    "r2_speed_test_warn_only": false,
+    "r2_speed_test_min_mbps": 16
+  }
+}

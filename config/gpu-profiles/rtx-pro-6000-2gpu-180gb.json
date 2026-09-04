@@ -1,0 +1,29 @@
+{
+  "name": "rtx-pro-6000-2gpu-180gb",
+  "preferred_gpu_name": null,
+  "allowed_gpu_names": [
+    "RTX PRO 6000 WS",
+    "RTX PRO 6000 S",
+    "RTX PRO 6000 Max-Q"
+  ],
+  "allowed_gpu_configs": [
+    {
+      "gpu_name": "RTX PRO 6000 WS",
+      "num_gpus": 2,
+      "min_gpu_total_ram_mb": 180000
+    },
+    {
+      "gpu_name": "RTX PRO 6000 S",
+      "num_gpus": 2,
+      "min_gpu_total_ram_mb": 180000
+    },
+    {
+      "gpu_name": "RTX PRO 6000 Max-Q",
+      "num_gpus": 2,
+      "min_gpu_total_ram_mb": 180000
+    }
+  ],
+  "min_gpu_total_ram_mb": 180000,
+  "min_cuda_max_good": 13.0,
+  "notes": "2-GPU RTX PRO 6000 (all 3 SKUs: WS / S / Max-Q), each 96 GB sm_120 Blackwell, for TP=2. The launcher runs one search per allowed_gpu_configs entry and unions the results, so all 3 SKUs are scanned. min_gpu_total_ram_mb=180000 (2x90GB) keeps only 96GB-class offers."
+}
