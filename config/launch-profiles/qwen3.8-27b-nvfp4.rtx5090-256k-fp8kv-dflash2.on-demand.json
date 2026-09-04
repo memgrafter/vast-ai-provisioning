@@ -1,0 +1,47 @@
+{
+  "gpu_profile": "config/gpu-profiles/carnice-v2-27b-nvfp4-mtp-rtx5090-1gpu.json",
+  "market": "on-demand",
+  "model_profile": "config/models/qwen3.8-27b-nvfp4.rtx5090-256k-fp8kv-dflash2.json",
+  "name": "qwen3.8-27b-nvfp4.rtx5090-256k-fp8kv-dflash2.on-demand",
+  "network": {
+    "max_internet_down_cost_per_tb": 8.0,
+    "max_internet_up_cost_per_tb": 10.0,
+    "min_direct_port_count": 1,
+    "min_inet_down": 128
+  },
+  "pricing": {
+    "max_dph_total": 1.2,
+    "target_first_test_minutes": 60
+  },
+  "purpose": "On-demand RTX 5090 cost-efficiency probe for Qwen3.8 27B w4a4 (RadixArk/Qwen3.8-27B-NVFP4) + fp8_e4m3 KV, 256k ctx, DFlash2 W4A16 drafter n=7. Same engine setup as the proven 1x RTX PRO 6000 WS champion (177-222 flat decode TPS, $1.23/hr). 5090 has ~1.33x the memory bandwidth of the PRO 6000 (GB202 ~1792 GB/s); model+KV easily fits 32 GB (~14.7 GB KV pool ~= 900k tokens). Question: does decode reach ~290-320 TPS (bandwidth-scaled) or do Vast power caps eat it? Watch the risk-scan power-cap telemetry.",
+  "reliability": {
+    "min_reliability2": 0.97,
+    "require_verified": false
+  },
+  "selection": {
+    "effective_cost_formula": "dph_total + expected_model_download_tb * internet_down_cost_per_tb",
+    "geo_query": "geolocation not in [CN]",
+    "greylisted_machine_ids": [
+      8357,
+      125312,
+      111175
+    ],
+    "preferred_machine_ids": [],
+    "search_no_default": true,
+    "sort": "preferred_machine_then_effective_cost_then_reliability"
+  },
+  "spot": {
+    "enabled_after_smoke_test": false,
+    "max_bid_dph": 0
+  },
+  "storage": {
+    "disk_gb": 100,
+    "max_storage_cost_per_gb_hour": 0.0003,
+    "max_storage_total_cost_per_hour": 0.03,
+    "min_disk_bw": 500
+  },
+  "template": {
+    "hash_id": "d8d8016a0aeaa3a58ec680ac95dc1ec3",
+    "name": "vLLM_R2_Qwen3_8_27B_NVFP4_RTX5090_256K_FP8KV_DFLASH2"
+  }
+}

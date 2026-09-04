@@ -1,0 +1,41 @@
+{
+  "name": "qwen3.8-27b-nvfp4.rtx5090-256k-fp8kv-dflash2",
+  "hf_model_id": "RadixArk/Qwen3.8-27B-NVFP4",
+  "r2_prefix": "RadixArk/Qwen3.8-27B-NVFP4",
+  "model_dir": "/workspace/models/RadixArk/Qwen3.8-27B-NVFP4",
+  "served_model_name": "qwen3.8-27b-nvfp4-rtx5090-256k-fp8kv-dflash2",
+  "quantization": "nvfp4",
+  "expected_model_download_tb": 0.022,
+  "vllm": {
+    "dtype": "bfloat16",
+    "max_model_len": 262144,
+    "gpu_memory_utilization": 0.9,
+    "kv_cache_dtype": "fp8_e4m3",
+    "trust_remote_code": true,
+    "host": "127.0.0.1",
+    "port": 18000,
+    "download_dir": "/workspace/models",
+    "max_num_seqs": 8,
+    "max_num_batched_tokens": 16384,
+    "enable_auto_tool_choice": true,
+    "tool_call_parser": "qwen3_coder",
+    "reasoning_parser": "qwen3",
+    "enable_prefix_caching": true,
+    "speculative_config": {
+      "method": "dflash",
+      "model": "/workspace/models/syvai/Qwen3.8-27B-DFlash2-W4A16",
+      "num_speculative_tokens": 7
+    },
+    "extra_args": [
+      "--no-async-scheduling",
+      "--long-prefill-token-threshold",
+      "4096"
+    ],
+    "force_quantization": "modelopt"
+  },
+  "notes": "Qwen3.8-27B w4a4 (RadixArk/Qwen3.8-27B-NVFP4) on 1x RTX 5090 (sm_120 GB202, 32 GB). Copied verbatim from the 1x RTX PRO 6000 WS 256k profile (the cost-efficiency champion, 177-222 flat decode TPS at $1.23/hr) and adapted: gpu_memory_utilization 0.85 -> 0.90. VRAM estimate: ~11.4 GB weights + ~2.6 activation/graph/misc => ~14.7 GB KV pool at fp8_e4m3 (~16.4 KB/token incl. GDN state) ~= 900k tokens. Full 262144 context fits with ~3.4x headroom; expect decode ~290-320 TPS if the box is not power-capped (GB202 ~1792 GB/s vs PRO 6000 ~1344 GB/s). DFlash2 W4A16 drafter n=7; fp8 KV (NVFP4 KV is sm_100/103-only). Expected download 0.024 TB.",
+  "provisioning": {
+    "r2_speed_test_warn_only": false,
+    "r2_speed_test_min_mbps": 16
+  }
+}
