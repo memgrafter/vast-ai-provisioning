@@ -13,7 +13,7 @@
     "max_dph_total": 1.5,
     "target_first_test_minutes": 60
   },
-  "purpose": "On-demand RTX PRO 6000 WS profile for Qwen3.8 27B NVFP4 (RadixArk/Qwen3.8-27B-NVFP4, modelopt MIXED W4A4/W8A8, ~20.4 GiB) + fp8_e4m3 KV cache, 64K context, built-in MTP drafter n=3. The club-3090 'ultrafast' tier \u2014 its real case is Blackwell sm_120+ where the 4-bit-activation groups run on FP4 tensor cores. NVFP4 KV is not usable on consumer Blackwell (trtllm-gen FP4 FMHA is sm_100/103 only), so KV stays fp8. MTP (not DFlash2) => plain v0.27.1 template, no DFlash2 backport. The last remaining decode lever vs the 4x3090-fp8 ~100 TPS reference.",
+  "purpose": "On-demand RTX PRO 6000 WS profile for Qwen3.8 27B NVFP4 (RadixArk/Qwen3.8-27B-NVFP4, modelopt MIXED W4A4/W8A8, ~20.4 GiB) + fp8_e4m3 KV cache, 64K context, DFlash2 W4A16 drafter n=7 (syvai). The club-3090 'ultrafast' tier \u2014 its real case is Blackwell sm_120+ where the 4-bit-activation groups run on FP4 tensor cores. NVFP4 KV is not usable on consumer Blackwell (trtllm-gen FP4 FMHA is sm_100/103 only), so KV stays fp8. DFlash2 (not MTP) => DFlash2 W4A16 template with the backport applied at boot. RISK: the RadixArk checkpoint quantizes lm_head to NVFP4 and the DFlash2 drafter shares the target lm_head (needs bf16) \u2014 if it fails at boot, revert speculative_config to method=mtp n=3. The last remaining decode lever vs the 4x3090-fp8 ~100 TPS reference.",
   "reliability": {
     "min_reliability2": 0.96,
     "require_verified": true
