@@ -1,6 +1,6 @@
 {
   "name": "rtx5090-2gpu-60gb",
-  "preferred_gpu_name": null,
+  "preferred_gpu_name": "RTX 5090",
   "allowed_gpu_names": [
     "RTX 5090"
   ],
