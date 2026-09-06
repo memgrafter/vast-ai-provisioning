@@ -133,6 +133,8 @@ def main():
         bl = [r for r in b_r if r.get("mode") != "prose"]
         bp = [r for r in b_r if r.get("mode") == "prose"]
         assert len(bl) == 3 and len(bp) == 3, f"B: expected 3 leetcode + 3 prose rounds: {len(bl)}/{len(bp)}"
+        order = ["prose" if r.get("mode") == "prose" else "leetcode" for r in b_r]
+        assert order == ["leetcode", "prose"] * 3, f"B: rounds must interleave per level: {order}"
         for r in bp:
             assert r["completion_tokens"] >= 4000, f"B: prose round below token floor: {r}"
             assert r.get("text_chars", 0) >= 2000, f"B: prose round missing text_chars: {r}"
@@ -152,8 +154,8 @@ def main():
         c_h, c_r = load_jsonl(c_out)
         cl = [r for r in c_r if r.get("mode") != "prose"]
         cp = [r for r in c_r if r.get("mode") == "prose"]
-        assert len(cl) == 3, f"C: leetcode rounds must be intact: {len(cl)}"
-        assert len(cp) == 2 and all(r.get("skip") for r in cp), f"C: expected 2 skipped prose rounds (P0+P1000, loop breaks on 2nd): {cp}"
+        assert len(cl) == 2, f"C: leetcode P0+P1000 run (prose skips don't poison leetcode): {len(cl)}"
+        assert len(cp) == 2 and all(r.get("skip") for r in cp), f"C: expected prose P0+P1000 skips (loop breaks on 2nd): {cp}"
         assert "prose gate" in cp[0]["skip"], f"C: skip reason: {cp[0]['skip']}"
         print(f"C PASS  short prose answer skipped by gate: {cp[0]['skip'][:60]!r}")
 

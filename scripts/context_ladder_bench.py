@@ -28,11 +28,13 @@ Modes:
     leetcode (default)  decode prompt = LeetCode-style code solutions (code TPS)
     prose   (--prose)   decode prompt = a ~10k-token prose-only dissertation on the
                         last 100 years in physics, no code/formulas/structure (text TPS)
-    Both can run in one invocation: the leetcode ladder runs first, then the prose
-    ladder on a FRESH TOK history (each mode sees only its own "TOK " prefix ladder,
-    sequentially). Prose rounds are tagged "mode": "prose"; leetcode rounds are
-    untagged so a leetcode-only run's JSONL is byte-identical to before.
-    The full prose text is saved next to the jsonl as <stem>.<round>.prose.txt.
+    Both can run in one invocation, INTERLEAVED per context level:
+        0k leetcode, 0k prose, 20k leetcode, 20k prose, 40k leetcode, 40k prose, ...
+    Each request carries only its own "TOK " prefix + its own decode prompt — the
+    prose request never sees the leetcode output. Prose rounds are tagged
+    "mode": "prose"; leetcode rounds are untagged so a leetcode-only run's JSONL
+    is byte-identical to before. The full prose text is saved next to the jsonl
+    as <stem>.<round>.prose.txt.
 
 Usage:
     python3 context_ladder_bench.py [--base URL] [--model ID] [--n-sol N]
@@ -270,14 +272,27 @@ def run_ladder(base, model, n_solutions, min_tokens, max_tokens,
 
     results = []
 
-    # ---- leetcode ladder (unchanged behaviour) ----
-    system = f"You are a coding challenge generator. Session nonce: {nonce}. Keep a running conversation."
-    decode = DECODE_PROMPT_TEMPLATE.format(n=n_solutions, min_tokens=min_tokens, round="{round}")
+    # ---- per-mode setup (leetcode always; prose optional) ----
+    lc_system = f"You are a coding challenge generator. Session nonce: {nonce}. Keep a running conversation."
+    lc_decode = DECODE_PROMPT_TEMPLATE.format(n=n_solutions, min_tokens=min_tokens, round="{round}")
+    if prose:
+        pr_system = (f"You are a physicist writing a long-form dissertation. "
+                     f"Session nonce: {nonce}. Keep a running conversation.")
+        pr_decode = PROSE_PROMPT_TEMPLATE.format(min_tokens=prose_min_tokens,
+                                                 min_chars=prose_min_tokens * 4, round="{round}")
 
+    # ---- ladder: INTERLEAVED per level — 0k lc, 0k prose, 20k lc, 20k prose, ...
+    # Both requests of a level share the same TOK prefix; the prose request is a
+    # separate request and never sees the leetcode output.
     hist = ""
-    r0_user = decode.format(round=0)
-    r0 = measured_round(base, model, system, r0_user, rnd="P0", max_tokens=max_tokens, api_key=api_key)
+    r0 = measured_round(base, model, lc_system, lc_decode.format(round=0), rnd="P0",
+                        max_tokens=max_tokens, api_key=api_key)
     results.append(r0); emit(r0)
+    if prose:
+        r0p = prose_finalize(base, model, pr_system, pr_decode.format(round=0), rnd="P0",
+                             max_tokens=prose_max_tokens, min_tokens=prose_min_tokens,
+                             api_key=api_key, out_path=out)
+        results.append(r0p); emit(r0p)
 
     rnd = 1
     while rnd <= rounds:
@@ -288,44 +303,25 @@ def run_ladder(base, model, n_solutions, min_tokens, max_tokens,
                               "nonce": nonce}))
             break
         hist = hist + "TOK " * tok_per_round
-        user = hist + decode.format(round=ctx_target)
-        rr = measured_round(base, model, system, user, rnd=f"P{ctx_target}", max_tokens=max_tokens, api_key=api_key)
+        rr = measured_round(base, model, lc_system, hist + lc_decode.format(round=ctx_target),
+                            rnd=f"P{ctx_target}", max_tokens=max_tokens, api_key=api_key)
         results.append(rr); emit(rr)
         if rr.get("skip"):
             print(json.dumps({"done": True, "rounds_run": len(results),
                               "stopped": rr["skip"], "nonce": nonce}))
             break
-        rnd += 1
-        time.sleep(1)
-
-    # ---- prose ladder: FRESH TOK history, same ladder shape, mode=prose ----
-    if prose:
-        system = (f"You are a physicist writing a long-form dissertation. "
-                  f"Session nonce: {nonce}. Keep a running conversation.")
-        decode = PROSE_PROMPT_TEMPLATE.format(min_tokens=prose_min_tokens,
-                                              min_chars=prose_min_tokens * 4, round="{round}")
-        hist = ""
-        r0 = prose_finalize(base, model, system, decode.format(round=0), rnd="P0",
-                            max_tokens=prose_max_tokens, min_tokens=prose_min_tokens,
-                            api_key=api_key, out_path=out)
-        results.append(r0); emit(r0)
-        rnd = 1
-        while rnd <= rounds:
-            ctx_target = rnd * tok_per_round
-            if ctx_target >= target_ctx:
-                break
-            hist = hist + "TOK " * tok_per_round
-            rr = prose_finalize(base, model, system, hist + decode.format(round=ctx_target),
+        if prose:
+            rp = prose_finalize(base, model, pr_system, hist + pr_decode.format(round=ctx_target),
                                 rnd=f"P{ctx_target}", max_tokens=prose_max_tokens,
                                 min_tokens=prose_min_tokens,
                                 api_key=api_key, out_path=out)
-            results.append(rr); emit(rr)
-            if rr.get("skip"):
+            results.append(rp); emit(rp)
+            if rp.get("skip"):
                 print(json.dumps({"done": True, "rounds_run": len(results),
-                                  "stopped": rr["skip"], "nonce": nonce}))
+                                  "stopped": rp["skip"], "nonce": nonce}))
                 break
-            rnd += 1
-            time.sleep(1)
+        rnd += 1
+        time.sleep(1)
 
     print(json.dumps({"done": True, "rounds_run": len(results), "nonce": nonce}))
     if out:
@@ -346,8 +342,8 @@ def main():
     ap.add_argument("--api-key", default=os.environ.get("VLLM_API_KEY", ""),
                     help="API key for the endpoint (default: $VLLM_API_KEY)")
     ap.add_argument("--prose", action="store_true",
-                    help="also run a prose-dissertation ladder (text TPS) after the leetcode ladder, "
-                         "on its own fresh TOK history")
+                    help="also run prose-dissertation rounds (text TPS), interleaved per level "
+                         "with the leetcode rounds (0k lc, 0k prose, 20k lc, 20k prose, ...)")
     ap.add_argument("--prose-min-tokens", type=int, default=10000,
                     help="prose mode: minimum completion tokens per round (default 10000 ≈ 40000 chars)")
     ap.add_argument("--prose-max-tokens", type=int, default=12000,
