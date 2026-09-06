@@ -69,6 +69,10 @@ class H(BaseHTTPRequestHandler):
         req = json.loads(self.rfile.read(n) or b"{}")
         body = json.dumps(req.get("messages", []))
         is_prose = "dissertation" in body
+        if state.get("fail_first") and state["n"] == 0:
+            self._json({"error": "simulated engine failure"}, 500)
+            state["n"] += 1
+            return
         p = len(req.get("messages", [])) * 100 + 5
         comp = 100
         if is_prose:
@@ -154,10 +158,20 @@ def main():
         c_h, c_r = load_jsonl(c_out)
         cl = [r for r in c_r if r.get("mode") != "prose"]
         cp = [r for r in c_r if r.get("mode") == "prose"]
-        assert len(cl) == 2, f"C: leetcode P0+P1000 run (prose skips don't poison leetcode): {len(cl)}"
-        assert len(cp) == 2 and all(r.get("skip") for r in cp), f"C: expected prose P0+P1000 skips (loop breaks on 2nd): {cp}"
+        assert len(cl) == 1, f"C: only leetcode P0 runs before prose P0 gate-skip: {len(cl)}"
+        assert len(cp) == 1 and cp[0].get("skip"), f"C: prose P0 gate-skip must stop the run: {cp}"
         assert "prose gate" in cp[0]["skip"], f"C: skip reason: {cp[0]['skip']}"
         print(f"C PASS  short prose answer skipped by gate: {cp[0]['skip'][:60]!r}")
+
+        # ---- E: leetcode P0 failure stops the run (P0 is not special anymore) ----
+        state.update(prose=False, short=False, n=0, fail_first=True)
+        e_out = os.path.join(tmp, "e.jsonl")
+        run_bench([], e_out)
+        e_h, e_r = load_jsonl(e_out)
+        assert len(e_r) == 1 and e_r[0].get("skip"), f"E: run must stop at failed P0: {e_r}"
+        assert "request failed" in e_r[0]["skip"], f"E: skip reason: {e_r[0]['skip']}"
+        state["fail_first"] = False
+        print("E PASS  leetcode P0 failure stops the run")
 
         # ---- D: report renders the mixed-mode file ----
         md = os.path.join(tmp, "report.md")

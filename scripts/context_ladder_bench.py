@@ -282,27 +282,21 @@ def run_ladder(base, model, n_solutions, min_tokens, max_tokens,
                                                  min_chars=prose_min_tokens * 4, round="{round}")
 
     # ---- ladder: INTERLEAVED per level — 0k lc, 0k prose, 20k lc, 20k prose, ...
-    # Both requests of a level share the same TOK prefix; the prose request is a
-    # separate request and never sees the leetcode output.
+    # Level 0 (P0) goes through the SAME loop and skip check as every other
+    # level: any skip stops the run. Both requests of a level share the same
+    # TOK prefix; the prose request is a separate request and never sees the
+    # leetcode output.
     hist = ""
-    r0 = measured_round(base, model, lc_system, lc_decode.format(round=0), rnd="P0",
-                        max_tokens=max_tokens, api_key=api_key)
-    results.append(r0); emit(r0)
-    if prose:
-        r0p = prose_finalize(base, model, pr_system, pr_decode.format(round=0), rnd="P0",
-                             max_tokens=prose_max_tokens, min_tokens=prose_min_tokens,
-                             api_key=api_key, out_path=out)
-        results.append(r0p); emit(r0p)
-
-    rnd = 1
+    rnd = 0
     while rnd <= rounds:
         ctx_target = rnd * tok_per_round
-        if ctx_target >= target_ctx:
-            print(json.dumps({"done": True, "rounds_run": len(results),
-                              "note": f"stopped: next target {ctx_target} >= target_ctx {target_ctx}",
-                              "nonce": nonce}))
-            break
-        hist = hist + "TOK " * tok_per_round
+        if rnd > 0:
+            if ctx_target >= target_ctx:
+                print(json.dumps({"done": True, "rounds_run": len(results),
+                                  "note": f"stopped: next target {ctx_target} >= target_ctx {target_ctx}",
+                                  "nonce": nonce}))
+                break
+            hist = hist + "TOK " * tok_per_round
         rr = measured_round(base, model, lc_system, hist + lc_decode.format(round=ctx_target),
                             rnd=f"P{ctx_target}", max_tokens=max_tokens, api_key=api_key)
         results.append(rr); emit(rr)
