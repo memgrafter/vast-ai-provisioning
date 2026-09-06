@@ -158,9 +158,10 @@ def main():
         c_h, c_r = load_jsonl(c_out)
         cl = [r for r in c_r if r.get("mode") != "prose"]
         cp = [r for r in c_r if r.get("mode") == "prose"]
-        assert len(cl) == 1, f"C: only leetcode P0 runs before prose P0 gate-skip: {len(cl)}"
-        assert len(cp) == 1 and cp[0].get("skip"), f"C: prose P0 gate-skip must stop the run: {cp}"
-        assert "prose gate" in cp[0]["skip"], f"C: skip reason: {cp[0]['skip']}"
+        assert len(cl) == 3, f"C: all 3 leetcode rounds run (prose skips must not stop the ladder): {len(cl)}"
+        assert len(cp) == 3 and all(r.get("skip") for r in cp), \
+            f"C: all 3 prose rounds gate-skipped but ladder continues: {len(cp)}"
+        assert all("prose gate" in r["skip"] for r in cp), f"C: skip reasons: {[r['skip'] for r in cp]}"
         print(f"C PASS  short prose answer skipped by gate: {cp[0]['skip'][:60]!r}")
 
         # ---- E: leetcode P0 failure stops the run (P0 is not special anymore) ----

@@ -303,25 +303,8 @@ class MetricsSampler:
 
 
 def token_count(endpoint: EndpointResolver, model: str, api_key: str, prompt: str, timeout: int) -> int:
-    payload = {"model": model, "prompt": prompt}
-    last_exc: Exception | None = None
-    for attempt in range(2):
-        try:
-            req = urllib.request.Request(
-                endpoint.tokenize_url(),
-                data=json.dumps(payload).encode(),
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            )
-            with urllib.request.urlopen(req, timeout=timeout) as response:
-                body = json.loads(response.read().decode())
-            return int(body.get("count") or len(body.get("tokens") or []))
-        except Exception as exc:
-            last_exc = exc
-            if attempt == 0 and endpoint.instance_id is not None:
-                endpoint.refresh()
-                continue
-            raise
-    raise RuntimeError(f"tokenize failed: {last_exc}")
+    """Estimate token count from character length (1 token ≈ 4 chars)."""
+    return max(1, len(prompt) // 4)
 
 
 def one_request(
