@@ -173,6 +173,31 @@ def main():
         state["fail_first"] = False
         print("E PASS  leetcode P0 failure stops the run")
 
+        # ---- F: --start-ctx resume skips P0 and lower levels, appends to same --out ----
+        state.update(prose=False, short=False, n=0)
+        f_out = os.path.join(tmp, "f.jsonl")
+        run_bench(["--start-ctx", "1000"], f_out)
+        f_h, f_r = load_jsonl(f_out)
+        assert f_h["run_header"].get("start_ctx") == 1000, f"F: header must record start_ctx: {f_h['run_header']}"
+        labels = [r["round"] for r in f_r]
+        assert "P0" not in labels, f"F: resume must skip P0, got {labels}"
+        assert labels == ["P1000", "P2000"], f"F: resume levels wrong: {labels}"
+        # appending on top of an existing jsonl keeps both runs' rows (autoresume via --out)
+        run_bench(["--start-ctx", "1000"], f_out)
+        f_h2, f_r2 = load_jsonl(f_out)
+        assert len(f_r2) == 4, f"F: append must keep prior rows, got {len(f_r2)}"
+        print(f"F PASS  --start-ctx 1000 resumes at P1000/P2000, appends to same --out (4 rows total)")
+
+        # ---- G: incremental report is auto-rendered next to the jsonl after each level ----
+        g_md = os.path.join(tmp, "bench-report-b.md")  # auto-written by bench during run B
+        assert os.path.exists(g_md), "G: auto-generated bench report must exist next to b.jsonl"
+        gm = open(g_md).read()
+        assert "## 1. Ladder" in gm and "| mode |" in gm, "G: auto report must have ladder table w/ mode column"
+        # a resume-append run also renders over the whole file (all level rows present)
+        f_md = os.path.join(tmp, "bench-report-f.md")
+        assert os.path.exists(f_md), "G: resume run must also auto-render a report"
+        print("G PASS  bench auto-renders bench-report-<stem>.md next to the jsonl")
+
         # ---- D: report renders the mixed-mode file ----
         md = os.path.join(tmp, "report.md")
         rd = subprocess.run([sys.executable, REPORT, "--ladder", b_out, "--out", md,

@@ -36,18 +36,33 @@ Modes:
     is byte-identical to before. The full prose text is saved next to the jsonl
     as <stem>.<round>.prose.txt.
 
+Resume:
+    --start-ctx N (>=0, default 0) starts the ladder at context N (must be a
+    multiple of --tok-per-round). Use it together with the same --out to append
+    to an existing run's jsonl and climb the remaining levels to target_ctx.
+
 Usage:
     python3 context_ladder_bench.py [--base URL] [--model ID] [--n-sol N]
                                     [--min-tokens N] [--max-tokens N]
                                     [--rounds N] [--target-ctx N] [--tok-per-round N]
                                     [--out FILE]
                                     [--prose] [--prose-min-tokens N] [--prose-max-tokens N]
+                                    [--start-ctx N]
 
 Example (20k-step burnin against a 256k-ctx vLLM):
     python3 context_ladder_bench.py --base http://HOST:PORT --model qwen3.8-27b \
         --tok-per-round 20000 --target-ctx 262144 --out ladder-20k.jsonl
 """
 import argparse, json, os, re, sys, time, urllib.request
+
+try:
+    import bench_markdown_report as _bmr
+    render_report = _bmr.render_report
+    HAVE_REPORT = True
+except Exception:
+    # Report rendering is optional — never let a missing sibling file kill the bench.
+    HAVE_REPORT = False
+
 
 DEFAULT_BASE  = "http://127.0.0.1:8095"
 DEFAULT_MODEL = "qwen3.8-27b"
@@ -249,7 +264,8 @@ def measured_round(base, model, system, user_content, rnd, max_tokens=12000, api
 
 def run_ladder(base, model, n_solutions, min_tokens, max_tokens,
                tok_per_round, target_ctx, rounds, out, api_key=None,
-               prose=False, prose_min_tokens=10000, prose_max_tokens=12000):
+               prose=False, prose_min_tokens=10000, prose_max_tokens=12000,
+               start_ctx=0):
     out_fh = open(out, "a") if out else sys.stdout
 
     nonce = f"anchor-{int(time.time())}"
@@ -263,12 +279,19 @@ def run_ladder(base, model, n_solutions, min_tokens, max_tokens,
               "rounds": rounds, "nonce": nonce}
     if prose:
         header["prose"] = {"min_tokens": prose_min_tokens, "max_tokens": prose_max_tokens}
+    if start_ctx:
+        header["start_ctx"] = start_ctx
     if out:  # self-describing header so bench_markdown_report.py can fill metadata
         out_fh.write(json.dumps({"run_header": header}) + "\n")
         out_fh.flush()
 
     def emit(rec):
         out_fh.write(json.dumps(rec) + "\n"); out_fh.flush()
+        if HAVE_REPORT and out:
+            try:
+                render_report(out)  # incremental report next to the jsonl
+            except Exception:
+                pass  # never let a report error kill the bench
 
     results = []
 
@@ -287,7 +310,16 @@ def run_ladder(base, model, n_solutions, min_tokens, max_tokens,
     # TOK prefix; the prose request is a separate request and never sees the
     # leetcode output.
     hist = ""
-    rnd = 0
+    start_rnd = 0
+    if start_ctx:
+        if start_ctx % tok_per_round != 0:
+            print(json.dumps({"error": f"--start-ctx {start_ctx} must be a multiple of --tok-per-round {tok_per_round}"}))
+            if out:
+                out_fh.close()
+            return []
+        start_rnd = start_ctx // tok_per_round
+        hist = "TOK " * (start_rnd * tok_per_round)
+    rnd = start_rnd
     while rnd <= rounds:
         ctx_target = rnd * tok_per_round
         if rnd > 0:
@@ -296,7 +328,8 @@ def run_ladder(base, model, n_solutions, min_tokens, max_tokens,
                                   "note": f"stopped: next target {ctx_target} >= target_ctx {target_ctx}",
                                   "nonce": nonce}))
                 break
-            hist = hist + "TOK " * tok_per_round
+            if rnd > start_rnd:
+                hist = hist + "TOK " * tok_per_round
         rr = measured_round(base, model, lc_system, hist + lc_decode.format(round=ctx_target),
                             rnd=f"P{ctx_target}", max_tokens=max_tokens, api_key=api_key)
         results.append(rr); emit(rr)
@@ -342,12 +375,15 @@ def main():
                     help="prose mode: minimum completion tokens per round (default 10000 ≈ 40000 chars)")
     ap.add_argument("--prose-max-tokens", type=int, default=12000,
                     help="prose mode: max_tokens per request (default 12000)")
+    ap.add_argument("--start-ctx", type=int, default=0,
+                    help="resume: start the ladder at context N (multiple of --tok-per-round); "
+                         "append to the same --out to continue an existing run")
     args = ap.parse_args()
 
     run_ladder(args.base, args.model, args.n_sol, args.min_tokens, args.max_tokens,
                args.tok_per_round, args.target_ctx, args.rounds, args.out, api_key=args.api_key,
                prose=args.prose, prose_min_tokens=args.prose_min_tokens,
-               prose_max_tokens=args.prose_max_tokens)
+               prose_max_tokens=args.prose_max_tokens, start_ctx=args.start_ctx)
 
 if __name__ == "__main__":
     main()
