@@ -5,7 +5,7 @@ Companion to context_ladder_bench.py / textgen_quality_bench.py. Reads a ladder
 JSONL (one guarded round per line), optionally a textgen-quality JSON, plus run
 metadata flags, and writes a Markdown report next to the ladder file:
 
-    logs/bench-report-<ladder-stem>.md
+    logs/bench-report-<ladder-stem>-<ts>.md
 
 Format (v1):
     # Benchmark Report — <title>
@@ -225,7 +225,7 @@ def render_report(ladder_path, out_path=None, title=None, meta=None, verdict=Non
     
     Args:
         ladder_path: Path to the ladder jsonl file
-        out_path: Output markdown path (default: bench-report-<stem>.md next to ladder)
+        out_path: Output markdown path (default: bench-report-<stem>-<ts>.md next to ladder)
         title: Report title (default: ladder file stem)
         meta: Dict of metadata {"key": "value", ...}
         verdict: Prose verdict text for §4
@@ -240,7 +240,8 @@ def render_report(ladder_path, out_path=None, title=None, meta=None, verdict=Non
     
     date = meta.get("date") or parse_ts(stem)
     tldr_bullets, stats = build_tldr(rounds, textgen)
-    out_path = out_path or os.path.join(ladder_dir, f"bench-report-{stem}.md")
+    ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    out_path = out_path or os.path.join(ladder_dir, f"bench-report-{stem}-{ts}.md")
     title = title or stem
     
     meta_rows = [("Run ID", f"`{stem}`")]
@@ -326,7 +327,7 @@ def main():
     ap.add_argument("--meta", action="append", default=[], metavar="KEY=VALUE",
                     help=f"metadata row, repeatable. keys: {', '.join(k for k, _ in META_LABELS)}")
     ap.add_argument("--verdict", default=None, help="prose verdict paragraph (§4)")
-    ap.add_argument("--out", default=None, help="output .md (default: bench-report-<stem>.md next to the ladder)")
+    ap.add_argument("--out", default=None, help="output .md (default: bench-report-<stem>-<ts>.md next to the ladder)")
     args = ap.parse_args()
 
     meta = {}
@@ -344,7 +345,8 @@ def main():
         stem = os.path.splitext(os.path.basename(args.ladder))[0]
         ladder_dir = os.path.dirname(os.path.abspath(args.ladder))
         _, rounds, skips = load_ladder(args.ladder)
-        out_path = args.out or os.path.join(ladder_dir, f"bench-report-{stem}.md")
+        ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+        out_path = args.out or os.path.join(ladder_dir, f"bench-report-{stem}-{ts}.md")
         print(f"[bench-report] wrote {out_path} ({len(rounds)} rounds, {len(skips)} skips)")
         return 0
     else:

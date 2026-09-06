@@ -190,14 +190,18 @@ def main():
         print(f"F PASS  --start-ctx 1000 resumes at P1000/P2000, appends to same --out (4 rows total)")
 
         # ---- G: incremental report is auto-rendered next to the jsonl after each level ----
-        g_md = os.path.join(tmp, "bench-report-b.md")  # auto-written by bench during run B
-        assert os.path.exists(g_md), "G: auto-generated bench report must exist next to b.jsonl"
+        def find_report(stem):
+            hits = [f for f in os.listdir(tmp)
+                    if f.startswith(f"bench-report-{stem}-") and f.endswith(".md")]
+            return sorted(hits)[-1] if hits else None  # latest ts
+        g_md = os.path.join(tmp, find_report("b"))  # auto-written by bench during run B
+        assert g_md and os.path.exists(g_md), "G: auto-generated bench report must exist next to b.jsonl"
         gm = open(g_md).read()
         assert "## 1. Ladder" in gm and "| mode |" in gm, "G: auto report must have ladder table w/ mode column"
         # a resume-append run also renders over the whole file (all level rows present)
-        f_md = os.path.join(tmp, "bench-report-f.md")
-        assert os.path.exists(f_md), "G: resume run must also auto-render a report"
-        print("G PASS  bench auto-renders bench-report-<stem>.md next to the jsonl")
+        f_md = os.path.join(tmp, find_report("f"))
+        assert f_md and os.path.exists(f_md), "G: resume run must also auto-render a report"
+        print(f"G PASS  bench auto-renders bench-report-<stem>-<ts>.md next to the jsonl ({find_report('b')})")
 
         # ---- D: report renders the mixed-mode file ----
         md = os.path.join(tmp, "report.md")
