@@ -76,8 +76,10 @@ def round_label(r):
     return f"{pretty_round(r['round'])} ({r['ctx_exact']:,})" if r.get("ctx_exact") else pretty_round(r["round"])
 
 
-def decode_stats(rounds):
-    ds = [r["decode_tps"] for r in rounds if r.get("decode_tps")]
+def decode_stats(rounds, mode=None):
+    # missing mode == leetcode (backward-compat records carry no mode key)
+    rs = [r for r in rounds if mode is None or (r.get("mode") or "leetcode") == mode]
+    ds = [r["decode_tps"] for r in rs if r.get("decode_tps")]
     return (min(ds), max(ds)) if ds else (None, None)
 
 
@@ -97,9 +99,11 @@ def acceptance_stats(rounds):
 
 
 def build_ladder_table(rounds, skips):
+    mixed = any(r.get("mode") for r in rounds) or any(s.get("mode") for s in skips)
     lines = [
-        "| ctx | prefill tok/s* | decode tok/s | DFlash2 accept | round wall (s) |",
-        "|---|---:|---:|---:|---:|",
+        "| ctx | mode | prefill tok/s* | decode tok/s | DFlash2 accept | round wall (s) |" if mixed
+        else "| ctx | prefill tok/s* | decode tok/s | DFlash2 accept | round wall (s) |",
+        "|---|---|---:|---:|---:|---:|" if mixed else "|---|---:|---:|---:|---:|",
     ]
     for r in rounds:
         pre = r.get("prefill_tps")
@@ -108,25 +112,33 @@ def build_ladder_table(rounds, skips):
         dec = f"{r['decode_tps']:.1f}" if r.get("decode_tps") else "—"
         acc = f"{r['acceptance']:.3f}" if r.get("acceptance") is not None else "—"
         wall = f"{r.get('wall_ms', 0) / 1000:.1f}"
-        lines.append(f"| {round_label(r)} | {pre_s} | {dec} | {acc} | {wall} |")
+        if mixed:
+            lines.append(f"| {round_label(r)} | {r.get('mode', 'leetcode')} | {pre_s} | {dec} | {acc} | {wall} |")
+        else:
+            lines.append(f"| {round_label(r)} | {pre_s} | {dec} | {acc} | {wall} |")
     for s in skips:
-        lines.append(f"| {pretty_round(s['round'])} | — | skipped | — | — |")
+        label = f"| {pretty_round(s['round'])} | {s.get('mode', 'leetcode')} | — | skipped | — | — |" if mixed \
+            else f"| {pretty_round(s['round'])} | — | skipped | — | — |"
+        lines.append(label)
     return "\n".join(lines)
 
 
 def build_tldr(rounds, textgen):
-    dmin, dmax = decode_stats(rounds)
+    dmin, dmax = decode_stats(rounds, mode=None if not any(r.get("mode") for r in rounds) else "leetcode")
     if dmin is None:
-        return ["- No decode data."], {}
+        return ["- No decode data."], {"dmin": None, "dmax": None}
     pmax, plast = prefill_stats(rounds)
     a_min, a_max = acceptance_stats(rounds)
-    last = rounds[-1]
+    last = [r for r in rounds if r.get("mode") != "prose"][-1]
     bullets = []
     flat = dmin / dmax >= 0.8 if dmax else False
     band = f"{dmin:.0f}–{dmax:.0f}"
     note = " — **flat, no decay**" if flat else ""
     bullets.append(f"- **Decode {band} tok/s** across P0 → P{fmt_k(last.get('ctx_exact', 0))}{note} "
                    f"(P{fmt_k(last.get('ctx_exact', 0))} holds {last['decode_tps'] / dmax * 100:.0f}% of peak)")
+    pmin, pmax2 = decode_stats(rounds, mode="prose")
+    if pmin is not None:
+        bullets.append(f"- **Prose decode {pmin:.0f}–{pmax2:.0f} tok/s** (dissertation rounds, same ladder)")
     if pmax:
         pmax_v, pmax_r = pmax
         plast_v, plast_r = plast
@@ -153,8 +165,8 @@ def build_tldr(rounds, textgen):
 def build_headline(rounds, stats):
     dmin, dmax = stats["dmin"], stats["dmax"]
     pmax, plast = prefill_stats(rounds)
-    last = rounds[-1]
-    dec_rounds = [r for r in rounds if r.get("decode_tps")]
+    last = [r for r in rounds if r.get("mode") != "prose"][-1]
+    dec_rounds = [r for r in rounds if r.get("decode_tps") and r.get("mode") != "prose"]
     floor = min(dec_rounds, key=lambda r: r["decode_tps"])
     rows = [
         ("Peak decode (P0)", f"{rounds[0]['decode_tps']:.1f} tok/s" if rounds[0].get("decode_tps") else "—"),
@@ -164,6 +176,9 @@ def build_headline(rounds, stats):
          f"{dmin:.1f} tok/s ({dmin / dmax * 100:.1f}% of peak)"),
         ("Decode band", f"{dmin:.0f}–{dmax:.0f} tok/s" + (" (flat)" if dmin / dmax >= 0.8 else "")),
     ]
+    pmin, pmax2 = decode_stats(rounds, mode="prose")
+    if pmin is not None:
+        rows.append(("Prose decode band", f"{pmin:.0f}–{pmax2:.0f} tok/s (dissertation rounds)"))
     if pmax:
         rows.append(("Peak marginal prefill", f"{pmax[0]:,.0f} tok/s @P{fmt_k(pmax[1]['ctx_exact'])}"))
     if plast:
@@ -262,6 +277,11 @@ def main():
         "- **Single stream (c=1).** Per-request numbers, not batched throughput.",
         "- **DFlash2 counts include drafts**: decode tok/s = completion tokens / engine decode time.",
     ]
+    if any(r.get("mode") == "prose" for r in rounds):
+        caveats.append("- **Prose rounds** (`mode: prose`) run the SAME ladder shape on a fresh TOK history "
+                       "after the leetcode ladder: ~10k-token physics dissertation, prose only. "
+                       "They measure TEXT decode TPS, which differs from code TPS; full texts are saved "
+                       "as `<stem>.<round>.prose.txt` next to the jsonl.")
     if skips:
         caveats.append("- Skipped rounds: " + "; ".join(f"{pretty_round(s['round'])} ({s['skip'][:80]})" for s in skips))
 

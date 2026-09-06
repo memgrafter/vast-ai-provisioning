@@ -24,11 +24,22 @@ Any gate failure discards the round (reported as 'skip', never a poisoned number
 
 Output: JSON lines, one per round (flushed), plus a final {"done": true, "rounds_run": N}.
 
+Modes:
+    leetcode (default)  decode prompt = LeetCode-style code solutions (code TPS)
+    prose   (--prose)   decode prompt = a ~10k-token prose-only dissertation on the
+                        last 100 years in physics, no code/formulas/structure (text TPS)
+    Both can run in one invocation: the leetcode ladder runs first, then the prose
+    ladder on a FRESH TOK history (each mode sees only its own "TOK " prefix ladder,
+    sequentially). Prose rounds are tagged "mode": "prose"; leetcode rounds are
+    untagged so a leetcode-only run's JSONL is byte-identical to before.
+    The full prose text is saved next to the jsonl as <stem>.<round>.prose.txt.
+
 Usage:
     python3 context_ladder_bench.py [--base URL] [--model ID] [--n-sol N]
                                     [--min-tokens N] [--max-tokens N]
                                     [--rounds N] [--target-ctx N] [--tok-per-round N]
                                     [--out FILE]
+                                    [--prose] [--prose-min-tokens N] [--prose-max-tokens N]
 
 Example (20k-step burnin against a 256k-ctx vLLM):
     python3 context_ladder_bench.py --base http://HOST:PORT --model qwen3.8-27b \
@@ -59,6 +70,61 @@ DECODE_PROMPT_TEMPLATE = (
     "Do NOT abbreviate or summarize. Make it long and thorough. Number each solution clearly. "
     "This is round {round}."
 )
+
+PROSE_PROMPT_TEMPLATE = (
+    "Think carefully about the last 100 years in physics, then write a long, continuous, "
+    "prose-only dissertation on the subject — roughly {min_tokens} tokens (about "
+    "{min_chars} characters) of flowing narrative paragraphs. Write as a physicist's essay: "
+    "relativity, quantum mechanics, the Standard Model, cosmology, and the open questions. "
+    "PROSE ONLY: no code, no formulas, no LaTeX, no bullet lists, no headings, no tables, "
+    "no structured output of any kind — just plain connected paragraphs. Do not abbreviate "
+    "or summarize; keep going until you have written the full dissertation. This is round {round}."
+)
+
+def prose_purity(text):
+    """ROUGH purity check — deliberately not a precise detector (~95% bar).
+    Returns (ok, reason). Penalizes fenced code blocks, heavy math-symbol lines,
+    list/heading structure, and long all-caps token runs (code identifiers)."""
+    n = len(text)
+    if n == 0:
+        return False, "empty text"
+    bad = 0
+    bad += len(re.findall(r"```", text)) // 2                      # fenced code blocks
+    mathy = sum(1 for ln in text.splitlines()
+                if sum(ch in "∑∏∫√∂∇≈≠≤≥αβγδεζηθλμνξπρσφωψΩ" for ch in ln) >= 3)
+    bad += mathy                                                     # formula-like lines
+    bad += len(re.findall(r"(?m)^\s*[-*]\s+", text))               # bullet lists
+    bad += len(re.findall(r"(?m)^\s*#{1,6}\s", text))              # markdown headings
+    caps = sum(1 for ln in text.splitlines()
+               if len(re.findall(r"\b[A-Z_]{4,}\b", ln)) >= 3)     # code-identifier lines
+    bad += caps
+    if bad > max(1, n // 5000):                                      # >~0.02% of chars worth of hits
+        return False, f"non-prose structure detected ({bad} hits)"
+    return True, "ok"
+
+def prose_finalize(base, model, system, user_content, rnd, max_tokens,
+                   min_tokens, api_key, out_path, mode="prose"):
+    """measured_round + prose-specific gates + save full text next to the jsonl."""
+    rr = measured_round(base, model, system, user_content, rnd=rnd,
+                        max_tokens=max_tokens, api_key=api_key, mode=mode)
+    text = rr.pop("text", None)
+    if rr.get("skip"):
+        return rr
+    if rr["completion_tokens"] < min_tokens:
+        rr["skip"] = (f"prose gate: completion {rr['completion_tokens']} < "
+                      f"min_tokens {min_tokens} (truncated?)")
+        return rr
+    ok, why = prose_purity(text or "")
+    if not ok:
+        rr["skip"] = f"prose gate: {why}"
+        return rr
+    rr["text_chars"] = len(text)
+    if out_path:
+        stem = os.path.splitext(os.path.basename(out_path))[0]
+        with open(os.path.join(os.path.dirname(os.path.abspath(out_path)),
+                               f"{stem}.{rnd}.prose.txt"), "w") as fh:
+            fh.write(text)
+    return rr
 
 def fetch_metrics(base, timeout=30):
     raw = urllib.request.urlopen(base.rstrip("/") + "/metrics", timeout=timeout).read().decode()
@@ -106,7 +172,8 @@ def settled_snapshot(base, label, settle=0.25, tries=3):
         time.sleep(settle)
     raise RuntimeError(f"{label}: counters never settled after {tries} reads — engine busy or another writer")
 
-def call_decode(base, model, messages, max_tokens=12000, timeout=1800, api_key=None):
+def call_decode(base, model, messages, max_tokens=12000, timeout=1800, api_key=None,
+                capture_text=False):
     body = {"model": model, "messages": messages, "max_tokens": max_tokens,
             "temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0.0, "stream": False}
     headers = {"Content-Type": "application/json"}
@@ -119,17 +186,24 @@ def call_decode(base, model, messages, max_tokens=12000, timeout=1800, api_key=N
     payload = json.loads(urllib.request.urlopen(req, timeout=timeout).read().decode())
     wall = time.time() - t0
     u = payload.get("usage", {})
-    return {"completion_tokens": u.get("completion_tokens", 0),
-            "prompt_tokens": u.get("prompt_tokens", 0),
-            "wall": wall}
+    out = {"completion_tokens": u.get("completion_tokens", 0),
+           "prompt_tokens": u.get("prompt_tokens", 0),
+           "wall": wall}
+    if capture_text:
+        out["text"] = (payload.get("choices") or [{}])[0].get("message", {}).get("content", "")
+    return out
 
-def measured_round(base, model, system, user_content, rnd, max_tokens=12000, api_key=None):
+def measured_round(base, model, system, user_content, rnd, max_tokens=12000, api_key=None,
+                   mode=None):
     """Single request with BOTH prefill and generation windows measured independently.
-    user_content should already include the TOK*n history + decode prompt."""
+    user_content should already include the TOK*n history + decode prompt.
+    mode, when set (e.g. "prose"), is added to the round record; leetcode rounds
+    pass mode=None and their records are unchanged."""
     c_start, s_start = settled_snapshot(base, f"r{rnd}.start")
     messages = [{"role": "system", "content": system}] + [{"role": "user", "content": user_content}]
     try:
-        r = call_decode(base, model, messages, max_tokens=max_tokens, api_key=api_key)
+        r = call_decode(base, model, messages, max_tokens=max_tokens, api_key=api_key,
+                        capture_text=mode is not None)
     except Exception as e:
         return {"round": rnd, "skip": f"request failed: {repr(e)}"}
     c_end, s_end = settled_snapshot(base, f"r{rnd}.end")
@@ -153,7 +227,7 @@ def measured_round(base, model, system, user_content, rnd, max_tokens=12000, api
     dacc = c_end["vllm:spec_decode_num_accepted_tokens_total"] - c_start["vllm:spec_decode_num_accepted_tokens_total"]
     ddrf = c_end["vllm:spec_decode_num_draft_tokens_total"] - c_start["vllm:spec_decode_num_draft_tokens_total"]
 
-    return {
+    rec = {
         "round": rnd, "ctx_exact": r["prompt_tokens"], "completion_tokens": dcompl,
         "wall_ms": int(r["wall"] * 1000),
         "prefill_prompt_tokens": int(dprompt),
@@ -165,32 +239,45 @@ def measured_round(base, model, system, user_content, rnd, max_tokens=12000, api
         "accepted": int(dacc), "drafted": int(ddrf),
         "acceptance": round(dacc / ddrf, 4) if ddrf else None,
     }
+    if mode:
+        rec["mode"] = mode
+    if "text" in r:
+        rec["text"] = r["text"]
+    return rec
 
 def run_ladder(base, model, n_solutions, min_tokens, max_tokens,
-               tok_per_round, target_ctx, rounds, out, api_key=None):
+               tok_per_round, target_ctx, rounds, out, api_key=None,
+               prose=False, prose_min_tokens=10000, prose_max_tokens=12000):
     out_fh = open(out, "a") if out else sys.stdout
 
     nonce = f"anchor-{int(time.time())}"
+    header = {"bench": "context-ladder-v1",
+              "ts": time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()),
+              "base": base, "model": model,
+              "n_solutions": n_solutions,
+              "max_tokens": max_tokens,
+              "tok_per_round": tok_per_round,
+              "target_ctx": target_ctx,
+              "rounds": rounds, "nonce": nonce}
+    if prose:
+        header["prose"] = {"min_tokens": prose_min_tokens, "max_tokens": prose_max_tokens}
     if out:  # self-describing header so bench_markdown_report.py can fill metadata
-        out_fh.write(json.dumps({"run_header": {"bench": "context-ladder-v1",
-                                                "ts": time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()),
-                                                "base": base, "model": model,
-                                                "n_solutions": n_solutions,
-                                                "max_tokens": max_tokens,
-                                                "tok_per_round": tok_per_round,
-                                                "target_ctx": target_ctx,
-                                                "rounds": rounds, "nonce": nonce}}) + "\n")
+        out_fh.write(json.dumps({"run_header": header}) + "\n")
         out_fh.flush()
+
+    def emit(rec):
+        out_fh.write(json.dumps(rec) + "\n"); out_fh.flush()
+
+    results = []
+
+    # ---- leetcode ladder (unchanged behaviour) ----
     system = f"You are a coding challenge generator. Session nonce: {nonce}. Keep a running conversation."
     decode = DECODE_PROMPT_TEMPLATE.format(n=n_solutions, min_tokens=min_tokens, round="{round}")
 
     hist = ""
-    results = []
-
     r0_user = decode.format(round=0)
     r0 = measured_round(base, model, system, r0_user, rnd="P0", max_tokens=max_tokens, api_key=api_key)
-    results.append(r0)
-    out_fh.write(json.dumps(r0) + "\n"); out_fh.flush()
+    results.append(r0); emit(r0)
 
     rnd = 1
     while rnd <= rounds:
@@ -203,14 +290,42 @@ def run_ladder(base, model, n_solutions, min_tokens, max_tokens,
         hist = hist + "TOK " * tok_per_round
         user = hist + decode.format(round=ctx_target)
         rr = measured_round(base, model, system, user, rnd=f"P{ctx_target}", max_tokens=max_tokens, api_key=api_key)
-        results.append(rr)
-        out_fh.write(json.dumps(rr) + "\n"); out_fh.flush()
+        results.append(rr); emit(rr)
         if rr.get("skip"):
             print(json.dumps({"done": True, "rounds_run": len(results),
                               "stopped": rr["skip"], "nonce": nonce}))
             break
         rnd += 1
         time.sleep(1)
+
+    # ---- prose ladder: FRESH TOK history, same ladder shape, mode=prose ----
+    if prose:
+        system = (f"You are a physicist writing a long-form dissertation. "
+                  f"Session nonce: {nonce}. Keep a running conversation.")
+        decode = PROSE_PROMPT_TEMPLATE.format(min_tokens=prose_min_tokens,
+                                              min_chars=prose_min_tokens * 4, round="{round}")
+        hist = ""
+        r0 = prose_finalize(base, model, system, decode.format(round=0), rnd="P0",
+                            max_tokens=prose_max_tokens, min_tokens=prose_min_tokens,
+                            api_key=api_key, out_path=out)
+        results.append(r0); emit(r0)
+        rnd = 1
+        while rnd <= rounds:
+            ctx_target = rnd * tok_per_round
+            if ctx_target >= target_ctx:
+                break
+            hist = hist + "TOK " * tok_per_round
+            rr = prose_finalize(base, model, system, hist + decode.format(round=ctx_target),
+                                rnd=f"P{ctx_target}", max_tokens=prose_max_tokens,
+                                min_tokens=prose_min_tokens,
+                                api_key=api_key, out_path=out)
+            results.append(rr); emit(rr)
+            if rr.get("skip"):
+                print(json.dumps({"done": True, "rounds_run": len(results),
+                                  "stopped": rr["skip"], "nonce": nonce}))
+                break
+            rnd += 1
+            time.sleep(1)
 
     print(json.dumps({"done": True, "rounds_run": len(results), "nonce": nonce}))
     if out:
@@ -230,10 +345,19 @@ def main():
     ap.add_argument("--out", default=None, help="append JSON lines to file (default stdout)")
     ap.add_argument("--api-key", default=os.environ.get("VLLM_API_KEY", ""),
                     help="API key for the endpoint (default: $VLLM_API_KEY)")
+    ap.add_argument("--prose", action="store_true",
+                    help="also run a prose-dissertation ladder (text TPS) after the leetcode ladder, "
+                         "on its own fresh TOK history")
+    ap.add_argument("--prose-min-tokens", type=int, default=10000,
+                    help="prose mode: minimum completion tokens per round (default 10000 ≈ 40000 chars)")
+    ap.add_argument("--prose-max-tokens", type=int, default=12000,
+                    help="prose mode: max_tokens per request (default 12000)")
     args = ap.parse_args()
 
     run_ladder(args.base, args.model, args.n_sol, args.min_tokens, args.max_tokens,
-               args.tok_per_round, args.target_ctx, args.rounds, args.out, api_key=args.api_key)
+               args.tok_per_round, args.target_ctx, args.rounds, args.out, api_key=args.api_key,
+               prose=args.prose, prose_min_tokens=args.prose_min_tokens,
+               prose_max_tokens=args.prose_max_tokens)
 
 if __name__ == "__main__":
     main()
